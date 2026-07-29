@@ -398,12 +398,12 @@ chmod -R 755 pasta
 
 # Tabela de referência
 
-| Comando | Descrição |
-|---------|-----------|
-| `chmod +x arquivo` | Adiciona permissão de execução |
-| `chmod -x arquivo` | Remove permissão de execução |
-| `chmod 755 arquivo` | Define permissões rwxr-xr-x |
-| `chmod 644 arquivo` | Define permissões rw-r--r-- |
-| `chmod 600 arquivo` | Apenas o proprietário pode ler e escrever |
-| `chmod -R 755 pasta` | Altera permissões recursivamente |
-| `ls -l` | Exibe as permissões dos arquivos |
+| Comando              | Descrição                                 |
+| -------------------- | ----------------------------------------- |
+| `chmod +x arquivo`   | Adiciona permissão de execução            |
+| `chmod -x arquivo`   | Remove permissão de execução              |
+| `chmod 755 arquivo`  | Define permissões rwxr-xr-x               |
+| `chmod 644 arquivo`  | Define permissões rw-r--r--               |
+| `chmod 600 arquivo`  | Apenas o proprietário pode ler e escrever |
+| `chmod -R 755 pasta` | Altera permissões recursivamente          |
+| `ls -l`              | Exibe as permissões dos arquivos          |

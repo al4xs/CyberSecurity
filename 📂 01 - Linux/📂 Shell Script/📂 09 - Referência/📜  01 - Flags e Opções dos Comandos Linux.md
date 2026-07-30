@@ -4640,3 +4640,360 @@ Assim você evita exclusões acidentais.
 - Deve ser usada com cuidado.
 
 ---
+---
+
+# Flag `-p`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-p` é bastante comum no Linux e, assim como várias outras flags, pode representar diferentes palavras dependendo do comando.
+
+Os significados mais comuns são:
+
+- **Parents** (Criar diretórios pais)
+- **Preserve** (Preservar atributos)
+- **Port** (Especificar porta)
+- **Password** (Em algumas ferramentas específicas)
+- **Progress** (Em algumas aplicações)
+
+Embora a letra seja sempre a mesma, seu comportamento depende totalmente do programa.
+
+---
+
+## 📚 Curiosidade
+
+A letra **p** aparece em centenas de programas Unix.
+
+Isso acontece porque palavras como *Parent*, *Preserve*, *Port* e *Password* são extremamente comuns na administração de sistemas.
+
+Por esse motivo, **não existe um significado universal**.
+
+Sempre consulte:
+
+```bash
+man comando
+```
+
+ou
+
+```bash
+comando --help
+```
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `mkdir` | Parents |
+| `cp` | Preserve |
+| `install` | Parents |
+| `ssh` | Port (maiúsculo: `-P` no `sftp`, minúsculo no `scp`) |
+| `scp` | Port |
+| `rsync` | Preserve permissions (em conjunto com outras opções) |
+
+---
+
+## Como funciona?
+
+Vamos conhecer os usos mais frequentes.
+
+---
+
+# Exemplo 1 — mkdir
+
+Provavelmente o uso mais conhecido.
+
+Imagine que desejamos criar:
+
+```text
+Projetos/Python/API
+```
+
+Mas nenhuma dessas pastas existe.
+
+Sem `-p`:
+
+```bash
+mkdir Projetos/Python/API
+```
+
+Saída
+
+```text
+mkdir: cannot create directory 'Projetos/Python/API': No such file or directory
+```
+
+Agora:
+
+```bash
+mkdir -p Projetos/Python/API
+```
+
+Resultado:
+
+```text
+Projetos/
+└── Python/
+    └── API/
+```
+
+Todos os diretórios intermediários foram criados automaticamente.
+
+---
+
+# Exemplo 2 — mkdir
+
+Outro detalhe importante.
+
+Imagine que o diretório já exista.
+
+Sem `-p`:
+
+```bash
+mkdir Documentos
+```
+
+Saída
+
+```text
+mkdir: cannot create directory 'Documentos': File exists
+```
+
+Agora:
+
+```bash
+mkdir -p Documentos
+```
+
+Resultado
+
+Nenhum erro será exibido.
+
+Esse comportamento torna a flag extremamente útil em scripts.
+
+---
+
+# Exemplo 3 — cp
+
+No comando `cp`, `-p` significa **Preserve**.
+
+```bash
+cp -p arquivo.txt backup/
+```
+
+Serão preservados atributos como:
+
+- permissões;
+- proprietário (quando permitido);
+- grupo;
+- data de modificação;
+- data de acesso (dependendo da implementação).
+
+---
+
+# Exemplo 4 — scp
+
+No `scp`, a flag possui outro significado.
+
+```bash
+scp -P 2222 arquivo.txt usuario@servidor:/tmp
+```
+
+Neste caso:
+
+```text
+-P
+```
+
+(escrito em maiúsculo) informa a porta SSH utilizada na conexão.
+
+> **Atenção:** no `scp`, a opção é `-P` maiúsculo. Já em outros programas relacionados ao SSH, a convenção pode ser diferente. Consulte sempre a documentação.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `mkdir -p` | Criar diretórios pais |
+| `cp -p` | Preservar atributos |
+| `scp -P` | Porta SSH |
+
+---
+
+## Utilizando em Shell Script
+
+Uma das utilizações mais comuns.
+
+```bash
+#!/bin/bash
+
+mkdir -p logs
+mkdir -p backups/mysql
+mkdir -p output
+```
+
+O script poderá ser executado diversas vezes sem gerar erros caso os diretórios já existam.
+
+Esse comportamento torna `mkdir -p` praticamente um padrão em scripts Bash.
+
+---
+
+Outro exemplo:
+
+```bash
+cp -p config.ini backup/
+```
+
+Assim as permissões e datas são preservadas.
+
+---
+
+## Utilizando em Pentest
+
+Durante um Pentest é comum organizar arquivos coletados.
+
+```bash
+mkdir -p evidencias/logs
+mkdir -p evidencias/screenshots
+mkdir -p evidencias/configuracoes
+```
+
+Isso facilita a organização das evidências.
+
+Também é comum utilizar:
+
+```bash
+cp -p
+```
+
+para preservar metadados de arquivos durante uma análise forense.
+
+Preservar datas e permissões pode ser importante para manter o contexto da investigação.
+
+---
+
+## 📚 Curiosidade Técnica
+
+A opção:
+
+```bash
+mkdir -p
+```
+
+faz parte do padrão POSIX.
+
+Isso significa que ela está disponível praticamente em qualquer sistema Unix moderno.
+
+Já algumas outras opções presentes em programas GNU podem não existir em implementações BSD ou BusyBox.
+
+Esse é um dos motivos pelos quais conhecer o padrão POSIX é tão importante para quem escreve Shell Scripts portáveis.
+
+---
+
+## Boas práticas
+
+✔ Sempre utilize:
+
+```bash
+mkdir -p
+```
+
+em scripts.
+
+Evita erros caso o diretório já exista.
+
+✔ Utilize:
+
+```bash
+cp -p
+```
+
+quando desejar preservar atributos importantes.
+
+---
+
+## Erros comuns
+
+### Esquecer que `cp` e `mkdir` utilizam significados diferentes
+
+Veja:
+
+```bash
+mkdir -p
+```
+
+Não possui relação com:
+
+```bash
+cp -p
+```
+
+A única coisa em comum é a letra da flag.
+
+---
+
+### Assumir que `-p` significa sempre "porta"
+
+Esse erro é comum entre iniciantes.
+
+Na realidade:
+
+```text
+mkdir → Parents
+
+cp → Preserve
+
+scp → Port
+```
+
+---
+
+## Observações
+
+A flag `-p` está presente em dezenas de programas Linux.
+
+É uma das melhores demonstrações de que uma mesma letra pode representar conceitos completamente diferentes.
+
+Por esse motivo, memorize sempre a combinação:
+
+> **Comando + Flag**
+
+Nunca apenas a flag isoladamente.
+
+---
+
+## Dicas
+
+💡 Sempre que escrever um Shell Script e precisar criar diretórios, utilize:
+
+```bash
+mkdir -p
+```
+
+É mais seguro e torna o script idempotente, ou seja, ele pode ser executado várias vezes sem falhar apenas porque um diretório já existe.
+
+💡 Durante uma cópia de arquivos importantes, considere utilizar:
+
+```bash
+cp -p
+```
+
+para preservar permissões e datas.
+
+---
+
+## Resumo
+
+- `-p` não possui um significado único.
+- Em `mkdir`, significa **Parents**.
+- Em `cp`, significa **Preserve**.
+- Em ferramentas SSH, geralmente está relacionado à **Port** (normalmente `-P`).
+- É uma das flags mais utilizadas em Shell Script.
+- Muito importante para administração de sistemas, automação e Pentest.
+
+---

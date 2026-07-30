@@ -262,3 +262,135 @@ grep -n "erro" sistema.log
 | `grep -rn` | `-r` Recursive (Recursivo) + `-n` Number (Número da linha) |
 | `grep -rIn` | `-r` Recursive (Recursivo) + `-I` Ignore Binary Files (Ignorar arquivos binários) + `-n` Number (Número da linha) |
 
+---
+
+# `-v`
+
+| Item | Informação |
+|------|------------|
+| **Significado** | **Verbose** (Modo detalhado) |
+| **Uso comum** | Exibir informações detalhadas durante a execução |
+| **Comandos comuns** | `cp`, `mv`, `curl`, `ssh`, `tar` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
+
+### Exemplo
+
+```bash
+cp -v arquivo.txt backup/
+```
+
+**Saída**
+
+```text
+'arquivo.txt' -> 'backup/arquivo.txt'
+```
+
+---
+
+# `-c`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `grep`, `tar`, `bash`, `wc` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Count** (Contar) | `grep`, `wc` |
+| **Create** (Criar) | `tar` |
+| **Command** (Executar comando) | `bash`, `sh` |
+
+### Exemplo
+
+```bash
+grep -c "erro" sistema.log
+```
+
+**Saída**
+
+```text
+12
+```
+
+---
+
+# `-f`
+
+| Item | Informação |
+|------|------------|
+| **Significado** | **Force** (Forçar) |
+| **Uso comum** | Executar uma operação sem solicitar confirmação |
+| **Comandos comuns** | `rm`, `cp`, `mv`, `grep` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
+
+### Exemplo
+
+```bash
+rm -f arquivo.txt
+```
+
+**Saída**
+
+```text
+Arquivo removido sem solicitar confirmação.
+```
+
+---
+
+# `-p`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `mkdir`, `cp`, `ssh`, `scp` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Parents** (Criar diretórios pais) | `mkdir` |
+| **Preserve** (Preservar atributos) | `cp` |
+| **Port** (Porta de conexão) | `ssh`, `scp` |
+
+### Exemplo 1
+
+```bash
+mkdir -p projetos/bash/scripts
+```
+
+**Saída**
+
+```text
+Diretórios criados, incluindo os diretórios intermediários.
+```
+
+### Exemplo 2
+
+```bash
+ssh -p 2222 usuario@192.168.0.10
+```
+
+**Saída**
+
+```text
+Conectando à porta 2222...
+```
+
+---
+
+# Combinações Mais Utilizadas
+
+| Comando | Expansão |
+|----------|----------|
+| `cp -pv` | `-p` Preserve (Preservar atributos) + `-v` Verbose (Modo detalhado) |
+| `rm -fv` | `-f` Force (Forçar) + `-v` Verbose (Modo detalhado) |
+| `mkdir -p` | `-p` Parents (Criar diretórios pais) |
+| `tar -cvf` | `-c` Create (Criar) + `-v` Verbose (Modo detalhado) + `-f` File (Arquivo) |
+| `grep -cv` | `-c` Count (Contar ocorrências) + `-v` Invert Match (Inverter correspondência)¹ |
+
+> **¹ Observação:** No comando `grep`, a flag `-v` possui um significado diferente do convencional: **Invert Match** (Inverter correspondência), exibindo as linhas que **não** correspondem ao padrão pesquisado.
+

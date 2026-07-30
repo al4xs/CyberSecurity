@@ -4997,3 +4997,539 @@ para preservar permissões e datas.
 - Muito importante para administração de sistemas, automação e Pentest.
 
 ---
+---
+
+# Flag `-P`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-P` (letra **P maiúscula**) normalmente está relacionada à palavra **Port** (Porta), **Physical** (Físico) ou **Do not follow symbolic links** (Não seguir links simbólicos), dependendo do comando.
+
+Ela é um excelente exemplo de como letras maiúsculas são utilizadas para evitar conflitos com flags minúsculas.
+
+Por exemplo:
+
+- `-p` já é utilizada por diversos programas para representar **Parents** ou **Preserve**.
+- Para evitar ambiguidade, alguns desenvolvedores escolheram utilizar `-P`.
+
+---
+
+## 📚 Por que utilizar uma letra maiúscula?
+
+Os programas Unix tradicionalmente utilizam letras minúsculas para a maioria das opções.
+
+Entretanto, o alfabeto possui apenas 26 letras.
+
+À medida que os programas cresceram e novas funcionalidades foram adicionadas, tornou-se necessário reutilizar letras.
+
+Uma solução adotada foi utilizar versões maiúsculas das flags.
+
+Assim:
+
+```text
+-p
+```
+
+e
+
+```text
+-P
+```
+
+passaram a representar funções completamente diferentes.
+
+Isso é muito comum em ferramentas GNU e OpenSSH.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `scp` | Porta SSH |
+| `sftp` | Porta SSH |
+| `find` | Não seguir links simbólicos |
+| `pwd` | Caminho físico |
+| `cp` | Não seguir links simbólicos (algumas implementações) |
+
+---
+
+## Como funciona?
+
+Vamos analisar os casos mais comuns.
+
+---
+
+# Exemplo 1 — scp
+
+Imagine que um servidor SSH esteja utilizando a porta:
+
+```text
+2222
+```
+
+Podemos copiar um arquivo utilizando:
+
+```bash
+scp -P 2222 backup.sql usuario@192.168.1.50:/tmp
+```
+
+Aqui:
+
+```text
+-P
+```
+
+indica a porta TCP utilizada pela conexão SSH.
+
+---
+
+# Exemplo 2 — sftp
+
+Da mesma forma:
+
+```bash
+sftp -P 2222 usuario@servidor
+```
+
+O cliente SFTP conectará utilizando a porta especificada.
+
+---
+
+# Exemplo 3 — pwd
+
+Normalmente:
+
+```bash
+pwd
+```
+
+Pode retornar:
+
+```text
+/home/kali/projetos
+```
+
+Agora imagine que esse caminho seja um link simbólico.
+
+Utilizando:
+
+```bash
+pwd -P
+```
+
+Saída:
+
+```text
+/data/storage/projetos
+```
+
+Agora o comando mostra o caminho físico real do sistema de arquivos.
+
+---
+
+# Exemplo 4 — find
+
+Imagine:
+
+```text
+Projeto/
+├── src/
+├── logs -> /var/log
+```
+
+O diretório:
+
+```text
+logs
+```
+
+é um link simbólico.
+
+Executando:
+
+```bash
+find -P Projeto
+```
+
+Os links simbólicos não serão seguidos.
+
+Isso evita percorrer diretórios externos durante uma busca.
+
+---
+
+## Comparando
+
+| Flag | Exemplo |
+|------|----------|
+| `-p` | Preserve / Parents |
+| `-P` | Port / Physical |
+
+Observe que apenas alterar a capitalização muda completamente o comportamento.
+
+---
+
+## 📚 Curiosidade Técnica
+
+Os links simbólicos (symlinks) são muito utilizados no Linux.
+
+Alguns comandos oferecem três comportamentos diferentes:
+
+- seguir todos os links;
+- nunca seguir links;
+- seguir apenas alguns tipos.
+
+Por esse motivo, aparecem combinações como:
+
+```text
+-P
+-L
+-H
+```
+
+Essas três opções serão estudadas em detalhes ao longo deste manual.
+
+---
+
+## Utilizando em Shell Script
+
+Imagine um script que precisa descobrir o diretório real onde está sendo executado.
+
+```bash
+pwd -P
+```
+
+Isso evita problemas causados por links simbólicos.
+
+---
+
+## Utilizando em Pentest
+
+Durante auditorias é comum encontrar diversos links simbólicos.
+
+Exemplo:
+
+```bash
+find -P /
+```
+
+Dessa forma a enumeração permanece apenas dentro da árvore desejada.
+
+Também é comum conectar em servidores SSH utilizando portas diferentes da padrão.
+
+```bash
+scp -P 2222
+```
+
+---
+
+## 🔒 Cuidados de segurança
+
+Durante um Pentest, seguir links simbólicos pode levar o scanner para diretórios inesperados.
+
+Dependendo do objetivo da análise, isso pode:
+
+- aumentar muito o tempo de execução;
+- gerar resultados duplicados;
+- acessar locais que não deveriam fazer parte da auditoria.
+
+---
+
+## Boas práticas
+
+✔ Sempre confirme se o comando diferencia `-p` de `-P`.
+
+✔ Nunca assuma que letras maiúsculas e minúsculas possuem o mesmo significado.
+
+---
+
+## Erros comuns
+
+### Utilizar `scp -p`
+
+Esse é um erro muito comum.
+
+No OpenSSH:
+
+```bash
+scp -P 2222
+```
+
+Utiliza a porta.
+
+Já:
+
+```bash
+scp -p
+```
+
+Preserva atributos do arquivo.
+
+Apenas uma letra maiúscula muda completamente o comportamento.
+
+---
+
+## Observações
+
+A distinção entre letras maiúsculas e minúsculas faz parte da filosofia Unix.
+
+Sempre leia a documentação com atenção.
+
+---
+
+## Dicas
+
+💡 Sempre copie exatamente a opção mostrada na documentação.
+
+Não altere letras maiúsculas para minúsculas (ou vice-versa).
+
+---
+
+## Resumo
+
+- `-P` normalmente representa Port ou Physical.
+- É utilizada para evitar conflito com `-p`.
+- Muito comum nas ferramentas SSH.
+- Também aparece em comandos relacionados ao sistema de arquivos.
+
+---
+
+# Flag `-o`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-o` normalmente representa a palavra **Output** (Saída) ou **Option** (Opção).
+
+Ela é utilizada para informar ao programa que o próximo argumento será um arquivo de saída ou uma configuração específica.
+
+É uma das flags mais reutilizadas do Linux.
+
+---
+
+## 📚 Por que a letra `o`?
+
+Em inglês:
+
+- **Output** → saída
+- **Option** → opção
+
+Essas duas palavras aparecem em praticamente todos os sistemas Unix.
+
+Por isso, diversos programas utilizam exatamente essa letra.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `curl` | Arquivo de saída |
+| `gcc` | Nome do arquivo gerado |
+| `mount` | Opções de montagem |
+| `ssh` | Opções da conexão |
+| `find` | Operador lógico OR (`-o`) |
+
+---
+
+## Como funciona?
+
+O significado depende do comando.
+
+Vamos analisar os principais casos.
+
+---
+
+# Exemplo 1 — curl
+
+```bash
+curl -o pagina.html https://example.com
+```
+
+Resultado:
+
+O conteúdo será salvo em:
+
+```text
+pagina.html
+```
+
+Sem `-o`, o conteúdo seria exibido diretamente no terminal.
+
+---
+
+# Exemplo 2 — gcc
+
+```bash
+gcc programa.c -o programa
+```
+
+Resultado:
+
+Será criado o executável:
+
+```text
+programa
+```
+
+Sem `-o`, o compilador normalmente gera:
+
+```text
+a.out
+```
+
+---
+
+# Exemplo 3 — mount
+
+```bash
+mount -o ro /dev/sdb1 /mnt
+```
+
+Neste exemplo:
+
+```text
+ro
+```
+
+significa:
+
+Read Only.
+
+O sistema de arquivos será montado apenas para leitura.
+
+Também podem ser utilizadas diversas outras opções.
+
+---
+
+# Exemplo 4 — ssh
+
+```bash
+ssh -o StrictHostKeyChecking=no usuario@host
+```
+
+Neste caso:
+
+```text
+-o
+```
+
+permite passar uma configuração específica para a conexão.
+
+Esse recurso é bastante utilizado em automações.
+
+---
+
+# Exemplo 5 — find
+
+No comando `find`, `-o` possui um significado completamente diferente.
+
+```bash
+find . -name "*.txt" -o -name "*.log"
+```
+
+Resultado:
+
+Serão encontrados:
+
+- arquivos `.txt`;
+- arquivos `.log`.
+
+Aqui:
+
+```text
+-o
+```
+
+funciona como um operador lógico **OR**.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `curl -o` | Salvar saída |
+| `gcc -o` | Nome do executável |
+| `mount -o` | Opções |
+| `ssh -o` | Opções |
+| `find -o` | Operador OR |
+
+---
+
+## Utilizando em Shell Script
+
+É extremamente comum.
+
+Exemplo:
+
+```bash
+curl -o backup.html https://servidor
+```
+
+Outro:
+
+```bash
+gcc programa.c -o programa
+```
+
+---
+
+## Utilizando em Pentest
+
+Muito utilizada durante:
+
+- download de arquivos;
+- compilação de exploits;
+- conexões SSH;
+- enumeração com `find`.
+
+---
+
+## Boas práticas
+
+✔ Sempre escolha nomes descritivos para os arquivos gerados com `-o`.
+
+✔ Ao utilizar `find`, combine `-o` com parênteses escapados (`\(` e `\)`) quando a expressão ficar mais complexa, para evitar resultados inesperados.
+
+---
+
+## Erros comuns
+
+### Confundir `-o` do `find` com `-o` do `curl`
+
+São funcionalidades completamente diferentes.
+
+Mais uma vez, memorize:
+
+> **Comando + Flag**
+
+---
+
+## Observações
+
+`-o` está entre as flags mais reutilizadas do Linux.
+
+---
+
+## Dicas
+
+💡 Sempre pergunte:
+
+> "Saída?" ou "Opção?"
+
+Isso ajuda a lembrar os significados mais comuns da flag.
+
+---
+
+## Resumo
+
+- Geralmente significa Output ou Option.
+- Também pode representar o operador lógico OR no `find`.
+- Muito utilizada em programação, automação e Pentest.
+- Seu significado depende do programa.
+
+---

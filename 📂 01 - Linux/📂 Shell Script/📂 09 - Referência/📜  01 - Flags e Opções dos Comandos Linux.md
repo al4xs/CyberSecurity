@@ -2139,3 +2139,4 @@ Grande parte dos administradores utiliza essa opção diariamente.
 - Mostra permissões, proprietário, grupo, tamanho e data.
 - Muito utilizada em administração de sistemas e Pentest.
 - Geralmente combinada com `-a` e `-h`.
+

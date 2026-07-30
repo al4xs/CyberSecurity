@@ -1,139 +1,320 @@
 
 ---
-# Echo - Parâmetro `-e`
+# Read
 
-## O que é?
+> O comando `read` lê dados da entrada padrão (`stdin`) e armazena o valor informado em uma ou mais variáveis.
 
-O parâmetro `-e` do comando `echo` permite interpretar caracteres especiais precedidos por uma barra invertida (`\`).
+---
 
-## Exemplo
-
-```bash
-
-echo -e "Olá\nMundo"
-
-```
-
-### Saída
-
-```text
-
-Olá
-
-Mundo
-
-```
-
-## Caracteres especiais mais utilizados
-
-| Caractere | Descrição |
-
-| ---------- | --------- |
-
-| `\n` | Quebra de linha |
-
-| `\t` | Tabulação |
-
-| `\\` | Barra invertida (`\`) |
-
-| `\"` | Aspas duplas |
-
-| `\r` | Retorno de carro |
-
-## Observação
-
-Sem o parâmetro `-e`, o `echo` imprime os caracteres literalmente.
-
-### Exemplo
+# Sintaxe
 
 ```bash
-
-echo "Olá\nMundo"
-
-```
-
-### Saída
-
-```text
-
-Olá\nMundo
-
+read [OPÇÕES] [VARIÁVEIS]
 ```
 
 ---
 
-# Read - Parâmetro `-p`
+# `-p`
 
 ## O que é?
 
-O parâmetro `-p` do comando `read` permite exibir uma mensagem (prompt) antes de o usuário digitar uma entrada.
-
-A mensagem é exibida na **mesma linha** em que o usuário irá inserir o valor.
-
-## Sintaxe
-
-```bash
-
-read -p "Mensagem: " variavel
-
-```
+Exibe uma mensagem (prompt) antes de aguardar a entrada do usuário.
 
 ## Exemplo
 
 ```bash
-
 read -p "Digite seu nome: " nome
-
 ```
 
 ### Saída
 
 ```text
-
 Digite seu nome: Allan
-
 ```
 
-A variável `nome` armazenará o valor digitado pelo usuário.
+A variável `nome` armazenará:
 
-## Equivalente sem `-p`
+```text
+Allan
+```
 
-Sem o parâmetro `-p`, é necessário usar o comando `echo` para exibir a mensagem.
+---
+
+# `-s`
+
+## O que é?
+
+Oculta os caracteres digitados pelo usuário.
+
+Muito utilizado para leitura de senhas.
+
+## Exemplo
 
 ```bash
-
-echo "Digite seu nome:"
-
-read nome
-
+read -s -p "Senha: " senha
 ```
 
 ### Saída
 
 ```text
-
-Digite seu nome:
-
-Allan
-
+Senha:
 ```
 
-## Observação
+> Os caracteres digitados não aparecem na tela.
 
-O parâmetro `-p` é uma opção do **Bash**.
+---
 
-No **Zsh**, a sintaxe é diferente:
+# `-r`
 
-```zsh
+## O que é?
 
-read "nome?Digite seu nome: "
+Impede que a barra invertida (`\`) seja interpretada como caractere de escape.
 
+## Exemplo
+
+```bash
+read -r caminho
 ```
 
-Caso utilize `read -p` no Zsh, será exibido o erro:
+Entrada
 
 ```text
-
-read: -p: no coprocess
-
+C:\Users\Allan
 ```
+
+Valor armazenado
+
+```text
+C:\Users\Allan
+```
+
+Sem `-r`, algumas barras invertidas podem ser interpretadas como escape.
+
+---
+
+# `-a`
+
+## O que é?
+
+Armazena os valores digitados em um array.
+
+## Exemplo
+
+```bash
+read -a nomes
+```
+
+Entrada
+
+```text
+João Maria Pedro
+```
+
+Acesso
+
+```bash
+echo "${nomes[0]}"
+echo "${nomes[1]}"
+echo "${nomes[2]}"
+```
+
+Saída
+
+```text
+João
+Maria
+Pedro
+```
+
+---
+
+# `-t`
+
+## O que é?
+
+Define um tempo limite para o usuário informar uma entrada.
+
+## Exemplo
+
+```bash
+read -t 5 -p "Digite algo: " texto
+```
+
+Se nada for digitado em 5 segundos, o comando termina automaticamente.
+
+---
+
+# `-n`
+
+## O que é?
+
+Lê apenas uma quantidade específica de caracteres.
+
+## Exemplo
+
+```bash
+read -n 1 -p "Continuar? (s/n): " opcao
+```
+
+### Saída
+
+```text
+Continuar? (s/n): s
+```
+
+O usuário precisa digitar apenas um caractere.
+
+---
+
+# `-d`
+
+## O que é?
+
+Define um delimitador para encerrar a leitura.
+
+O padrão é a tecla **Enter** (`\n`).
+
+## Exemplo
+
+```bash
+read -d ":" texto
+```
+
+Entrada
+
+```text
+admin:1234
+```
+
+Valor armazenado
+
+```text
+admin
+```
+
+---
+
+# Ler múltiplas variáveis
+
+```bash
+read nome idade cidade
+```
+
+Entrada
+
+```text
+Allan 25 Curitiba
+```
+
+Resultado
+
+```bash
+echo "$nome"
+echo "$idade"
+echo "$cidade"
+```
+
+Saída
+
+```text
+Allan
+25
+Curitiba
+```
+
+---
+
+# Ler para a variável padrão
+
+Se nenhuma variável for informada, o Bash utiliza a variável especial `REPLY`.
+
+## Exemplo
+
+```bash
+read
+```
+
+Entrada
+
+```text
+Linux
+```
+
+Resultado
+
+```bash
+echo "$REPLY"
+```
+
+Saída
+
+```text
+Linux
+```
+
+---
+
+# Mini Cheatsheet
+
+| Opção | Função |
+|--------|--------|
+| `-p` | Exibir mensagem |
+| `-s` | Ocultar entrada |
+| `-r` | Não interpretar `\` |
+| `-a` | Ler para um array |
+| `-t` | Definir tempo limite |
+| `-n` | Limitar quantidade de caracteres |
+| `-d` | Alterar delimitador |
+
+---
+
+# Exemplos comuns
+
+## Nome
+
+```bash
+read -p "Nome: " nome
+```
+
+---
+
+## Senha
+
+```bash
+read -s -p "Senha: " senha
+echo
+```
+
+---
+
+## Confirmar ação
+
+```bash
+read -n 1 -p "Deseja continuar? (s/n): " resp
+echo
+```
+
+---
+
+## Array
+
+```bash
+read -a usuarios
+```
+
+---
+
+## Timeout
+
+```bash
+read -t 10 resposta
+```
+
+---
+
+# Observações
+
+- `read` lê dados da **entrada padrão (`stdin`)**.
+- A entrada normalmente é finalizada ao pressionar **Enter**.
+- É um **builtin do Bash**, ou seja, não é um programa externo.
+- Algumas opções podem variar entre diferentes shells, como `zsh`, `dash` e `BusyBox`.

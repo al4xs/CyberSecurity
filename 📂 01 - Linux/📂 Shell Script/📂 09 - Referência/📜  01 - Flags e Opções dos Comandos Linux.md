@@ -268,5 +268,7 @@ ls -lah
 
 O resultado será exatamente o mesmo.
 
-00
+---
+
+
 

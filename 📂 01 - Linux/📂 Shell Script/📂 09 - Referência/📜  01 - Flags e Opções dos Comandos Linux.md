@@ -6620,4 +6620,581 @@ Isso facilita bastante a memorização.
 - Complementa a flag `-P`.
 - É bastante utilizada em administração de sistemas e Pentest.
 
+---
+
+# Flag `-s`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-s` é uma das mais reutilizadas em sistemas Linux.
+
+Dependendo do comando, ela pode significar:
+
+- **Silent** (Silencioso)
+- **Symbolic** (Simbólico)
+- **Size** (Tamanho)
+- **Summarize** (Resumir)
+- **Secure** (Seguro)
+- **Subject** (Assunto, em algumas ferramentas)
+
+Como já vimos em outras flags, **não existe um significado universal**.
+
+O correto é sempre associar:
+
+> **Comando + Flag**
+
+Nunca apenas a letra.
+
+---
+
+## 📚 Por que a letra `s`?
+
+A letra **S** representa diversas palavras muito utilizadas em sistemas operacionais.
+
+Algumas delas:
+
+- Silent
+- Symbolic
+- Size
+- Summary
+- Secure
+- Source
+
+Por esse motivo ela acabou sendo reutilizada por centenas de programas diferentes.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `curl` | Silent |
+| `wget` | Silent |
+| `ln` | Symbolic |
+| `du` | Summarize |
+| `test` / `[` | Arquivo não vazio (Size) |
+| `tar` | Preserve sparse files (implementações específicas) |
+
+---
+
+## Como funciona?
+
+Vamos conhecer os casos mais importantes.
+
+---
+
+# Exemplo 1 — curl
+
+Sem a flag:
+
+```bash
+curl https://example.com
+```
+
+Além do conteúdo da página, algumas informações de progresso poderão aparecer.
+
+Agora:
+
+```bash
+curl -s https://example.com
+```
+
+Resultado
+
+O conteúdo será exibido sem mensagens extras.
+
+Essa opção é extremamente utilizada em Shell Script.
+
+---
+
+# Exemplo 2 — wget
+
+```bash
+wget -s https://example.com
+```
+
+Dependendo da implementação, o programa executa verificações sem realizar o download ou reduz a saída exibida.
+
+> **Importante:** as opções do `wget` variam entre versões. Consulte sempre `wget --help` ou `man wget`.
+
+---
+
+# Exemplo 3 — ln
+
+Criando um link simbólico.
+
+```bash
+ln -s arquivo.txt link.txt
+```
+
+Resultado:
+
+```text
+link.txt -> arquivo.txt
+```
+
+Aqui:
+
+```text
+-s
+```
+
+significa:
+
+```text
+Symbolic
+```
+
+---
+
+# Exemplo 4 — du
+
+Sem a flag:
+
+```bash
+du Documentos
+```
+
+Saída
+
+```text
+4 Documentos/imagens
+8 Documentos/scripts
+12 Documentos
+```
+
+Agora:
+
+```bash
+du -s Documentos
+```
+
+Saída
+
+```text
+12 Documentos
+```
+
+Neste caso:
+
+```text
+-s
+```
+
+significa:
+
+```text
+Summarize
+```
+
+Apenas o total é exibido.
+
+---
+
+# Exemplo 5 — test
+
+```bash
+if [ -s backup.sql ]; then
+    echo "Arquivo possui conteúdo."
+fi
+```
+
+Resultado
+
+A condição será verdadeira apenas se:
+
+- o arquivo existir;
+- possuir tamanho maior que zero.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `curl -s` | Silent |
+| `ln -s` | Symbolic |
+| `du -s` | Summarize |
+| `[ -s ]` | Arquivo não vazio |
+
+---
+
+## 📚 Curiosidade Técnica
+
+Observe como a palavra **Silent** aparece em diversas ferramentas de rede.
+
+Isso acontece porque programas utilizados em automações normalmente precisam produzir apenas a saída realmente importante.
+
+Por isso encontramos frequentemente:
+
+```bash
+curl -s
+```
+
+```bash
+wget -q
+```
+
+```bash
+ssh -q
+```
+
+Cada programa escolhe uma convenção diferente.
+
+---
+
+## Utilizando em Shell Script
+
+Muito comum.
+
+```bash
+IP=$(curl -s ifconfig.me)
+```
+
+Sem `-s`, mensagens extras poderiam ser capturadas pela variável.
+
+Outro exemplo:
+
+```bash
+if [ -s resultado.txt ]; then
+    echo "Arquivo preenchido."
+fi
+```
+
+---
+
+## Utilizando em Pentest
+
+Extremamente comum.
+
+Baixar informações silenciosamente:
+
+```bash
+curl -s http://alvo/api
+```
+
+Criar links simbólicos:
+
+```bash
+ln -s /etc/passwd passwd_link
+```
+
+Verificar se um arquivo de log contém dados:
+
+```bash
+[ -s access.log ]
+```
+
+---
+
+## 🔒 Cuidados de segurança
+
+Utilizar `curl -s` oculta mensagens de erro e progresso.
+
+Se estiver depurando um script, talvez seja melhor remover essa opção temporariamente.
+
+---
+
+## Boas práticas
+
+✔ Utilize `curl -s` em scripts automatizados.
+
+✔ Utilize `[ -s ]` para verificar arquivos antes de processá-los.
+
+✔ Utilize `du -sh` quando desejar um resumo legível.
+
+---
+
+## Erros comuns
+
+### Confundir `-s` do `curl` com `-s` do `ln`
+
+São funções completamente diferentes.
+
+Memorize:
+
+```text
+curl → Silent
+
+ln → Symbolic
+```
+
+---
+
+## Observações
+
+A flag `-s` está entre as mais reutilizadas do Linux.
+
+Ela aparece em praticamente todas as áreas:
+
+- redes;
+- programação;
+- administração;
+- Shell Script;
+- Pentest.
+
+---
+
+## Dicas
+
+💡 Quando encontrar `-s`, pergunte:
+
+> O programa quer ficar silencioso?
+
+Ou:
+
+> Está relacionado a links simbólicos?
+
+Na maioria dos casos, uma dessas respostas estará correta.
+
+---
+
+## Resumo
+
+- Não possui significado único.
+- Frequentemente representa Silent ou Symbolic.
+- Muito utilizada em Shell Script.
+- Muito comum em Pentest.
+
+---
+
+# Flag `-t`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-t` normalmente representa:
+
+- **Target** (Destino)
+- **Time** (Tempo)
+- **Type** (Tipo)
+- **Terminal**
+
+Seu significado depende do comando utilizado.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `cp` | Diretório de destino |
+| `mv` | Diretório de destino |
+| `touch` | Definir data/hora |
+| `ssh` | Forçar alocação de terminal (`-t`) |
+| `find` | Tipo (`-type`) |
+| `tar` | Listar conteúdo (`-t`) |
+
+---
+
+## Como funciona?
+
+Vamos analisar os casos mais comuns.
+
+---
+
+# Exemplo 1 — tar
+
+```bash
+tar -tf backup.tar
+```
+
+Resultado
+
+Lista o conteúdo do arquivo TAR sem extraí-lo.
+
+Saída
+
+```text
+Documentos/
+Documentos/notas.txt
+Documentos/imagens/
+```
+
+---
+
+# Exemplo 2 — touch
+
+```bash
+touch -t 202507261530 arquivo.txt
+```
+
+Resultado
+
+Define a data de modificação do arquivo para:
+
+```text
+26/07/2025 15:30
+```
+
+---
+
+# Exemplo 3 — ssh
+
+```bash
+ssh -t usuario@servidor
+```
+
+Resultado
+
+Força a criação de um terminal interativo remoto.
+
+Essa opção é muito utilizada para executar comandos administrativos remotamente.
+
+---
+
+## Utilizando em Shell Script
+
+O uso mais frequente aparece em automações com `tar`.
+
+```bash
+tar -tf backup.tar
+```
+
+Permite verificar o conteúdo de um backup antes de extraí-lo.
+
+---
+
+## Utilizando em Pentest
+
+Muito utilizada com:
+
+```bash
+ssh -t
+```
+
+Especialmente durante acesso remoto a servidores.
+
+Também aparece em análises de arquivos TAR.
+
+---
+
+## Resumo
+
+- Geralmente representa Target, Time ou Terminal.
+- Muito utilizada em `tar`, `touch` e `ssh`.
+- Bastante comum em administração de sistemas.
+
+---
+
+# Flag `-u`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-u` normalmente representa:
+
+- **Update** (Atualizar)
+- **User** (Usuário)
+- **Unix**
+- **Uppercase** (em programas específicos)
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `cp` | Copiar apenas arquivos mais recentes |
+| `touch` | Utilizar horário de referência |
+| `id` | Mostrar apenas o UID |
+| `sort` | Combinada com outras opções em alguns contextos |
+| `tar` | Atualizar arquivos em um arquivo TAR |
+
+---
+
+## Exemplo 1 — cp
+
+```bash
+cp -u origem.txt destino/
+```
+
+Resultado
+
+O arquivo será copiado apenas se:
+
+- não existir no destino; ou
+- for mais recente.
+
+Isso evita cópias desnecessárias.
+
+---
+
+## Exemplo 2 — id
+
+```bash
+id -u
+```
+
+Saída
+
+```text
+1000
+```
+
+Nesse caso, o comando exibe apenas o UID do usuário atual.
+
+---
+
+## Exemplo 3 — tar
+
+```bash
+tar -uf backup.tar novo_arquivo.txt
+```
+
+Resultado
+
+O arquivo será adicionado ou atualizado dentro do arquivo TAR.
+
+---
+
+## Utilizando em Shell Script
+
+Muito útil para backups incrementais.
+
+```bash
+cp -u origem/* backup/
+```
+
+---
+
+## Utilizando em Pentest
+
+É comum utilizar:
+
+```bash
+id -u
+```
+
+para verificar rapidamente o identificador do usuário atual, especialmente após obter acesso a um sistema.
+
+---
+
+## Boas práticas
+
+✔ Utilize `cp -u` quando copiar grandes quantidades de arquivos.
+
+✔ Utilize `id -u` em scripts para verificar privilégios.
+
+Exemplo:
+
+```bash
+if [ "$(id -u)" -eq 0 ]; then
+    echo "Executando como root."
+fi
+```
+
+---
+
+## Resumo
+
+- Geralmente significa Update ou User.
+- Muito utilizada em backups.
+- Muito útil em Shell Script.
+- Bastante utilizada em administração de sistemas.
+
 

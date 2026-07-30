@@ -3276,3 +3276,415 @@ A forma de utilização dependerá do comando escolhido.
 
 ---
 
+---
+
+# Flag `-i` (Continuação)
+
+## Onde você encontrará essa flag?
+
+A flag `-i` aparece em diversos comandos do Linux, porém seu significado depende do programa utilizado.
+
+Veja alguns exemplos:
+
+| Comando | Significado |
+|----------|-------------|
+| `rm` | Interactive (confirma antes de remover) |
+| `cp` | Interactive (confirma antes de sobrescrever) |
+| `mv` | Interactive (confirma antes de sobrescrever) |
+| `grep` | Ignore Case (ignora diferenças entre maiúsculas e minúsculas) |
+| `sed` | In-place (edita o arquivo diretamente) |
+
+Observe que a letra continua sendo a mesma, porém o comportamento muda completamente.
+
+Por isso, nunca assuma que uma flag terá sempre o mesmo significado.
+
+---
+
+# Exemplos
+
+## Exemplo 1 — rm
+
+Sem a flag:
+
+```bash
+rm senha.txt
+```
+
+Resultado:
+
+O arquivo será removido imediatamente.
+
+Agora:
+
+```bash
+rm -i senha.txt
+```
+
+Saída
+
+```text
+rm: remover arquivo regular 'senha.txt'?
+```
+
+O sistema aguardará sua confirmação.
+
+Se responder:
+
+```text
+y
+```
+
+O arquivo será removido.
+
+Caso responda:
+
+```text
+n
+```
+
+Nada acontecerá.
+
+---
+
+## Exemplo 2 — cp
+
+Imagine que já exista um arquivo chamado:
+
+```text
+backup.sql
+```
+
+Agora execute:
+
+```bash
+cp banco.sql backup.sql
+```
+
+Resultado:
+
+O arquivo antigo será sobrescrito imediatamente.
+
+Agora:
+
+```bash
+cp -i banco.sql backup.sql
+```
+
+Saída
+
+```text
+cp: sobrescrever 'backup.sql'?
+```
+
+Isso evita perda acidental de dados.
+
+---
+
+## Exemplo 3 — mv
+
+```bash
+mv -i script.sh backup/
+```
+
+Caso exista outro arquivo chamado:
+
+```text
+script.sh
+```
+
+Dentro do diretório `backup`, o sistema perguntará antes de sobrescrevê-lo.
+
+---
+
+## Exemplo 4 — grep
+
+No comando `grep`, o significado muda completamente.
+
+Arquivo:
+
+```text
+usuarios.txt
+```
+
+Conteúdo:
+
+```text
+Admin
+admin
+ADMIN
+usuario
+```
+
+Busca sem `-i`:
+
+```bash
+grep "admin" usuarios.txt
+```
+
+Saída
+
+```text
+admin
+```
+
+Agora:
+
+```bash
+grep -i "admin" usuarios.txt
+```
+
+Saída
+
+```text
+Admin
+admin
+ADMIN
+```
+
+Observe que agora o comando ignorou diferenças entre letras maiúsculas e minúsculas.
+
+---
+
+## Exemplo 5 — sed
+
+No `sed`, a flag `-i` significa **In-place**.
+
+Arquivo:
+
+```text
+config.txt
+```
+
+Conteúdo:
+
+```text
+porta=80
+```
+
+Comando:
+
+```bash
+sed -i 's/80/8080/' config.txt
+```
+
+Resultado:
+
+O próprio arquivo será alterado.
+
+Novo conteúdo:
+
+```text
+porta=8080
+```
+
+Sem `-i`, o `sed` exibiria a alteração apenas na saída padrão, sem modificar o arquivo original.
+
+---
+
+# Utilizando em Shell Script
+
+A flag `-i` é utilizada quando desejamos proteger arquivos importantes.
+
+Exemplo:
+
+```bash
+#!/bin/bash
+
+cp -i backup.sql backups/
+```
+
+Caso o arquivo já exista, o script solicitará confirmação.
+
+No entanto, em automações totalmente automáticas essa flag normalmente **não é utilizada**, pois ela interrompe a execução aguardando a resposta do usuário.
+
+---
+
+# Utilizando em Pentest
+
+Durante um Pentest, normalmente evitamos utilizar flags interativas em scripts automatizados.
+
+Imagine um scanner que precise copiar centenas de arquivos.
+
+Se utilizarmos:
+
+```bash
+cp -i
+```
+
+O script poderá parar diversas vezes aguardando confirmação.
+
+Por esse motivo, ferramentas automatizadas geralmente evitam opções interativas.
+
+Já o `grep -i` é extremamente comum.
+
+Exemplo:
+
+```bash
+grep -Ri "password" .
+```
+
+Esse comando procura por:
+
+```text
+password
+PASSWORD
+Password
+PaSsWoRd
+```
+
+Em todos os arquivos do diretório.
+
+---
+
+# Boas práticas
+
+✔ Utilize `-i` quando estiver manipulando arquivos importantes.
+
+✔ Evite utilizá-la em scripts totalmente automatizados.
+
+✔ Sempre confirme o significado da flag antes de utilizá-la.
+
+---
+
+# Erros comuns
+
+## Pensar que `-i` significa sempre "Interactive"
+
+Não significa.
+
+Veja alguns exemplos:
+
+| Comando | Significado |
+|----------|-------------|
+| `rm` | Interactive |
+| `cp` | Interactive |
+| `mv` | Interactive |
+| `grep` | Ignore Case |
+| `sed` | In-place |
+
+---
+
+# Observações
+
+A flag `-i` é uma das melhores demonstrações de que uma mesma letra pode possuir funções completamente diferentes.
+
+---
+
+# Dicas
+
+💡 Sempre consulte:
+
+```bash
+man comando
+```
+
+antes de assumir o significado de uma flag.
+
+---
+
+# Resumo
+
+- `-i` normalmente significa Interactive.
+- Em outros comandos pode significar Ignore Case ou In-place.
+- O comportamento depende do programa.
+- É muito utilizada em Shell Script e Pentest.
+
+---
+
+# Flag `-I`
+
+⭐⭐⭐☆☆ **Importante**
+
+## O que significa?
+
+A flag `-I` (i maiúsculo) normalmente está relacionada à palavra **Ignore** (ignorar).
+
+Ela é utilizada para instruir um comando a ignorar determinados arquivos, padrões ou comportamentos.
+
+Assim como outras flags, seu significado depende do programa.
+
+---
+
+## Onde você encontrará essa flag?
+
+Alguns exemplos:
+
+| Comando | Significado |
+|----------|-------------|
+| `grep` | Ignorar arquivos binários |
+| `make` | Adicionar diretórios de inclusão |
+| `gcc` | Diretórios de cabeçalhos (`#include`) |
+| `diff` | Ignorar algumas diferenças específicas |
+
+---
+
+## Como funciona?
+
+No `grep`, por exemplo, ao pesquisar recursivamente um diretório, podemos encontrar arquivos binários.
+
+Esses arquivos normalmente não contêm texto legível e podem gerar mensagens desnecessárias.
+
+Com a flag `-I`, esses arquivos são ignorados.
+
+---
+
+## Exemplo
+
+```bash
+grep -RI "password" .
+```
+
+Neste comando:
+
+- `-R` percorre todos os diretórios.
+- `-I` ignora arquivos binários.
+
+Resultado:
+
+A busca será feita apenas em arquivos de texto.
+
+Isso torna o comando mais rápido e evita resultados desnecessários.
+
+---
+
+## Utilizando em Pentest
+
+Durante a enumeração de servidores Linux, é muito comum pesquisar:
+
+```bash
+grep -RI "password" .
+```
+
+ou
+
+```bash
+grep -RI "token" .
+```
+
+Assim evitamos perder tempo analisando arquivos binários.
+
+---
+
+## Observações
+
+No `gcc`, a flag `-I` possui outro significado.
+
+Exemplo:
+
+```bash
+gcc -I include main.c
+```
+
+Nesse caso ela informa ao compilador onde procurar arquivos de cabeçalho (`.h`).
+
+Mais uma vez percebemos que a mesma flag pode representar funções completamente diferentes dependendo do programa.
+
+---
+
+## Resumo
+
+- Geralmente significa **Ignore**.
+- Muito utilizada pelo `grep`.
+- Também aparece no `gcc` e em outras ferramentas.
+- Sempre consulte a documentação para confirmar seu significado.
+

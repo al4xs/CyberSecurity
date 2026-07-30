@@ -1513,3 +1513,4 @@ Você provavelmente utilizará esse comando centenas de vezes.
 - Extremamente útil em administração de sistemas e Pentest.
 - Pode ser combinada com outras flags, como `-l` e `-h`.
 - O significado pode variar conforme o comando.
+

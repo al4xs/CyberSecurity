@@ -5533,3 +5533,568 @@ Isso ajuda a lembrar os significados mais comuns da flag.
 - Seu significado depende do programa.
 
 ---
+
+# Flag `-e`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-e` é uma das opções mais reutilizadas no ecossistema Linux.
+
+Dependendo do programa, ela pode significar:
+
+- **Expression** (Expressão)
+- **Execute** (Executar)
+- **Enable** (Habilitar)
+- **Extended** (Estendido)
+
+Por isso, seu significado depende totalmente do comando utilizado.
+
+Ao contrário de flags como `-h` (Human Readable) ou `-v` (Verbose), não existe um único significado predominante para `-e`.
+
+---
+
+## 📚 Por que a letra `e`?
+
+A letra **E** aparece em inúmeras palavras importantes da computação:
+
+- Expression
+- Execute
+- Enable
+- Environment
+- Extended
+- Escape
+
+Como essas palavras são muito comuns, muitos programas acabaram reutilizando a mesma letra.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `grep` | Expressão de busca |
+| `sed` | Expressão de substituição |
+| `echo` | Interpretar sequências de escape |
+| `bash` | Executar comandos com tratamento de erros (em alguns contextos) |
+| `find` | Executar comando (`-exec`) |
+
+---
+
+## Como funciona?
+
+Vamos analisar alguns dos casos mais conhecidos.
+
+---
+
+# Exemplo 1 — grep
+
+Imagine o arquivo:
+
+```text
+usuarios.txt
+```
+
+Conteúdo:
+
+```text
+admin
+root
+guest
+backup
+```
+
+Podemos pesquisar utilizando:
+
+```bash
+grep -e "admin" usuarios.txt
+```
+
+Resultado:
+
+```text
+admin
+```
+
+A opção `-e` informa que o próximo argumento é uma expressão de busca.
+
+Isso é especialmente útil quando desejamos pesquisar vários padrões.
+
+```bash
+grep -e "admin" -e "root" usuarios.txt
+```
+
+Resultado:
+
+```text
+admin
+root
+```
+
+---
+
+# Exemplo 2 — sed
+
+Arquivo:
+
+```text
+config.txt
+```
+
+Conteúdo:
+
+```text
+porta=80
+```
+
+Comando:
+
+```bash
+sed -e 's/80/8080/' config.txt
+```
+
+Resultado:
+
+```text
+porta=8080
+```
+
+Aqui:
+
+```text
+-e
+```
+
+indica uma expressão que deverá ser executada.
+
+Também podemos utilizar várias expressões.
+
+```bash
+sed \
+-e 's/http/https/' \
+-e 's/80/443/' arquivo.txt
+```
+
+---
+
+# Exemplo 3 — echo
+
+Sem a flag:
+
+```bash
+echo "Linha1\nLinha2"
+```
+
+Saída
+
+```text
+Linha1\nLinha2
+```
+
+Agora:
+
+```bash
+echo -e "Linha1\nLinha2"
+```
+
+Saída
+
+```text
+Linha1
+Linha2
+```
+
+Neste caso:
+
+```text
+-e
+```
+
+faz com que o `echo` interprete caracteres especiais.
+
+---
+
+## Sequências de escape mais comuns
+
+| Sequência | Significado |
+|-----------|-------------|
+| `\n` | Nova linha |
+| `\t` | Tabulação |
+| `\\` | Barra invertida |
+| `\"` | Aspas duplas |
+| `\r` | Retorno de carro |
+| `\a` | Alerta sonoro (quando suportado) |
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `grep -e` | Expressão |
+| `sed -e` | Expressão |
+| `echo -e` | Interpretar escapes |
+
+---
+
+## Utilizando em Shell Script
+
+Muito comum.
+
+Exemplo:
+
+```bash
+echo -e "Iniciando...\n"
+```
+
+Outro exemplo:
+
+```bash
+grep -e "ERROR" logfile.txt
+```
+
+Também é frequente utilizar várias expressões em um único comando `sed`.
+
+---
+
+## Utilizando em Pentest
+
+Bastante utilizada para:
+
+Pesquisar múltiplos padrões:
+
+```bash
+grep -e "password" -e "token" config.php
+```
+
+Formatar relatórios:
+
+```bash
+echo -e "\n=== RELATÓRIO ===\n"
+```
+
+Automatizar substituições:
+
+```bash
+sed -e 's/localhost/192.168.1.10/' config.ini
+```
+
+---
+
+## 📚 Curiosidade Técnica
+
+O comportamento de:
+
+```bash
+echo -e
+```
+
+não é totalmente padronizado entre todas as implementações.
+
+Em alguns sistemas, especialmente em scripts portáveis, recomenda-se utilizar:
+
+```bash
+printf
+```
+
+pois seu comportamento é definido de forma mais consistente pelo padrão POSIX.
+
+---
+
+## Boas práticas
+
+✔ Prefira `printf` em scripts que precisam funcionar em diferentes sistemas Unix.
+
+✔ Utilize múltiplas opções `-e` no `grep` quando precisar pesquisar diversos padrões.
+
+✔ Utilize várias expressões no `sed` em vez de executar vários comandos separados.
+
+---
+
+## Erros comuns
+
+### Assumir que `echo -e` funciona da mesma forma em todos os sistemas
+
+Nem sempre.
+
+Implementações diferentes do `echo` podem interpretar `-e` de maneira distinta.
+
+Quando a portabilidade for importante, utilize:
+
+```bash
+printf
+```
+
+---
+
+## Observações
+
+A flag `-e` é extremamente comum em Shell Script.
+
+Também aparece constantemente em administração de sistemas.
+
+---
+
+## Dicas
+
+💡 Sempre que encontrar:
+
+```text
+-e
+```
+
+pergunte:
+
+> O programa está esperando uma expressão ou interpretando caracteres especiais?
+
+Essa pergunta normalmente ajuda a identificar seu significado.
+
+---
+
+## Resumo
+
+- Não possui significado único.
+- Geralmente representa Expressão ou Escape.
+- Muito utilizada em `grep`, `sed` e `echo`.
+- Importante para Shell Script e automação.
+
+---
+
+# Flag `-d`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-d` normalmente está relacionada à palavra **Directory** (Diretório), **Delimiter** (Delimitador) ou **Debug**, dependendo do programa.
+
+Ela aparece com frequência em ferramentas que trabalham com arquivos, entrada de dados ou sistemas de arquivos.
+
+---
+
+## 📚 Por que a letra `d`?
+
+A palavra **Directory** é uma das mais importantes do Unix.
+
+Por isso, diversos programas reutilizam essa letra para operações relacionadas a diretórios.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `test` / `[` | Verificar se é um diretório |
+| `read` | Delimitador |
+| `cut` | Delimitador |
+| `tar` | Diretório de trabalho (em algumas opções longas e contextos específicos) |
+| `find` | Tipo diretório (`-type d`) |
+
+---
+
+## Como funciona?
+
+O significado depende do comando utilizado.
+
+---
+
+# Exemplo 1 — test
+
+```bash
+if [ -d "/etc" ]; then
+    echo "Existe"
+fi
+```
+
+Resultado
+
+```text
+Existe
+```
+
+A condição será verdadeira apenas se o caminho informado for um diretório.
+
+---
+
+# Exemplo 2 — read
+
+```bash
+read -d ":" usuario
+```
+
+O comando continuará lendo até encontrar:
+
+```text
+:
+```
+
+Esse recurso é útil ao processar arquivos com delimitadores personalizados.
+
+---
+
+# Exemplo 3 — cut
+
+```bash
+cut -d ":" -f1 /etc/passwd
+```
+
+Neste caso:
+
+```text
+-d ":"
+```
+
+define que o caractere `:` será utilizado como delimitador.
+
+Resultado:
+
+```text
+root
+daemon
+bin
+sys
+...
+```
+
+---
+
+# Exemplo 4 — find
+
+```bash
+find . -type d
+```
+
+Embora `-d` não apareça diretamente como uma flag isolada, a letra `d` representa o tipo **directory**.
+
+Resultado:
+
+```text
+.
+./Documentos
+./Downloads
+./Projetos
+```
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `[ -d ]` | Diretório |
+| `read -d` | Delimitador |
+| `cut -d` | Delimitador |
+| `find -type d` | Tipo diretório |
+
+---
+
+## Utilizando em Shell Script
+
+Muito utilizada para validar caminhos.
+
+```bash
+if [ -d "$HOME/backup" ]; then
+    echo "Backup encontrado."
+fi
+```
+
+Também aparece em scripts que processam arquivos CSV ou outros formatos delimitados.
+
+---
+
+## Utilizando em Pentest
+
+É comum verificar a existência de diretórios importantes.
+
+```bash
+[ -d "/var/www" ]
+```
+
+Também é frequente utilizar:
+
+```bash
+cut -d ":"
+```
+
+para analisar arquivos como:
+
+```text
+/etc/passwd
+```
+
+---
+
+## 📚 Curiosidade Técnica
+
+Grande parte dos arquivos de configuração do Linux utiliza o caractere:
+
+```text
+:
+```
+
+como delimitador.
+
+Por isso, ferramentas como `cut` aparecem com frequência em scripts administrativos.
+
+---
+
+## Boas práticas
+
+✔ Utilize `[ -d ]` antes de manipular diretórios.
+
+✔ Evite assumir que um caminho existe.
+
+✔ Sempre valide a entrada do usuário.
+
+---
+
+## Erros comuns
+
+### Confundir arquivo com diretório
+
+Lembre-se:
+
+```bash
+-f
+```
+
+Verifica arquivos.
+
+Já:
+
+```bash
+-d
+```
+
+Verifica diretórios.
+
+---
+
+## Observações
+
+A letra `d` está fortemente associada ao conceito de diretório no Linux.
+
+---
+
+## Dicas
+
+💡 Memorize:
+
+```text
+d → Directory
+f → File
+```
+
+Essa associação será utilizada constantemente em Shell Script.
+
+---
+
+## Resumo
+
+- Geralmente significa Directory ou Delimiter.
+- Muito utilizada em Shell Script.
+- Aparece frequentemente em automação e administração de sistemas.
+- É essencial para validação de diretórios.
+
+

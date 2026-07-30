@@ -1,94 +1,6 @@
-
----
-
 # Cheatsheet de Flags Linux
 
 > Consulta rápida das flags mais comuns utilizadas em comandos Linux e Unix.
-
----
-
-# Índice
-
-## A
-
-- [`-a`](#-a)
-- [`-A`](#-a-1)
-
-## C
-
-- [`-c`](#-c)
-
-## D
-
-- [`-d`](#-d)
-
-## E
-
-- [`-e`](#-e)
-
-## F
-
-- [`-f`](#-f)
-
-## H
-
-- [`-h`](#-h)
-
-## I
-
-- [`-i`](#-i)
-- [`-I`](#-i-1)
-
-## L
-
-- [`-l`](#-l)
-- [`-L`](#-l-1)
-
-## N
-
-- [`-n`](#-n)
-
-## O
-
-- [`-o`](#-o)
-
-## P
-
-- [`-p`](#-p)
-- [`-P`](#-p-1)
-
-## Q
-
-- [`-q`](#-q)
-
-## R
-
-- [`-r`](#-r)
-- [`-R`](#-r-1)
-
-## S
-
-- [`-s`](#-s)
-
-## T
-
-- [`-t`](#-t)
-
-## U
-
-- [`-u`](#-u)
-
-## V
-
-- [`-v`](#-v)
-
-## W
-
-- [`-w`](#-w)
-
-## X
-
-- [`-x`](#-x)
 
 ---
 
@@ -96,10 +8,10 @@
 
 | Item | Informação |
 |------|------------|
-| Significado | **All** |
-| Uso comum | Mostrar todos os arquivos, incluindo ocultos |
-| Comandos | `ls`, `cp`, `grep` |
-| Importância | ⭐⭐⭐⭐⭐ |
+| **Significado** | **All** (Todos) |
+| **Uso comum** | Mostrar todos os arquivos, incluindo os ocultos |
+| **Comandos comuns** | `ls`, `cp`, `grep` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
 
 ### Exemplo
 
@@ -120,19 +32,26 @@ Downloads
 
 ---
 
-# `-A`
+# `-l`
 
 | Item | Informação |
 |------|------------|
-| Significado | **Almost All** |
-| Uso comum | Lista arquivos ocultos, exceto `.` e `..` |
-| Comandos | `ls` |
-| Importância | ⭐⭐⭐⭐☆ |
+| **Significado** | **Long** (Formato longo) |
+| **Uso comum** | Exibir informações detalhadas sobre arquivos |
+| **Comandos comuns** | `ls` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
 
 ### Exemplo
 
 ```bash
-ls -A
+ls -l
+```
+
+**Saída**
+
+```text
+drwxr-xr-x 2 user user 4096 Jul 20 10:30 Documentos
+-rw-r--r-- 1 user user  842 Jul 20 09:10 notas.txt
 ```
 
 ---
@@ -141,10 +60,10 @@ ls -A
 
 | Item | Informação |
 |------|------------|
-| Significado | **Force** |
-| Uso comum | Forçar uma operação |
-| Comandos | `rm`, `cp`, `mv` |
-| Importância | ⭐⭐⭐⭐⭐ |
+| **Significado** | **Force** (Forçar) |
+| **Uso comum** | Executar uma ação sem solicitar confirmação |
+| **Comandos comuns** | `rm`, `cp`, `mv` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
 
 ### Exemplo
 
@@ -152,18 +71,16 @@ ls -A
 rm -f arquivo.txt
 ```
 
-⚠ Ignora confirmações e erros simples.
-
 ---
 
 # `-v`
 
 | Item | Informação |
 |------|------------|
-| Significado | **Verbose** |
-| Uso comum | Exibir detalhes da execução |
-| Comandos | `cp`, `mv`, `curl`, `ssh` |
-| Importância | ⭐⭐⭐⭐⭐ |
+| **Significado** | **Verbose** (Modo detalhado) |
+| **Uso comum** | Mostrar detalhes da execução |
+| **Comandos comuns** | `cp`, `mv`, `curl`, `ssh` |
+| **Importância** | ⭐⭐⭐⭐⭐ |
 
 ### Exemplo
 
@@ -171,7 +88,7 @@ rm -f arquivo.txt
 cp -v arquivo.txt backup/
 ```
 
-Saída
+**Saída**
 
 ```text
 'arquivo.txt' -> 'backup/arquivo.txt'
@@ -181,88 +98,47 @@ Saída
 
 # Combinações Mais Utilizadas
 
-| Comando     | Significado                                |
-| ----------- | ------------------------------------------ |
-| `ls -lah`   | Long + All + Human Readable                |
-| `rm -rf`    | Recursive + Force                          |
-| `cp -av`    | Archive + Verbose                          |
-| `grep -rin` | Recursive + Ignore Case + Número da linha  |
-| `find -L`   | Seguir links simbólicos                    |
-| `curl -LO`  | Seguir redirect + Salvar com nome original |
-| `tar -czvf` | Create + gzip + Verbose + File             |
+| Comando | Expansão |
+|----------|----------|
+| `ls -lah` | `-l` Long (Formato longo) + `-a` All (Todos) + `-h` Human Readable (Legível para humanos) |
+| `rm -rf` | `-r` Recursive (Recursivo) + `-f` Force (Forçar) |
+| `cp -av` | `-a` Archive (Modo arquivo) + `-v` Verbose (Modo detalhado) |
+| `grep -rin` | `-r` Recursive (Recursivo) + `-i` Ignore Case (Ignorar maiúsculas/minúsculas) + `-n` Number (Número da linha) |
+| `curl -LO` | `-L` Follow Redirects (Seguir redirecionamentos) + `-O` Remote Name (Salvar com o nome original) |
+| `tar -czvf` | `-c` Create (Criar) + `-z` Gzip (Compactar com gzip) + `-v` Verbose (Modo detalhado) + `-f` File (Arquivo) |
 
 ---
 
-# Convenções
+# Convenções Mais Comuns
 
-| Letra | Geralmente significa |
-|--------|----------------------|
-| `a` | All |
-| `c` | Count / Create |
-| `d` | Directory |
-| `e` | Expression |
-| `f` | Force |
-| `h` | Help / Human |
-| `i` | Interactive |
-| `l` | Long |
-| `n` | Number |
-| `o` | Output |
-| `p` | Preserve |
-| `q` | Quiet |
-| `r` | Recursive |
-| `s` | Silent |
-| `t` | Target / Time |
-| `u` | Update |
-| `v` | Verbose |
-| `w` | Word |
-| `x` | Execute |
-
----
-
-# Combinações Opostas
-
-| Flag | Oposta |
-|------|--------|
-| `-v` | `-q` |
-| `-L` | `-P` |
-| `-i` | `-f` |
+| Letra | Inglês | Português |
+|-------|---------|------------|
+| `a` | All | Todos |
+| `c` | Create / Count | Criar / Contar |
+| `d` | Directory | Diretório |
+| `e` | Expression | Expressão |
+| `f` | Force | Forçar |
+| `h` | Help / Human | Ajuda / Legível para humanos |
+| `i` | Interactive | Interativo |
+| `l` | Long | Formato longo |
+| `n` | Number | Número |
+| `o` | Output | Saída |
+| `p` | Preserve / Parents | Preservar / Pais |
+| `q` | Quiet | Silencioso |
+| `r` | Recursive | Recursivo |
+| `s` | Silent | Silencioso |
+| `t` | Target / Time | Destino / Tempo |
+| `u` | Update | Atualizar |
+| `v` | Verbose | Modo detalhado |
+| `w` | Word | Palavra |
+| `x` | Execute | Executar |
 
 ---
 
-# Mais utilizadas
+# Prioridade de Estudo
 
-⭐⭐⭐⭐⭐
-
-```
--a
--l
--h
--r
--f
--i
--v
-```
-
-⭐⭐⭐⭐☆
-
-```
--p
--o
--L
--q
--s
--n
-```
-
-⭐⭐⭐☆☆
-
-```
--A
--I
--P
--d
--t
--u
--w
--x
-```
+| Nível | Flags |
+|--------|-------|
+| ⭐⭐⭐⭐⭐ Essenciais | `-a` `-l` `-h` `-r` `-f` `-i` `-v` |
+| ⭐⭐⭐⭐☆ Muito comuns | `-p` `-o` `-L` `-q` `-s` `-n` |
+| ⭐⭐⭐☆☆ Úteis | `-A` `-I` `-P` `-d` `-t` `-u` `-w` `-x` |

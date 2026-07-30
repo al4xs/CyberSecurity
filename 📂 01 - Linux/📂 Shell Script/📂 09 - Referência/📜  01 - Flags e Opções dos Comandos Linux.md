@@ -3688,3 +3688,472 @@ Mais uma vez percebemos que a mesma flag pode representar funções completament
 - Também aparece no `gcc` e em outras ferramentas.
 - Sempre consulte a documentação para confirmar seu significado.
 
+---
+
+# Flag `-n`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-n` é uma das mais comuns do Linux e também uma das que mais mudam de significado entre comandos.
+
+Dependendo do programa, ela pode significar:
+
+- **Number** (numerar linhas)
+- **Count** (limitar quantidade)
+- **Não adicionar quebra de linha**
+- **Execução de teste (dry run)** em alguns programas
+- Outras funções específicas
+
+Por isso, sempre consulte a documentação do comando.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `echo` | Não adicionar quebra de linha |
+| `cat` | Numerar linhas |
+| `grep` | Mostrar número das linhas |
+| `head` | Quantidade de linhas |
+| `tail` | Quantidade de linhas |
+| `ping` | Número de pacotes (Windows) |
+| `sed` | Suprimir impressão automática |
+| `nl` | Numeração de linhas |
+
+---
+
+## Como funciona?
+
+O comportamento depende completamente do comando utilizado.
+
+Vamos conhecer os casos mais comuns.
+
+---
+
+# Exemplo 1 — echo
+
+Sem `-n`:
+
+```bash
+echo "Olá"
+echo "Mundo"
+```
+
+Saída
+
+```text
+Olá
+Mundo
+```
+
+Agora:
+
+```bash
+echo -n "Olá"
+echo " Mundo"
+```
+
+Saída
+
+```text
+Olá Mundo
+```
+
+A flag impede que o primeiro `echo` adicione uma quebra de linha.
+
+---
+
+# Exemplo 2 — cat
+
+Arquivo:
+
+```text
+Linux
+Shell Script
+Pentest
+```
+
+Comando:
+
+```bash
+cat -n arquivo.txt
+```
+
+Saída
+
+```text
+1 Linux
+2 Shell Script
+3 Pentest
+```
+
+Agora cada linha recebeu uma numeração.
+
+---
+
+# Exemplo 3 — grep
+
+```bash
+grep -n "root" /etc/passwd
+```
+
+Saída
+
+```text
+1:root:x:0:0:root:/root:/bin/bash
+```
+
+O número antes dos dois pontos representa a linha onde o texto foi encontrado.
+
+Isso facilita bastante a localização do conteúdo.
+
+---
+
+# Exemplo 4 — head
+
+```bash
+head -n 5 arquivo.txt
+```
+
+Resultado:
+
+Mostra apenas as cinco primeiras linhas.
+
+---
+
+# Exemplo 5 — tail
+
+```bash
+tail -n 20 access.log
+```
+
+Resultado:
+
+Mostra apenas as últimas vinte linhas.
+
+---
+
+## Comparando alguns usos
+
+| Comando | Função da flag |
+|----------|----------------|
+| `echo -n` | Não quebra a linha |
+| `cat -n` | Numera linhas |
+| `grep -n` | Mostra o número da linha encontrada |
+| `head -n` | Quantidade de linhas exibidas |
+| `tail -n` | Quantidade de linhas exibidas |
+
+---
+
+## Utilizando em Shell Script
+
+Uma utilização muito comum é:
+
+```bash
+echo -n "Digite seu nome: "
+read nome
+```
+
+Sem `-n`, o cursor iria para a próxima linha antes da entrada do usuário.
+
+Outro exemplo:
+
+```bash
+tail -n 50 log.txt
+```
+
+Muito utilizado para verificar logs recentes.
+
+---
+
+## Utilizando em Pentest
+
+Alguns exemplos reais:
+
+Visualizar as últimas linhas de um log:
+
+```bash
+tail -n 100 /var/log/auth.log
+```
+
+Encontrar uma senha e saber exatamente onde ela aparece:
+
+```bash
+grep -n "password" config.php
+```
+
+---
+
+## Boas práticas
+
+✔ Utilize `echo -n` para criar prompts.
+
+✔ Utilize `grep -n` durante auditorias.
+
+✔ Utilize `tail -n` para acompanhar logs.
+
+---
+
+## Erros comuns
+
+❌ Pensar que `-n` possui sempre o mesmo significado.
+
+Na realidade, ela muda bastante entre comandos.
+
+---
+
+## Observações
+
+É uma das flags mais utilizadas em Shell Script.
+
+Também aparece constantemente em administração de sistemas.
+
+---
+
+## Dicas
+
+💡 Sempre leia o manual antes de utilizar `-n` em um comando desconhecido.
+
+---
+
+## Resumo
+
+- É extremamente comum.
+- Possui diversos significados.
+- Muito utilizada em Shell Script.
+- Também é bastante utilizada em Pentest.
+
+---
+
+# Flag `-v`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-v` normalmente significa **Verbose**.
+
+Quando utilizada, faz com que o comando exiba informações detalhadas sobre o que está fazendo.
+
+Em vez de apenas executar a operação silenciosamente, o programa informa cada etapa realizada.
+
+Essa opção é muito útil para acompanhar processos, depurar scripts e entender o comportamento de um comando.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `cp` | Exibe cada arquivo copiado |
+| `mv` | Exibe cada arquivo movido |
+| `rm` | Exibe cada arquivo removido |
+| `tar` | Lista os arquivos processados |
+| `chmod` | Mostra as alterações de permissões |
+| `chown` | Mostra as alterações de proprietário |
+| `curl` | Exibe detalhes da comunicação HTTP |
+| `ssh` | Exibe detalhes da conexão SSH |
+
+---
+
+## Como funciona?
+
+Sem `-v`, muitos comandos executam suas tarefas sem produzir saída.
+
+Ao adicionar essa flag, eles passam a informar o que está acontecendo.
+
+Isso facilita a identificação de erros e a confirmação de que a operação foi executada corretamente.
+
+---
+
+# Exemplo 1 — cp
+
+Sem a flag:
+
+```bash
+cp arquivo.txt backup/
+```
+
+Nenhuma mensagem será exibida.
+
+Agora:
+
+```bash
+cp -v arquivo.txt backup/
+```
+
+Saída
+
+```text
+'arquivo.txt' -> 'backup/arquivo.txt'
+```
+
+---
+
+# Exemplo 2 — mv
+
+```bash
+mv -v teste.txt documentos/
+```
+
+Saída
+
+```text
+'teste.txt' -> 'documentos/teste.txt'
+```
+
+---
+
+# Exemplo 3 — rm
+
+```bash
+rm -v arquivo.txt
+```
+
+Saída
+
+```text
+removed 'arquivo.txt'
+```
+
+---
+
+# Exemplo 4 — tar
+
+```bash
+tar -cvf backup.tar Documentos/
+```
+
+Saída
+
+```text
+Documentos/
+Documentos/notas.txt
+Documentos/fotos/
+Documentos/fotos/img01.jpg
+```
+
+Cada arquivo processado é exibido durante a criação do arquivo compactado.
+
+---
+
+# Exemplo 5 — curl
+
+```bash
+curl -v https://example.com
+```
+
+Saída (trecho simplificado)
+
+```text
+> GET / HTTP/1.1
+< HTTP/1.1 200 OK
+```
+
+Essa saída detalhada ajuda a entender a comunicação entre cliente e servidor.
+
+---
+
+## Comparando
+
+| Sem `-v` | Com `-v` |
+|-----------|-----------|
+| Execução silenciosa | Execução detalhada |
+| Menos informações | Mais informações |
+| Mais limpa | Ideal para depuração |
+
+---
+
+## Utilizando em Shell Script
+
+Durante o desenvolvimento de scripts, é comum utilizar comandos com `-v` para verificar o comportamento do programa.
+
+Depois que o script estiver pronto, essa opção pode ser removida para deixar a saída mais limpa.
+
+---
+
+## Utilizando em Pentest
+
+A flag `-v` aparece em diversas ferramentas utilizadas por profissionais de segurança.
+
+Por exemplo:
+
+```bash
+curl -v
+```
+
+Permite visualizar cabeçalhos HTTP.
+
+```bash
+ssh -v usuario@servidor
+```
+
+Mostra detalhes da negociação da conexão SSH.
+
+Essas informações são muito úteis para diagnóstico de problemas e entendimento do funcionamento dos protocolos.
+
+---
+
+## Boas práticas
+
+✔ Utilize `-v` durante testes e depuração.
+
+✔ Em scripts destinados a outros usuários, avalie se uma saída detalhada realmente é necessária.
+
+---
+
+## Erros comuns
+
+❌ Confundir `-v` com "versão".
+
+Muitos programas utilizam:
+
+```bash
+--version
+```
+
+ou
+
+```bash
+-V
+```
+
+para exibir a versão, enquanto `-v` ativa o modo verboso.
+
+Sempre consulte a documentação.
+
+---
+
+## Observações
+
+A flag `-v` costuma ser combinada com outras opções.
+
+Exemplo:
+
+```bash
+cp -rv origem destino
+```
+
+Nesse caso:
+
+- `-r` copia diretórios recursivamente.
+- `-v` informa cada arquivo copiado.
+
+---
+
+## Dicas
+
+💡 Durante o aprendizado, prefira utilizar `-v` sempre que disponível. Ver o que o comando está fazendo ajuda a entender melhor seu funcionamento.
+
+---
+
+## Resumo
+
+- Normalmente significa **Verbose**.
+- Exibe informações detalhadas da execução.
+- Muito utilizada para depuração.
+- Comum em Shell Script, administração de sistemas e Pentest.
+

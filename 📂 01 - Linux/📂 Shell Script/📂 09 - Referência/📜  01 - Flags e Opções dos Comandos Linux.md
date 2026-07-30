@@ -2709,3 +2709,570 @@ Tudo depende da implementação.
 - Seu comportamento depende do programa.
 - Costuma ser combinada com outras flags.
 
+---
+
+# Flag `-R`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-R` normalmente significa **Recursive**, que em português pode ser traduzido como **Recursivo**.
+
+Ela faz com que um comando execute sua operação não apenas sobre o diretório informado, mas também em **todos os seus subdiretórios e arquivos**, independentemente da quantidade de níveis existentes.
+
+Imagine a seguinte estrutura:
+
+```text
+Projetos/
+├── app.py
+├── README.md
+├── imagens/
+│   ├── logo.png
+│   └── banner.jpg
+├── src/
+│   ├── main.py
+│   ├── utils.py
+│   └── config/
+│       └── settings.py
+└── backup/
+    └── antigo.zip
+```
+
+Sem utilizar `-R`, a maioria dos comandos processará apenas o primeiro nível.
+
+Já utilizando `-R`, todos os arquivos e diretórios internos também serão processados.
+
+É uma das flags mais importantes do Linux.
+
+---
+
+## Como funciona?
+
+Por padrão, muitos comandos trabalham apenas sobre o diretório informado.
+
+Exemplo:
+
+```bash
+ls Projetos
+```
+
+Saída:
+
+```text
+README.md
+app.py
+backup
+imagens
+src
+```
+
+Observe que apenas o conteúdo principal foi listado.
+
+Agora:
+
+```bash
+ls -R Projetos
+```
+
+Saída:
+
+```text
+Projetos:
+README.md
+app.py
+backup
+imagens
+src
+
+Projetos/imagens:
+banner.jpg
+logo.png
+
+Projetos/src:
+config
+main.py
+utils.py
+
+Projetos/src/config:
+settings.py
+
+Projetos/backup:
+antigo.zip
+```
+
+Agora o comando percorreu toda a estrutura.
+
+Isso significa trabalhar **recursivamente**.
+
+---
+
+## O que significa "recursivo"?
+
+Recursivo significa que uma operação será repetida para todos os níveis internos de uma estrutura.
+
+Imagine uma árvore.
+
+```
+Diretório
+│
+├── Pasta A
+│   ├── Arquivo
+│   └── Pasta B
+│       └── Arquivo
+│
+└── Pasta C
+    └── Arquivo
+```
+
+Um comando recursivo visita:
+
+- Diretório
+- Pasta A
+- Pasta B
+- Pasta C
+
+E todos os arquivos encontrados.
+
+Sem a recursão, apenas o primeiro nível seria processado.
+
+---
+
+## Quando utilizar?
+
+Utilize `-R` quando desejar:
+
+- Listar todos os arquivos de uma árvore de diretórios.
+- Alterar permissões de uma pasta inteira.
+- Alterar proprietário de vários arquivos.
+- Copiar diretórios completos.
+- Procurar arquivos em vários níveis.
+- Realizar auditorias.
+
+---
+
+## Comandos que utilizam
+
+A flag `-R` aparece em diversos comandos importantes.
+
+Alguns deles são:
+
+- `ls`
+- `chmod`
+- `chown`
+- `cp`
+- `grep`
+- `scp`
+- `zip`
+- `unzip`
+
+Dependendo do comando, seu comportamento pode variar um pouco, mas a ideia continua sendo a mesma: **percorrer diretórios recursivamente**.
+
+---
+
+## Sintaxe
+
+```bash
+comando -R diretório
+```
+
+Exemplo:
+
+```bash
+ls -R Projetos
+```
+
+---
+
+# Exemplos
+
+## Exemplo 1 — ls
+
+Sem `-R`
+
+```bash
+ls Projetos
+```
+
+Saída
+
+```text
+README.md
+src
+imagens
+```
+
+Agora:
+
+```bash
+ls -R Projetos
+```
+
+Saída
+
+```text
+Projetos:
+README.md
+src
+imagens
+
+Projetos/src:
+main.py
+utils.py
+
+Projetos/imagens:
+logo.png
+banner.png
+```
+
+Observe que agora todos os diretórios internos foram exibidos.
+
+---
+
+## Exemplo 2 — chmod
+
+Imagine o seguinte diretório.
+
+```text
+Site/
+├── index.php
+├── login.php
+├── css/
+├── js/
+└── uploads/
+```
+
+Desejamos conceder permissão de leitura para todos.
+
+Podemos utilizar:
+
+```bash
+chmod -R 755 Site
+```
+
+Agora todos os arquivos e diretórios internos receberão a nova permissão.
+
+Sem `-R`, apenas o diretório principal seria alterado.
+
+---
+
+## Exemplo 3 — chown
+
+Alterando o proprietário.
+
+```bash
+sudo chown -R www-data:www-data Site
+```
+
+Todos os arquivos passam a pertencer ao usuário:
+
+```text
+www-data
+```
+
+Esse comando é extremamente comum em servidores Apache e Nginx.
+
+---
+
+## Exemplo 4 — cp
+
+Copiando um diretório.
+
+```bash
+cp -R Projetos Backup
+```
+
+Resultado:
+
+```text
+Backup/
+└── Projetos/
+```
+
+Todos os arquivos serão copiados.
+
+Sem `-R`, o comando retornaria erro.
+
+---
+
+## Exemplo 5 — grep
+
+Também podemos pesquisar textos dentro de vários diretórios.
+
+```bash
+grep -R "password" .
+```
+
+Saída
+
+```text
+config/database.php:password=123456
+.env:DB_PASSWORD=senha123
+```
+
+O `grep` percorreu todos os arquivos existentes dentro do diretório atual.
+
+---
+
+# Utilizando em Shell Script
+
+A flag `-R` aparece constantemente em scripts administrativos.
+
+Exemplo:
+
+```bash
+#!/bin/bash
+
+chmod -R 755 /var/www/html
+```
+
+Outro exemplo:
+
+```bash
+#!/bin/bash
+
+grep -R "TODO" .
+```
+
+Muito útil para localizar comentários em projetos grandes.
+
+---
+
+# Utilizando em Pentest
+
+Durante um Pentest, `-R` é utilizada praticamente todos os dias.
+
+Exemplo:
+
+Buscar senhas.
+
+```bash
+grep -R "password" /var/www
+```
+
+Buscar chaves privadas.
+
+```bash
+grep -R "PRIVATE KEY" /home
+```
+
+Buscar tokens.
+
+```bash
+grep -R "token" .
+```
+
+Listar toda a estrutura de uma aplicação.
+
+```bash
+ls -R
+```
+
+Esses comandos ajudam bastante durante a fase de enumeração.
+
+---
+
+# Boas práticas
+
+✔ Utilize com cuidado.
+
+Uma operação recursiva pode modificar milhares de arquivos em poucos segundos.
+
+Sempre confirme o diretório antes de executar comandos como:
+
+```bash
+chmod -R
+```
+
+```bash
+chown -R
+```
+
+```bash
+rm -R
+```
+
+---
+
+# Erros comuns
+
+## Esquecer que todos os arquivos serão afetados
+
+Muitos iniciantes executam:
+
+```bash
+chmod -R 777 /
+```
+
+Esse comando altera permissões de praticamente todo o sistema.
+
+Além de representar um enorme risco de segurança, pode deixar o sistema inutilizável.
+
+---
+
+## Utilizar `-R` sem verificar o diretório
+
+Sempre confira onde você está.
+
+```bash
+pwd
+```
+
+Depois execute o comando.
+
+Esse hábito evita diversos acidentes.
+
+---
+
+# Observações
+
+A flag `-R` é extremamente poderosa.
+
+Ela economiza muito tempo, porém exige bastante cuidado.
+
+Uma única execução incorreta pode alterar milhares de arquivos.
+
+---
+
+# Dicas
+
+💡 Sempre teste primeiro com:
+
+```bash
+ls
+```
+
+Depois utilize:
+
+```bash
+ls -R
+```
+
+Assim você entende exatamente quais arquivos serão processados.
+
+💡 Sempre faça backup antes de utilizar comandos recursivos que modificam arquivos.
+
+---
+
+# Resumo
+
+- Significa **Recursive**.
+- Processa todos os subdiretórios.
+- Muito utilizada em administração de sistemas.
+- Extremamente comum em Pentest.
+- Deve ser utilizada com cuidado.
+
+---
+
+# Flag `-i`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-i` normalmente significa **Interactive**, que pode ser traduzido como **Interativo**.
+
+Seu objetivo é solicitar confirmação do usuário antes de executar determinadas ações consideradas perigosas.
+
+Ela funciona como uma camada extra de segurança, evitando alterações ou exclusões acidentais.
+
+Entretanto, dependendo do comando, `-i` pode possuir outro significado.
+
+Por exemplo, no `grep`, `-i` significa **Ignore Case** (ignorar diferenças entre letras maiúsculas e minúsculas).
+
+Por isso, é importante consultar sempre a documentação do comando utilizado.
+
+---
+
+## Como funciona?
+
+Vamos utilizar o comando `rm`.
+
+Sem a flag:
+
+```bash
+rm arquivo.txt
+```
+
+O arquivo será removido imediatamente.
+
+Agora:
+
+```bash
+rm -i arquivo.txt
+```
+
+Saída
+
+```text
+rm: remover arquivo regular 'arquivo.txt'?
+```
+
+O sistema aguardará sua confirmação.
+
+Se responder:
+
+```text
+y
+```
+
+O arquivo será removido.
+
+Se responder:
+
+```text
+n
+```
+
+Nada acontecerá.
+
+---
+
+## Quando utilizar?
+
+Utilize `-i` quando:
+
+- Estiver removendo arquivos importantes.
+- Alterar permissões.
+- Copiar arquivos que possam sobrescrever outros.
+- Mover arquivos.
+- Trabalhar como root.
+
+Ela ajuda a evitar erros que podem ser difíceis de corrigir.
+
+---
+
+## Comandos que utilizam
+
+É comum encontrar essa flag em:
+
+- `rm`
+- `cp`
+- `mv`
+- `grep`
+- `sed`
+
+**Atenção:** o significado varia conforme o comando.
+
+| Comando | Significado de `-i` |
+|----------|---------------------|
+| `rm` | Interactive |
+| `cp` | Interactive |
+| `mv` | Interactive |
+| `grep` | Ignore Case |
+| `sed` | Editar arquivo diretamente (*in-place*) |
+
+Esse é um excelente exemplo de que uma mesma flag pode representar funções completamente diferentes.
+
+---
+
+## Sintaxe
+
+```bash
+comando -i
+```
+
+A forma de utilização dependerá do comando escolhido.
+
+---
+

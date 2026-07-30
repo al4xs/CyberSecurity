@@ -2708,3 +2708,4 @@ Tudo depende da implementação.
 - Em alguns comandos significa **Recursive**.
 - Seu comportamento depende do programa.
 - Costuma ser combinada com outras flags.
+

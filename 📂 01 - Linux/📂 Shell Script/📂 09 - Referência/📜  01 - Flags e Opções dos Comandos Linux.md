@@ -4157,3 +4157,486 @@ Nesse caso:
 - Muito utilizada para depuração.
 - Comum em Shell Script, administração de sistemas e Pentest.
 
+---
+
+# Flag `-c`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-c` é uma das opções mais utilizadas no Linux. Assim como outras flags, seu significado depende do comando em que é utilizada.
+
+Na maioria dos programas, ela está relacionada a uma destas ideias:
+
+- **Create** (Criar)
+- **Count** (Contar)
+- **Command** (Executar um comando)
+- **Checksum** (Verificar integridade)
+
+Embora a letra seja a mesma, cada programa decide qual significado utilizar.
+
+---
+
+## 📚 Curiosidade
+
+A letra `c` é extremamente reutilizada porque representa palavras muito comuns em inglês.
+
+Por isso, não existe um significado universal.
+
+Antes de utilizar qualquer comando, consulte:
+
+```bash
+man comando
+```
+
+ou
+
+```bash
+comando --help
+```
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `tar` | Create (criar um arquivo compactado) |
+| `wc` | Count (contar bytes) |
+| `bash` | Executar um comando informado na linha de comando |
+| `sh` | Executar um comando |
+| `gzip` | Escrever saída na saída padrão |
+| `cksum` | Relacionado ao cálculo de checksum |
+
+---
+
+## Como funciona?
+
+O comportamento depende do programa.
+
+Vamos analisar os casos mais utilizados.
+
+---
+
+# Exemplo 1 — tar
+
+A utilização mais famosa.
+
+```bash
+tar -cvf backup.tar Documentos/
+```
+
+Neste comando:
+
+| Flag | Significado |
+|------|-------------|
+| `-c` | Criar um novo arquivo TAR |
+| `-v` | Mostrar arquivos processados |
+| `-f` | Informar o nome do arquivo |
+
+Resultado:
+
+```text
+backup.tar
+```
+
+será criado contendo todo o diretório.
+
+Sem `-c`, o `tar` não saberá que desejamos criar um novo arquivo.
+
+---
+
+# Exemplo 2 — bash
+
+Também podemos executar comandos diretamente.
+
+```bash
+bash -c "echo Olá"
+```
+
+Saída
+
+```text
+Olá
+```
+
+Nesse caso:
+
+```text
+-c
+```
+
+significa:
+
+> Execute o comando informado entre aspas.
+
+Essa opção é muito utilizada em automações.
+
+---
+
+# Exemplo 3 — sh
+
+O mesmo comportamento.
+
+```bash
+sh -c "date"
+```
+
+Saída
+
+```text
+Fri Jul 18 14:32:15 UTC 2025
+```
+
+---
+
+# Exemplo 4 — wc
+
+Arquivo:
+
+```text
+Linux
+Shell
+Pentest
+```
+
+Comando:
+
+```bash
+wc -c arquivo.txt
+```
+
+Saída
+
+```text
+21 arquivo.txt
+```
+
+Neste comando:
+
+```text
+-c
+```
+
+representa a quantidade de bytes existentes no arquivo.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `tar -c` | Criar |
+| `bash -c` | Executar comando |
+| `wc -c` | Contar bytes |
+
+---
+
+## Utilizando em Shell Script
+
+Muito comum:
+
+```bash
+bash -c "comando"
+```
+
+Exemplo:
+
+```bash
+bash -c "ls -lah"
+```
+
+Também aparece bastante em scripts que utilizam `tar`.
+
+---
+
+## Utilizando em Pentest
+
+É comum encontrar:
+
+```bash
+bash -c
+```
+
+durante exploração de sistemas ou execução remota de comandos.
+
+Também é frequente criar backups antes de alterar arquivos críticos:
+
+```bash
+tar -cvf backup.tar /etc
+```
+
+---
+
+## Boas práticas
+
+✔ Nunca memorize apenas a letra.
+
+Memorize:
+
+> **Flag + comando**
+
+Por exemplo:
+
+```text
+tar -c
+```
+
+é completamente diferente de
+
+```text
+bash -c
+```
+
+---
+
+## Erros comuns
+
+### Achar que `-c` significa sempre "Create"
+
+Não significa.
+
+Ela muda bastante entre programas.
+
+---
+
+## Observações
+
+É uma das flags mais reutilizadas do Linux.
+
+---
+
+## Dicas
+
+💡 Sempre leia primeiro o manual do comando antes de utilizar `-c`.
+
+---
+
+## Resumo
+
+- Não possui significado único.
+- Geralmente está relacionada a criar, contar ou executar comandos.
+- Muito utilizada por administradores e desenvolvedores.
+
+---
+
+# Flag `-f`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-f` normalmente representa a palavra **Force** (Forçar).
+
+Ela instrui o programa a executar uma operação sem solicitar confirmação ou interromper a execução devido a determinadas condições.
+
+Entretanto, em alguns comandos, `-f` significa **File**, indicando que o próximo argumento será o nome de um arquivo.
+
+Assim como vimos em outras flags, o significado depende do programa.
+
+---
+
+## 📚 Curiosidade
+
+A associação entre `-f` e **Force** tornou-se uma convenção bastante difundida em programas Unix e Linux.
+
+Por esse motivo, muitos usuários experientes associam imediatamente essa flag a operações potencialmente destrutivas.
+
+Sempre tenha cuidado ao utilizá-la.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `rm` | Force |
+| `cp` | Force (dependendo da implementação) |
+| `tar` | File |
+| `curl` | Fail (em algumas combinações) |
+| `find` | Não utiliza `-f` como opção principal |
+| `git clean` | Force |
+
+---
+
+## Como funciona?
+
+Vamos analisar os casos mais comuns.
+
+---
+
+# Exemplo 1 — rm
+
+Sem `-f`:
+
+```bash
+rm arquivo.txt
+```
+
+Se houver restrições ou confirmações, elas poderão ser apresentadas.
+
+Agora:
+
+```bash
+rm -f arquivo.txt
+```
+
+O comando tentará remover o arquivo sem solicitar confirmação.
+
+---
+
+# Exemplo 2 — rm -rf
+
+Provavelmente o exemplo mais conhecido.
+
+```bash
+rm -rf pasta
+```
+
+Neste caso:
+
+| Flag | Função |
+|------|--------|
+| `-r` | Percorrer diretórios recursivamente |
+| `-f` | Forçar a remoção |
+
+O comando removerá toda a árvore de diretórios.
+
+⚠️ Utilize apenas quando tiver absoluta certeza do que está fazendo.
+
+---
+
+# Exemplo 3 — tar
+
+No `tar`, `-f` significa outra coisa.
+
+```bash
+tar -cvf backup.tar Documentos
+```
+
+Aqui:
+
+```text
+-f
+```
+
+informa que o próximo argumento é o nome do arquivo TAR.
+
+Sem essa opção, o `tar` espera utilizar outro dispositivo de entrada ou saída.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `rm -f` | Force |
+| `tar -f` | File |
+
+---
+
+## Utilizando em Shell Script
+
+Muito comum em rotinas automáticas.
+
+Exemplo:
+
+```bash
+rm -f arquivo.tmp
+```
+
+Isso evita que o script fique aguardando confirmação.
+
+No entanto, utilize essa opção somente quando tiver certeza de que o arquivo pode ser removido.
+
+---
+
+## Utilizando em Pentest
+
+É frequente encontrar:
+
+```bash
+rm -rf
+```
+
+durante limpeza de diretórios temporários.
+
+Também aparece em scripts de automação e pós-exploração.
+
+---
+
+## 🔒 Cuidados de segurança
+
+A combinação:
+
+```bash
+rm -rf
+```
+
+é uma das mais perigosas do Linux.
+
+Um erro de digitação pode apagar milhares de arquivos em poucos segundos.
+
+Sempre confirme o diretório atual:
+
+```bash
+pwd
+```
+
+Antes de executar operações destrutivas.
+
+---
+
+## Boas práticas
+
+✔ Evite utilizar `-f` por hábito.
+
+✔ Utilize somente quando realmente desejar ignorar confirmações.
+
+✔ Em scripts críticos, valide caminhos antes da remoção.
+
+---
+
+## Erros comuns
+
+### Executar `rm -rf` no diretório errado
+
+Esse é um dos acidentes mais conhecidos entre administradores Linux.
+
+Sempre revise o comando antes de pressionar **Enter**.
+
+---
+
+## Observações
+
+Embora seja extremamente útil, `-f` também é uma das flags mais perigosas do sistema.
+
+---
+
+## Dicas
+
+💡 Quando estiver aprendendo, prefira utilizar:
+
+```bash
+rm -i
+```
+
+Em vez de:
+
+```bash
+rm -f
+```
+
+Assim você evita exclusões acidentais.
+
+---
+
+## Resumo
+
+- Geralmente significa **Force**.
+- Em alguns comandos significa **File**.
+- Muito utilizada em administração de sistemas.
+- Deve ser usada com cuidado.
+
+---

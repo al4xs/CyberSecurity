@@ -2140,3 +2140,571 @@ Grande parte dos administradores utiliza essa opção diariamente.
 - Muito utilizada em administração de sistemas e Pentest.
 - Geralmente combinada com `-a` e `-h`.
 
+---
+
+# Flag `-h`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-h` normalmente significa **Human Readable**, que pode ser traduzido como **Legível para Humanos**.
+
+Seu objetivo é tornar valores numéricos mais fáceis de interpretar.
+
+Ela é utilizada principalmente para exibir tamanhos de arquivos, diretórios, discos e sistemas de arquivos utilizando unidades conhecidas, como:
+
+- Bytes (B)
+- Kilobytes (KB)
+- Megabytes (MB)
+- Gigabytes (GB)
+- Terabytes (TB)
+
+Sem essa flag, muitos comandos exibem apenas a quantidade de bytes, o que pode dificultar bastante a leitura.
+
+---
+
+## Como funciona?
+
+Imagine um arquivo com aproximadamente 5 MB.
+
+Sem utilizar `-h`, alguns comandos exibem:
+
+```text
+5242880
+```
+
+À primeira vista, fica difícil saber quanto isso representa.
+
+Agora utilizando a flag `-h`:
+
+```text
+5.0M
+```
+
+A informação continua sendo a mesma, porém muito mais fácil de interpretar.
+
+A flag apenas altera a forma como os números são exibidos.
+
+Ela **não modifica** o tamanho real dos arquivos.
+
+---
+
+## Quando utilizar?
+
+Utilize sempre que desejar visualizar tamanhos de forma mais intuitiva.
+
+É recomendada principalmente quando estiver:
+
+- Explorando diretórios.
+- Verificando espaço em disco.
+- Analisando backups.
+- Trabalhando com arquivos grandes.
+- Fazendo auditorias em servidores.
+- Investigando sistemas durante um Pentest.
+
+---
+
+## Comandos que utilizam
+
+A flag `-h` aparece em diversos comandos.
+
+Alguns exemplos:
+
+- `ls`
+- `du`
+- `df`
+- `free`
+- `sort`
+- `numfmt`
+
+Dependendo do comando, o comportamento pode variar levemente.
+
+---
+
+## Sintaxe
+
+```bash
+comando -h
+```
+
+ou, quando existir:
+
+```bash
+comando --human-readable
+```
+
+---
+
+# Exemplos
+
+## Exemplo 1 — ls
+
+Sem a flag:
+
+```bash
+ls -l
+```
+
+Saída
+
+```text
+-rw-r--r-- 1 kali kali 5242880 Jul 18 arquivo.iso
+```
+
+Observe que o tamanho foi mostrado em bytes.
+
+Agora:
+
+```bash
+ls -lh
+```
+
+Saída
+
+```text
+-rw-r--r-- 1 kali kali 5.0M Jul 18 arquivo.iso
+```
+
+Agora ficou muito mais fácil entender o tamanho do arquivo.
+
+---
+
+## Exemplo 2 — du
+
+O comando `du` mostra o tamanho de diretórios.
+
+Sem a flag:
+
+```bash
+du .
+```
+
+Saída
+
+```text
+4096 .
+```
+
+Agora:
+
+```bash
+du -h .
+```
+
+Saída
+
+```text
+4.0K .
+```
+
+---
+
+## Exemplo 3 — df
+
+O comando `df` mostra o uso dos sistemas de arquivos.
+
+Sem a flag:
+
+```bash
+df
+```
+
+Saída
+
+```text
+Filesystem     1K-blocks    Used Available Use%
+/dev/sda1       20511356 9876543  9634813   51%
+```
+
+Agora:
+
+```bash
+df -h
+```
+
+Saída
+
+```text
+Filesystem      Size Used Avail Use%
+/dev/sda1        20G 9.4G 9.2G  51%
+```
+
+Observe como a leitura ficou muito mais simples.
+
+---
+
+## Exemplo 4 — free
+
+O comando `free` mostra informações sobre a memória RAM.
+
+Sem `-h`:
+
+```bash
+free
+```
+
+Saída
+
+```text
+Mem: 8179312 3128932 5050380
+```
+
+Agora:
+
+```bash
+free -h
+```
+
+Saída
+
+```text
+Mem: 7.8Gi 3.0Gi 4.8Gi
+```
+
+---
+
+# Utilizando em Shell Script
+
+Durante automações, normalmente preferimos trabalhar com valores em bytes.
+
+Entretanto, quando o script gera um relatório para usuários, utilizar `-h` torna as informações muito mais amigáveis.
+
+Exemplo:
+
+```bash
+echo "Espaço utilizado:"
+df -h
+```
+
+Assim o relatório fica muito mais fácil de interpretar.
+
+---
+
+# Utilizando em Pentest
+
+Durante um teste de invasão, frequentemente precisamos identificar:
+
+- arquivos grandes;
+- backups esquecidos;
+- bancos de dados;
+- imagens de máquinas virtuais;
+- arquivos de log.
+
+Exemplo:
+
+```bash
+du -sh /var/log
+```
+
+Saída
+
+```text
+1.8G /var/log
+```
+
+Com apenas uma linha conseguimos identificar rapidamente o tamanho do diretório.
+
+---
+
+# Boas práticas
+
+✔ Sempre combine `-h` com comandos que exibem tamanhos.
+
+✔ Utilize juntamente com `-l`.
+
+Exemplo:
+
+```bash
+ls -lh
+```
+
+ou
+
+```bash
+ls -lah
+```
+
+---
+
+# Erros comuns
+
+## Pensar que `-h` altera o tamanho do arquivo
+
+A flag modifica apenas a forma de exibição.
+
+O arquivo continua possuindo exatamente o mesmo tamanho.
+
+---
+
+## Esquecer que alguns comandos utilizam unidades binárias
+
+Dependendo do comando, poderá aparecer:
+
+```text
+KiB
+MiB
+GiB
+```
+
+Em vez de:
+
+```text
+KB
+MB
+GB
+```
+
+Essa diferença está relacionada à forma de cálculo utilizada pelo programa.
+
+---
+
+# Observações
+
+- É uma das flags mais utilizadas no Linux.
+- Facilita muito a leitura de informações.
+- Costuma ser combinada com `-l`.
+- Muito comum em comandos administrativos.
+
+---
+
+# Dicas
+
+💡 A combinação:
+
+```bash
+ls -lah
+```
+
+é considerada praticamente um padrão entre usuários Linux.
+
+💡 Sempre utilize:
+
+```bash
+df -h
+```
+
+ao verificar espaço em disco.
+
+---
+
+# Resumo
+
+- Significa **Human Readable**.
+- Exibe tamanhos legíveis.
+- Não altera o tamanho real dos arquivos.
+- Muito utilizada com `ls`, `du`, `df` e `free`.
+- Extremamente útil em administração de sistemas e Pentest.
+
+---
+
+# Flag `-r`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-r` normalmente significa **Reverse** (Reverso) ou **Recursive** (Recursivo), dependendo do comando utilizado.
+
+Esse é um excelente exemplo de que **uma mesma flag pode possuir significados completamente diferentes**.
+
+Por isso, nunca devemos assumir que uma determinada letra terá sempre a mesma função.
+
+---
+
+## Como funciona?
+
+O comportamento depende do comando.
+
+Nos comandos de listagem e ordenação, `-r` geralmente significa **ordem inversa**.
+
+Já em outros programas, pode indicar processamento recursivo.
+
+Sempre consulte a documentação antes de utilizá-la.
+
+---
+
+## Quando utilizar?
+
+Utilize `-r` quando desejar:
+
+- inverter a ordem de classificação;
+- percorrer estruturas recursivamente (quando suportado);
+- modificar a ordem padrão de processamento.
+
+---
+
+## Comandos que utilizam
+
+Alguns exemplos:
+
+- `ls`
+- `sort`
+- `tac`
+- `cp`
+- `rm`
+- `grep` (em versões específicas existem diferenças entre `-r` e `-R`)
+
+---
+
+## Sintaxe
+
+```bash
+comando -r
+```
+
+---
+
+# Exemplos
+
+## Exemplo 1 — ls
+
+```bash
+ls
+```
+
+Saída
+
+```text
+arquivo1
+arquivo2
+arquivo3
+```
+
+Agora:
+
+```bash
+ls -r
+```
+
+Saída
+
+```text
+arquivo3
+arquivo2
+arquivo1
+```
+
+A ordem foi invertida.
+
+---
+
+## Exemplo 2 — sort
+
+```bash
+sort nomes.txt
+```
+
+Saída
+
+```text
+Ana
+Carlos
+Pedro
+```
+
+Agora:
+
+```bash
+sort -r nomes.txt
+```
+
+Saída
+
+```text
+Pedro
+Carlos
+Ana
+```
+
+---
+
+## Exemplo 3 — Combinando
+
+```bash
+ls -lr
+```
+
+ou
+
+```bash
+ls -lhr
+```
+
+É muito comum combinar `-r` com outras flags.
+
+---
+
+# Utilizando em Shell Script
+
+Imagine que um script precise processar uma lista do maior para o menor.
+
+```bash
+sort -r lista.txt
+```
+
+Isso evita processamento adicional dentro do próprio script.
+
+---
+
+# Utilizando em Pentest
+
+Durante um Pentest, `sort -r` pode ser utilizado para organizar resultados por ordem decrescente.
+
+Também é comum encontrar `-r` em ferramentas que percorrem diretórios ou estruturas internas.
+
+---
+
+# Boas práticas
+
+✔ Leia sempre a documentação do comando.
+
+✔ Não assuma que `-r` significa sempre a mesma coisa.
+
+---
+
+# Erros comuns
+
+## Confundir `-r` com `-R`
+
+Essa é uma das confusões mais frequentes.
+
+Embora pareçam iguais, normalmente possuem funções diferentes.
+
+Na próxima seção estudaremos justamente a flag `-R`.
+
+---
+
+# Observações
+
+É uma das flags cujo significado mais varia entre comandos.
+
+Sempre consulte:
+
+```bash
+man comando
+```
+
+---
+
+# Dicas
+
+💡 Sempre leia o manual quando encontrar uma flag `-r` em um programa novo.
+
+Ela pode significar:
+
+- Reverse
+- Recursive
+- Retry
+- Read
+
+Tudo depende da implementação.
+
+---
+
+# Resumo
+
+- Geralmente significa **Reverse**.
+- Em alguns comandos significa **Recursive**.
+- Seu comportamento depende do programa.
+- Costuma ser combinada com outras flags.

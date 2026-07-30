@@ -181,15 +181,15 @@ Saída
 
 # Combinações Mais Utilizadas
 
-| Comando | Significado |
-|---------|-------------|
-| `ls -lah` | Long + All + Human Readable |
-| `rm -rf` | Recursive + Force |
-| `cp -av` | Archive + Verbose |
-| `grep -rin` | Recursive + Ignore Case + Número da linha |
-| `find -L` | Seguir links simbólicos |
-| `curl -LO` | Seguir redirect + Salvar com nome original |
-| `tar -czvf` | Create + gzip + Verbose + File |
+| Comando     | Significado                                |
+| ----------- | ------------------------------------------ |
+| `ls -lah`   | Long + All + Human Readable                |
+| `rm -rf`    | Recursive + Force                          |
+| `cp -av`    | Archive + Verbose                          |
+| `grep -rin` | Recursive + Ignore Case + Número da linha  |
+| `find -L`   | Seguir links simbólicos                    |
+| `curl -LO`  | Seguir redirect + Salvar com nome original |
+| `tar -czvf` | Create + gzip + Verbose + File             |
 
 ---
 

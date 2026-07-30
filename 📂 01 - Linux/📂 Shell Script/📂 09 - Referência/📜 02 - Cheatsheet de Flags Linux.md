@@ -1,3 +1,6 @@
+
+---
+
 # Cheatsheet de Flags Linux
 
 > Consulta rápida das flags mais comuns utilizadas em comandos Linux e Unix.
@@ -32,6 +35,32 @@ Downloads
 
 ---
 
+# `-A`
+
+| Item | Informação |
+|------|------------|
+| **Significado** | **Almost All** (Quase todos) |
+| **Uso comum** | Mostrar arquivos ocultos, exceto `.` e `..` |
+| **Comandos comuns** | `ls` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Exemplo
+
+```bash
+ls -A
+```
+
+**Saída**
+
+```text
+.bashrc
+.profile
+Documentos
+Downloads
+```
+
+---
+
 # `-l`
 
 | Item | Informação |
@@ -56,56 +85,27 @@ drwxr-xr-x 2 user user 4096 Jul 20 10:30 Documentos
 
 ---
 
-# `-f`
+# `-h`
 
 | Item | Informação |
 |------|------------|
-| **Significado** | **Force** (Forçar) |
-| **Uso comum** | Executar uma ação sem solicitar confirmação |
-| **Comandos comuns** | `rm`, `cp`, `mv` |
+| **Significado** | **Human Readable** (Legível para humanos) |
+| **Uso comum** | Exibir tamanhos em KB, MB, GB etc. |
+| **Comandos comuns** | `ls`, `du`, `df` |
 | **Importância** | ⭐⭐⭐⭐⭐ |
 
 ### Exemplo
 
 ```bash
-rm -f arquivo.txt
-```
-
----
-
-# `-v`
-
-| Item | Informação |
-|------|------------|
-| **Significado** | **Verbose** (Modo detalhado) |
-| **Uso comum** | Mostrar detalhes da execução |
-| **Comandos comuns** | `cp`, `mv`, `curl`, `ssh` |
-| **Importância** | ⭐⭐⭐⭐⭐ |
-
-### Exemplo
-
-```bash
-cp -v arquivo.txt backup/
+ls -lh
 ```
 
 **Saída**
 
 ```text
-'arquivo.txt' -> 'backup/arquivo.txt'
+-rw-r--r-- 1 user user 1.5K notas.txt
+-rw-r--r-- 1 user user 2.3M backup.tar
 ```
-
----
-
-# Combinações Mais Utilizadas
-
-| Comando | Expansão |
-|----------|----------|
-| `ls -lah` | `-l` Long (Formato longo) + `-a` All (Todos) + `-h` Human Readable (Legível para humanos) |
-| `rm -rf` | `-r` Recursive (Recursivo) + `-f` Force (Forçar) |
-| `cp -av` | `-a` Archive (Modo arquivo) + `-v` Verbose (Modo detalhado) |
-| `grep -rin` | `-r` Recursive (Recursivo) + `-i` Ignore Case (Ignorar maiúsculas/minúsculas) + `-n` Number (Número da linha) |
-| `curl -LO` | `-L` Follow Redirects (Seguir redirecionamentos) + `-O` Remote Name (Salvar com o nome original) |
-| `tar -czvf` | `-c` Create (Criar) + `-z` Gzip (Compactar com gzip) + `-v` Verbose (Modo detalhado) + `-f` File (Arquivo) |
 
 ---
 
@@ -118,7 +118,7 @@ cp -v arquivo.txt backup/
 | `d` | Directory | Diretório |
 | `e` | Expression | Expressão |
 | `f` | Force | Forçar |
-| `h` | Help / Human | Ajuda / Legível para humanos |
+| `h` | Help / Human Readable | Ajuda / Legível para humanos |
 | `i` | Interactive | Interativo |
 | `l` | Long | Formato longo |
 | `n` | Number | Número |
@@ -133,12 +133,3 @@ cp -v arquivo.txt backup/
 | `w` | Word | Palavra |
 | `x` | Execute | Executar |
 
----
-
-# Prioridade de Estudo
-
-| Nível | Flags |
-|--------|-------|
-| ⭐⭐⭐⭐⭐ Essenciais | `-a` `-l` `-h` `-r` `-f` `-i` `-v` |
-| ⭐⭐⭐⭐☆ Muito comuns | `-p` `-o` `-L` `-q` `-s` `-n` |
-| ⭐⭐⭐☆☆ Úteis | `-A` `-I` `-P` `-d` `-t` `-u` `-w` `-x` |

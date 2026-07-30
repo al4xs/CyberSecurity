@@ -18,11 +18,11 @@ Esses fluxos podem ser redirecionados para arquivos, outros comandos ou descarta
 
 # Fluxos padrão
 
-| Nome | Número | Descrição |
-|------|--------|-----------|
-| stdin | 0 | Entrada de dados |
-| stdout | 1 | Saída normal |
-| stderr | 2 | Saída de erro |
+| Nome   | Número | Descrição        |
+| ------ | ------ | ---------------- |
+| stdin  | 0      | Entrada de dados |
+| stdout | 1      | Saída normal     |
+| stderr | 2      | Saída de erro    |
 
 ---
 

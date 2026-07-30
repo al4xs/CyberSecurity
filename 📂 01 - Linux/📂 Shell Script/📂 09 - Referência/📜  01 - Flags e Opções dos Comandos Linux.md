@@ -7198,3 +7198,647 @@ fi
 - Bastante utilizada em administração de sistemas.
 
 
+---
+
+# Flag `-w`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-w` normalmente representa uma das seguintes palavras:
+
+- **Word** (Palavra)
+- **Write** (Escrita)
+- **Width** (Largura)
+- **Warning** (Aviso)
+
+Seu significado depende do programa utilizado.
+
+Na prática, o uso mais comum é relacionado à palavra **Word**.
+
+---
+
+## 📚 Por que a letra `w`?
+
+A letra **W** aparece frequentemente em programas que trabalham com texto.
+
+Ela normalmente representa:
+
+- Word
+- Write
+- Width
+
+Como essas palavras são comuns em ferramentas Unix, a flag acabou sendo reutilizada em diversos programas.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `grep` | Procurar palavras inteiras |
+| `wc` | Contagem de palavras (nome do comando: *Word Count*) |
+| `ping` | Tempo limite (deadline) em algumas implementações |
+| `curl` | Formato personalizado de saída (`-w`, *write-out*) |
+| `chmod` | Permissão de escrita (`w`, não como flag, mas como símbolo) |
+
+---
+
+## Como funciona?
+
+Vamos conhecer os casos mais utilizados.
+
+---
+
+# Exemplo 1 — grep
+
+Arquivo:
+
+```text
+usuarios.txt
+```
+
+Conteúdo:
+
+```text
+admin
+administrator
+root
+```
+
+Executando:
+
+```bash
+grep "admin" usuarios.txt
+```
+
+Resultado:
+
+```text
+admin
+administrator
+```
+
+Agora:
+
+```bash
+grep -w "admin" usuarios.txt
+```
+
+Resultado:
+
+```text
+admin
+```
+
+A opção `-w` faz com que apenas palavras completas sejam consideradas.
+
+---
+
+# Exemplo 2 — curl
+
+```bash
+curl -s -o /dev/null \
+-w "%{http_code}\n" \
+https://example.com
+```
+
+Saída:
+
+```text
+200
+```
+
+Neste caso:
+
+```text
+-w
+```
+
+permite personalizar a saída do comando.
+
+É muito utilizada em automações.
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `grep -w` | Palavra inteira |
+| `curl -w` | Write-out (saída personalizada) |
+
+---
+
+## Utilizando em Shell Script
+
+Muito comum para validar respostas HTTP.
+
+```bash
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://example.com)
+```
+
+Também é útil em pesquisas de texto.
+
+```bash
+grep -w "root" usuarios.txt
+```
+
+---
+
+## Utilizando em Pentest
+
+Extremamente comum para verificar rapidamente códigos HTTP.
+
+Exemplo:
+
+```bash
+curl -s -o /dev/null \
+-w "%{http_code}" \
+http://alvo
+```
+
+Também é útil ao procurar palavras exatas em arquivos de configuração.
+
+---
+
+## 🔒 Cuidados de segurança
+
+Lembre-se de que:
+
+```bash
+grep -w senha
+```
+
+não encontrará:
+
+```text
+senha123
+```
+
+nem
+
+```text
+minhasenha
+```
+
+Portanto, avalie se realmente deseja pesquisar apenas palavras completas.
+
+---
+
+## Boas práticas
+
+✔ Utilize `grep -w` quando precisar evitar falsos positivos.
+
+✔ Utilize `curl -w` para criar scripts de monitoramento.
+
+---
+
+## Erros comuns
+
+### Esperar que `grep -w` encontre partes de palavras
+
+Ele procura apenas palavras completas.
+
+---
+
+## Observações
+
+A letra `w` aparece em diversos programas relacionados a texto e redes.
+
+---
+
+## Dicas
+
+💡 Associe:
+
+```text
+w → Word
+```
+
+Esse será o significado mais frequente.
+
+---
+
+## Resumo
+
+- Geralmente significa Word ou Write.
+- Muito utilizada em `grep` e `curl`.
+- Bastante comum em Shell Script e Pentest.
+
+---
+
+# Flag `-x`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-x` normalmente representa:
+
+- **Exact**
+- **Execute**
+- **One filesystem**
+- **Debug de execução** (Shell)
+
+Seu significado depende do comando.
+
+---
+
+## 📚 Por que a letra `x`?
+
+Historicamente, a letra **X** foi associada à palavra **eXecute**.
+
+Isso explica por que ela também representa a permissão de execução no Linux.
+
+```text
+rwx
+```
+
+Onde:
+
+```text
+x
+```
+
+significa:
+
+```text
+Execute
+```
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `grep` | Linha exatamente igual |
+| `bash` | Debug de execução |
+| `find` | Não atravessar sistemas de arquivos (`-xdev`) |
+| `chmod` | Permissão de execução (símbolo `x`) |
+| `tar` | Extração (`-x`) |
+
+---
+
+## Como funciona?
+
+---
+
+# Exemplo 1 — grep
+
+Arquivo:
+
+```text
+usuarios.txt
+```
+
+Conteúdo:
+
+```text
+root
+root123
+administrator
+```
+
+Executando:
+
+```bash
+grep -x root usuarios.txt
+```
+
+Resultado:
+
+```text
+root
+```
+
+A linha deve ser exatamente igual ao padrão informado.
+
+---
+
+# Exemplo 2 — bash
+
+```bash
+bash -x script.sh
+```
+
+Saída:
+
+```text
++ echo "Iniciando"
++ mkdir backup
++ cp arquivo backup/
+```
+
+Cada comando será mostrado antes de ser executado.
+
+É uma das melhores ferramentas para depuração de Shell Scripts.
+
+---
+
+# Exemplo 3 — tar
+
+```bash
+tar -xf backup.tar
+```
+
+Resultado
+
+O arquivo será extraído.
+
+Aqui:
+
+```text
+-x
+```
+
+significa:
+
+```text
+Extract
+```
+
+---
+
+## Comparando
+
+| Comando | Significado |
+|----------|-------------|
+| `grep -x` | Linha exata |
+| `bash -x` | Debug |
+| `tar -x` | Extrair |
+
+---
+
+## Utilizando em Shell Script
+
+Extremamente útil durante o desenvolvimento.
+
+```bash
+bash -x backup.sh
+```
+
+Permite identificar exatamente onde um erro ocorreu.
+
+---
+
+## Utilizando em Pentest
+
+Muito utilizada para depurar scripts automatizados.
+
+Também aparece constantemente durante manipulação de arquivos TAR.
+
+---
+
+## 🔒 Cuidados de segurança
+
+Nunca utilize:
+
+```bash
+bash -x
+```
+
+em scripts que exibam:
+
+- senhas;
+- tokens;
+- chaves de API;
+
+pois todas as variáveis poderão aparecer na saída do terminal.
+
+---
+
+## Boas práticas
+
+✔ Utilize `bash -x` apenas durante testes.
+
+✔ Remova informações sensíveis antes de compartilhar logs.
+
+---
+
+## Erros comuns
+
+### Esquecer de desabilitar o modo de depuração
+
+Em produção, o excesso de saída pode dificultar a leitura dos logs.
+
+---
+
+## Observações
+
+A letra `x` está fortemente associada à execução de programas.
+
+---
+
+## Dicas
+
+💡 Memorize:
+
+```text
+x → Execute
+```
+
+Mesmo quando o significado exato mudar, essa associação costuma ajudar.
+
+---
+
+## Resumo
+
+- Geralmente representa Execute ou Exact.
+- Muito utilizada em Shell Script.
+- Essencial para depuração.
+
+---
+
+# Flag `-q`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-q` normalmente representa:
+
+```text
+Quiet
+```
+
+Ou seja:
+
+> Executar silenciosamente.
+
+Ela reduz ou elimina mensagens exibidas pelo programa.
+
+---
+
+## 📚 Por que a letra `q`?
+
+A palavra inglesa **Quiet** significa:
+
+```text
+Silencioso
+```
+
+Ela é amplamente utilizada em programas Unix para indicar um modo de execução com pouca ou nenhuma saída.
+
+---
+
+## Onde você encontrará essa flag?
+
+| Comando | Significado |
+|----------|-------------|
+| `grep` | Não mostrar resultados |
+| `wget` | Modo silencioso |
+| `ssh` | Reduzir mensagens |
+| `diff` | Mostrar apenas diferenças importantes |
+| `ping` | Modo silencioso (algumas implementações) |
+
+---
+
+## Como funciona?
+
+---
+
+# Exemplo 1 — grep
+
+```bash
+grep -q "admin" usuarios.txt
+```
+
+Nenhuma saída será exibida.
+
+O resultado deverá ser obtido pelo código de retorno.
+
+```bash
+echo $?
+```
+
+Saída:
+
+```text
+0
+```
+
+Encontrado.
+
+```text
+1
+```
+
+Não encontrado.
+
+---
+
+# Exemplo 2 — wget
+
+```bash
+wget -q https://example.com
+```
+
+O download será realizado sem mostrar informações de progresso.
+
+---
+
+# Exemplo 3 — ssh
+
+```bash
+ssh -q servidor
+```
+
+Mensagens informativas serão reduzidas.
+
+---
+
+## Comparando
+
+| Flag | Comportamento |
+|------|---------------|
+| `-v` | Mais informações |
+| `-q` | Menos informações |
+
+São praticamente opostas.
+
+---
+
+## Utilizando em Shell Script
+
+Muito utilizada para testes.
+
+```bash
+if grep -q "ERRO" log.txt; then
+    echo "Falha encontrada."
+fi
+```
+
+Nenhuma saída intermediária será exibida.
+
+---
+
+## Utilizando em Pentest
+
+É comum reduzir a quantidade de mensagens produzidas por ferramentas automatizadas.
+
+Também é muito útil em scripts de enumeração.
+
+---
+
+## 🔒 Cuidados de segurança
+
+Executar programas em modo silencioso pode ocultar mensagens importantes.
+
+Durante o desenvolvimento de scripts, considere utilizar o modo padrão e ativar `-q` apenas na versão final.
+
+---
+
+## Boas práticas
+
+✔ Utilize `grep -q` quando apenas o código de retorno for necessário.
+
+✔ Utilize `wget -q` em automações para evitar excesso de logs.
+
+---
+
+## Erros comuns
+
+### Confundir `-q` com `-s`
+
+Embora ambas possam reduzir a saída, elas nem sempre possuem o mesmo comportamento.
+
+Sempre consulte a documentação do programa.
+
+---
+
+## Observações
+
+A flag `-q` normalmente é o oposto de:
+
+```text
+-v
+```
+
+Enquanto uma reduz mensagens, a outra aumenta o nível de detalhes.
+
+---
+
+## Dicas
+
+💡 Memorize o par:
+
+```text
+-v → Verbose
+
+-q → Quiet
+```
+
+Essas duas opções aparecem juntas em diversos programas.
+
+---
+
+## Resumo
+
+- Geralmente significa Quiet.
+- Reduz ou elimina mensagens.
+- Muito utilizada em automação.
+- Complementa a flag `-v`.
+

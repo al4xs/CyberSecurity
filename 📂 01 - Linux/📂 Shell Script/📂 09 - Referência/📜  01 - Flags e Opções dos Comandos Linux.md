@@ -8939,3 +8939,698 @@ Apesar das diferenças de implementação, todas seguem a mesma ideia: interpret
 - Em Shell Scripts, o mecanismo recomendado é o `getopts`.
 - Utilizar bibliotecas de parsing torna o código mais organizado, legível e compatível com as convenções do Unix.
 
+---
+
+# Criando Flags em Shell Script com `getopts`
+
+Até este ponto estudamos dezenas de comandos Linux.
+
+Todos eles aceitam opções como:
+
+```bash
+-v
+-h
+-f
+-r
+-p
+```
+
+Mas como criar esse mesmo comportamento em um Shell Script?
+
+A resposta é:
+
+```bash
+getopts
+```
+
+Ele é o mecanismo padrão utilizado para interpretar opções em scripts compatíveis com POSIX.
+
+---
+
+# O que é `getopts`?
+
+`getopts` é um comando interno (*builtin*) do Shell.
+
+Sua função é analisar as opções passadas ao script e informar quais foram utilizadas pelo usuário.
+
+Por exemplo:
+
+```bash
+./backup.sh -v -f
+```
+
+O `getopts` identifica automaticamente:
+
+- `-v`
+- `-f`
+
+sem que seja necessário escrever dezenas de estruturas `if`.
+
+---
+
+# Por que utilizar `getopts`?
+
+Imagine um script simples.
+
+```bash
+./script.sh -v -f arquivo.txt
+```
+
+Sem `getopts`, provavelmente escreveríamos:
+
+```bash
+if [ "$1" = "-v" ]; then
+    ...
+fi
+
+if [ "$2" = "-f" ]; then
+    ...
+fi
+```
+
+Logo aparecem vários problemas.
+
+E se o usuário executar:
+
+```bash
+./script.sh -f -v arquivo.txt
+```
+
+Ou:
+
+```bash
+./script.sh -vf arquivo.txt
+```
+
+Ou ainda:
+
+```bash
+./script.sh arquivo.txt -v
+```
+
+Controlar todas essas combinações manualmente se torna complicado.
+
+O `getopts` resolve esse problema automaticamente.
+
+---
+
+# Sintaxe
+
+A estrutura básica é:
+
+```bash
+while getopts "opções" variavel
+do
+    case "$variavel" in
+
+        opção)
+
+            comandos
+            ;;
+
+    esac
+done
+```
+
+À primeira vista pode parecer estranha.
+
+Vamos entender cada parte.
+
+---
+
+# Entendendo a sintaxe
+
+Considere:
+
+```bash
+while getopts "hvf" opcao
+```
+
+Temos:
+
+```text
+h
+```
+
+aceita:
+
+```bash
+-h
+```
+
+---
+
+```text
+v
+```
+
+aceita:
+
+```bash
+-v
+```
+
+---
+
+```text
+f
+```
+
+aceita:
+
+```bash
+-f
+```
+
+Sempre que uma dessas opções for encontrada, ela será armazenada na variável:
+
+```bash
+$opcao
+```
+
+---
+
+# Primeiro exemplo
+
+Arquivo:
+
+```bash
+#!/bin/bash
+
+while getopts "hv" opcao
+do
+    case "$opcao" in
+
+        h)
+            echo "Ajuda"
+            ;;
+
+        v)
+            echo "Modo Verbose"
+            ;;
+
+    esac
+done
+```
+
+---
+
+Executando:
+
+```bash
+./script.sh -h
+```
+
+Saída:
+
+```text
+Ajuda
+```
+
+---
+
+Executando:
+
+```bash
+./script.sh -v
+```
+
+Saída:
+
+```text
+Modo Verbose
+```
+
+---
+
+Executando:
+
+```bash
+./script.sh -hv
+```
+
+Saída:
+
+```text
+Ajuda
+
+Modo Verbose
+```
+
+Observe que o `getopts` separa automaticamente:
+
+```text
+-hv
+```
+
+em:
+
+```text
+-h
+
+-v
+```
+
+---
+
+# Opções que recebem argumentos
+
+Algumas opções precisam receber um valor.
+
+Por exemplo:
+
+```bash
+-p 8080
+```
+
+ou
+
+```bash
+-o resultado.txt
+```
+
+Para informar isso ao `getopts`, utilizamos:
+
+```text
+:
+```
+
+---
+
+Exemplo:
+
+```bash
+while getopts "p:" opcao
+```
+
+O caractere:
+
+```text
+:
+```
+
+significa:
+
+> Esta opção precisa receber um argumento.
+
+---
+
+# Exemplo
+
+```bash
+#!/bin/bash
+
+while getopts "p:" opcao
+do
+    case "$opcao" in
+
+        p)
+
+            echo "Porta: $OPTARG"
+
+            ;;
+    esac
+done
+```
+
+Executando:
+
+```bash
+./script.sh -p 8080
+```
+
+Saída:
+
+```text
+Porta: 8080
+```
+
+---
+
+# A variável `OPTARG`
+
+Sempre que uma opção recebe um argumento, esse valor fica armazenado em:
+
+```bash
+$OPTARG
+```
+
+Exemplo:
+
+```bash
+./script.sh -o backup.tar
+```
+
+Dentro do script:
+
+```bash
+echo "$OPTARG"
+```
+
+Resultado:
+
+```text
+backup.tar
+```
+
+---
+
+# A variável `OPTIND`
+
+Outra variável importante é:
+
+```bash
+OPTIND
+```
+
+Ela indica o índice do próximo argumento que ainda não foi processado.
+
+Isso é útil quando o script possui opções e também argumentos posicionais.
+
+Exemplo:
+
+```bash
+./script.sh -v arquivo.txt
+```
+
+Após o processamento das opções:
+
+```bash
+shift $((OPTIND - 1))
+```
+
+Os argumentos restantes poderão ser acessados normalmente.
+
+```bash
+$1
+```
+
+Resultado:
+
+```text
+arquivo.txt
+```
+
+---
+
+# Tratando opções inválidas
+
+É recomendável tratar erros de forma explícita.
+
+Exemplo:
+
+```bash
+while getopts "hv" opcao
+do
+
+    case "$opcao" in
+
+        h)
+
+            ...
+
+            ;;
+
+        v)
+
+            ...
+
+            ;;
+
+        ?)
+
+            echo "Opção inválida."
+
+            exit 1
+
+            ;;
+
+    esac
+
+done
+```
+
+Agora:
+
+```bash
+./script.sh -z
+```
+
+Saída:
+
+```text
+Opção inválida.
+```
+
+---
+
+# Exigindo argumentos obrigatórios
+
+Imagine:
+
+```bash
+./script.sh -p
+```
+
+Sem informar a porta.
+
+O `getopts` consegue detectar esse problema.
+
+Exemplo:
+
+```bash
+while getopts ":p:" opcao
+```
+
+Observe os dois pontos no início.
+
+Agora podemos tratar:
+
+```bash
+:)
+```
+
+que representa:
+
+> argumento obrigatório ausente.
+
+Exemplo:
+
+```bash
+:)
+
+    echo "A opção -p precisa de um argumento."
+
+    exit 1
+
+    ;;
+```
+
+---
+
+# Fluxo completo
+
+```text
+Usuário
+
+      │
+
+      ▼
+
+./script.sh -v -p 8080 arquivo.txt
+
+      │
+
+      ▼
+
+getopts
+
+      │
+
+      ├── -v
+
+      ├── -p
+
+      └── 8080
+
+      │
+
+      ▼
+
+Script executa as ações
+
+      │
+
+      ▼
+
+Argumentos restantes
+
+arquivo.txt
+```
+
+---
+
+# Exemplo completo
+
+```bash
+#!/bin/bash
+
+VERBOSE=false
+PORTA=80
+
+while getopts "vp:h" opcao
+do
+
+    case "$opcao" in
+
+        v)
+
+            VERBOSE=true
+
+            ;;
+
+        p)
+
+            PORTA="$OPTARG"
+
+            ;;
+
+        h)
+
+            echo "Uso: script [-v] [-p porta]"
+
+            exit 0
+
+            ;;
+
+        ?)
+
+            echo "Opção inválida."
+
+            exit 1
+
+            ;;
+
+    esac
+
+done
+
+shift $((OPTIND - 1))
+
+echo "Verbose: $VERBOSE"
+
+echo "Porta: $PORTA"
+
+echo "Arquivo: $1"
+```
+
+---
+
+Executando:
+
+```bash
+./script.sh -v -p 443 config.ini
+```
+
+Saída:
+
+```text
+Verbose: true
+
+Porta: 443
+
+Arquivo: config.ini
+```
+
+---
+
+# 📚 Curiosidade Técnica
+
+O `getopts` implementa apenas **opções curtas**, como:
+
+```bash
+-v
+-h
+-p
+```
+
+Ele **não interpreta opções longas**, como:
+
+```bash
+--verbose
+
+--help
+
+--port
+```
+
+Se o script precisar aceitar opções longas, normalmente será necessário implementar essa lógica manualmente ou utilizar outras ferramentas, como `getopt` (quando disponível), lembrando que seu comportamento pode variar entre implementações GNU e BSD.
+
+---
+
+# Utilizando em Shell Script
+
+Praticamente todo script profissional que aceita opções utiliza alguma estratégia semelhante ao `getopts`.
+
+Exemplos comuns:
+
+- scripts de backup;
+- instaladores;
+- ferramentas de deploy;
+- automações DevOps;
+- scripts de administração de servidores.
+
+---
+
+# Boas práticas
+
+✔ Utilize `getopts` em vez de analisar `$1`, `$2` e `$3` manualmente.
+
+✔ Trate opções inválidas.
+
+✔ Informe mensagens de ajuda (`-h`).
+
+✔ Defina valores padrão para as opções quando possível.
+
+✔ Utilize `shift $((OPTIND - 1))` antes de processar argumentos posicionais.
+
+---
+
+# Erros comuns
+
+### Esquecer o `shift`
+
+Sem ele, os argumentos posicionais permanecem deslocados.
+
+---
+
+### Não validar argumentos obrigatórios
+
+Sempre trate opções que exigem parâmetros, como:
+
+```bash
+-o arquivo.txt
+```
+
+ou
+
+```bash
+-p 8080
+```
+
+---
+
+### Tentar utilizar opções longas
+
+O `getopts` trabalha apenas com opções curtas.
+
+---
+
+# Resumo
+
+- `getopts` é o mecanismo padrão para processar opções em Shell Scripts compatíveis com POSIX.
+- Permite interpretar opções curtas de forma organizada.
+- `OPTARG` armazena o argumento associado a uma opção.
+- `OPTIND` indica o próximo argumento ainda não processado.
+- O uso de `getopts` torna scripts mais robustos, legíveis e alinhados às convenções do Unix.
+

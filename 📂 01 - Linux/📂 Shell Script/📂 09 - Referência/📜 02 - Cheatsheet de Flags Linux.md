@@ -394,3 +394,445 @@ Conectando à porta 2222...
 
 > **¹ Observação:** No comando `grep`, a flag `-v` possui um significado diferente do convencional: **Invert Match** (Inverter correspondência), exibindo as linhas que **não** correspondem ao padrão pesquisado.
 
+---
+
+# `-P`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `cp`, `mv`, `pwd` |
+| **Importância** | ⭐⭐⭐☆☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **No Dereference** (Não seguir links simbólicos) | `cp`, `mv` |
+| **Physical** (Caminho físico) | `pwd` |
+
+### Exemplo
+
+```bash
+pwd -P
+```
+
+**Saída**
+
+```text
+/home/user/projetos
+```
+
+---
+
+# `-o`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `sort`, `find`, `ssh`, `curl` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Output** (Arquivo de saída) | `curl` |
+| **OR** (Operador lógico OU) | `find` |
+| **Option** (Opção de configuração) | `ssh` |
+| **Output Order** (Ordenação da saída) | `sort` |
+
+### Exemplo
+
+```bash
+curl -o pagina.html https://example.com
+```
+
+**Saída**
+
+```text
+Arquivo salvo como "pagina.html".
+```
+
+---
+
+# `-e`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `echo`, `grep`, `sed` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Enable Escapes** (Interpretar sequências de escape) | `echo` |
+| **Expression** (Expressão) | `grep`, `sed` |
+
+### Exemplo
+
+```bash
+echo -e "Linha 1\nLinha 2"
+```
+
+**Saída**
+
+```text
+Linha 1
+Linha 2
+```
+
+---
+
+# `-d`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `ls`, `grep`, `tar`, `cut` |
+| **Importância** | ⭐⭐⭐☆☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Directory** (Diretório) | `ls` |
+| **Directories** (Processar diretórios) | `grep` |
+| **Delimiter** (Delimitador) | `cut` |
+| **Difference** (Comparação) | Alguns utilitários |
+
+### Exemplo
+
+```bash
+cut -d ":" -f1 /etc/passwd
+```
+
+**Saída**
+
+```text
+root
+daemon
+bin
+sys
+```
+
+---
+
+# `-L`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `find`, `cp`, `curl`, `ls` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Follow Symbolic Links** (Seguir links simbólicos) | `find`, `cp` |
+| **Follow Redirects** (Seguir redirecionamentos HTTP) | `curl` |
+| **Dereference Links** (Exibir o destino do link) | `ls` |
+
+### Exemplo
+
+```bash
+find -L . -name "*.sh"
+```
+
+**Saída**
+
+```text
+./scripts/backup.sh
+./scripts/install.sh
+```
+
+---
+
+# Combinações Mais Utilizadas
+
+| Comando | Expansão |
+|----------|----------|
+| `curl -LO` | `-L` Follow Redirects (Seguir redirecionamentos) + `-O` Remote Name (Salvar com o nome original) |
+| `find -L` | `-L` Follow Symbolic Links (Seguir links simbólicos) |
+| `cut -d ":"` | `-d` Delimiter (Delimitador) |
+| `grep -e` | `-e` Expression (Expressão) |
+| `echo -e` | `-e` Enable Escapes (Interpretar sequências de escape) |
+| `pwd -P` | `-P` Physical (Caminho físico) |
+
+---
+
+# `-s`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `grep`, `curl`, `du`, `ln` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Silent** (Modo silencioso) | `curl` |
+| **Summarize** (Resumir) | `du` |
+| **Suppress Messages** (Ocultar mensagens) | `grep` |
+| **Symbolic** (Link simbólico) | `ln` |
+
+### Exemplo
+
+```bash
+curl -s https://example.com
+```
+
+**Saída**
+
+```text
+<html>...</html>
+```
+
+---
+
+# `-t`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `ls`, `tar`, `sort` |
+| **Importância** | ⭐⭐⭐☆☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Time** (Ordenar por data/hora) | `ls` |
+| **File** (Arquivo no terminal) | `tar` |
+| **Temporary Directory** (Diretório temporário) | Alguns utilitários |
+
+### Exemplo
+
+```bash
+ls -lt
+```
+
+**Saída**
+
+```text
+Arquivos ordenados pela data de modificação.
+```
+
+---
+
+# `-u`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `sort`, `touch`, `ls` |
+| **Importância** | ⭐⭐⭐☆☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Unique** (Único) | `sort` |
+| **Access Time** (Tempo de acesso) | `ls` |
+| **Update Access Time** (Atualizar tempo de acesso) | `touch` |
+
+### Exemplo
+
+```bash
+sort -u nomes.txt
+```
+
+**Saída**
+
+```text
+Lista ordenada sem valores duplicados.
+```
+
+---
+
+# `-w`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `grep`, `wc`, `fmt` |
+| **Importância** | ⭐⭐⭐☆☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Word** (Palavra inteira) | `grep` |
+| **Width** (Largura) | `fmt` |
+| **Words** (Contar palavras) | Alguns utilitários |
+
+### Exemplo
+
+```bash
+grep -w "root" /etc/passwd
+```
+
+**Saída**
+
+```text
+root:x:0:0:root:/root:/bin/bash
+```
+
+---
+
+# `-x`
+
+| Item | Informação |
+|------|------------|
+| **Uso comum** | O significado depende do comando |
+| **Comandos comuns** | `chmod`, `find`, `bash` |
+| **Importância** | ⭐⭐⭐⭐☆ |
+
+### Significados
+
+| Significado | Comandos |
+|-------------|----------|
+| **Execute** (Executar) | `chmod` |
+| **One File System** (Mesmo sistema de arquivos) | `find` |
+| **Debug Mode** (Modo de depuração) | `bash` |
+
+### Exemplo
+
+```bash
+bash -x script.sh
+```
+
+**Saída**
+
+```text
++ echo "Iniciando..."
++ mkdir backup
++ cp arquivo.txt backup/
+```
+
+---
+
+# Combinações Mais Utilizadas
+
+| Comando | Expansão |
+|----------|----------|
+| `ls -lah` | `-l` Long (Formato longo) + `-a` All (Todos) + `-h` Human Readable (Legível para humanos) |
+| `ls -lt` | `-l` Long (Formato longo) + `-t` Time (Ordenar por data) |
+| `rm -rf` | `-r` Recursive (Recursivo) + `-f` Force (Forçar) |
+| `cp -av` | `-a` Archive (Modo arquivo) + `-v` Verbose (Modo detalhado) |
+| `grep -rin` | `-r` Recursive (Recursivo) + `-i` Ignore Case (Ignorar maiúsculas/minúsculas) + `-n` Number (Número da linha) |
+| `grep -rw` | `-r` Recursive (Recursivo) + `-w` Word (Palavra inteira) |
+| `find -L` | `-L` Follow Symbolic Links (Seguir links simbólicos) |
+| `curl -LO` | `-L` Follow Redirects (Seguir redirecionamentos) + `-O` Remote Name (Salvar com o nome original) |
+| `tar -czvf` | `-c` Create (Criar) + `-z` Gzip (Compactar com gzip) + `-v` Verbose (Modo detalhado) + `-f` File (Arquivo) |
+| `chmod -R 755` | `-R` Recursive (Recursivo) |
+
+---
+
+# Flags por Comando
+
+## `ls`
+
+| Flag | Função |
+|------|--------|
+| `-a` | Mostrar arquivos ocultos |
+| `-A` | Mostrar ocultos, exceto `.` e `..` |
+| `-l` | Formato longo |
+| `-h` | Tamanho legível |
+| `-R` | Listagem recursiva |
+| `-t` | Ordenar por data |
+| `-u` | Utilizar tempo de acesso |
+
+---
+
+## `grep`
+
+| Flag | Função |
+|------|--------|
+| `-r` | Busca recursiva |
+| `-i` | Ignorar maiúsculas/minúsculas |
+| `-n` | Mostrar número da linha |
+| `-c` | Contar ocorrências |
+| `-v` | Inverter correspondência |
+| `-w` | Palavra inteira |
+| `-e` | Expressão |
+| `-I` | Ignorar arquivos binários |
+
+---
+
+## `find`
+
+| Flag | Função |
+|------|--------|
+| `-L` | Seguir links simbólicos |
+| `-P` | Não seguir links simbólicos |
+| `-o` | Operador lógico OU |
+
+---
+
+## `cp`
+
+| Flag | Função |
+|------|--------|
+| `-a` | Modo arquivo |
+| `-r` | Copiar recursivamente |
+| `-p` | Preservar atributos |
+| `-v` | Modo detalhado |
+| `-f` | Forçar cópia |
+
+---
+
+## `rm`
+
+| Flag | Função |
+|------|--------|
+| `-r` | Remover recursivamente |
+| `-f` | Forçar remoção |
+| `-i` | Solicitar confirmação |
+
+---
+
+## `curl`
+
+| Flag | Função |
+|------|--------|
+| `-L` | Seguir redirecionamentos |
+| `-O` | Salvar com o nome original |
+| `-o` | Definir nome do arquivo |
+| `-s` | Modo silencioso |
+
+---
+
+## `tar`
+
+| Flag | Função |
+|------|--------|
+| `-c` | Criar arquivo |
+| `-z` | Compactar com gzip |
+| `-v` | Modo detalhado |
+| `-f` | Especificar arquivo |
+
+---
+
+## `chmod`
+
+| Flag | Função |
+|------|--------|
+| `-R` | Alterar permissões recursivamente |
+
+---
+
+# Prioridade de Estudo
+
+| Nível | Flags |
+|--------|-------|
+| ⭐⭐⭐⭐⭐ Essenciais | `-a` `-l` `-h` `-r` `-f` `-i` `-v` |
+| ⭐⭐⭐⭐☆ Muito comuns | `-A` `-c` `-n` `-o` `-L` `-p` `-s` `-x` |
+| ⭐⭐⭐☆☆ Úteis | `-P` `-d` `-e` `-I` `-t` `-u` `-w` |
+
+---

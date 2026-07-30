@@ -1514,3 +1514,628 @@ Você provavelmente utilizará esse comando centenas de vezes.
 - Pode ser combinada com outras flags, como `-l` e `-h`.
 - O significado pode variar conforme o comando.
 
+---
+
+# Flag `-A`
+
+⭐⭐⭐⭐☆ **Muito Importante**
+
+## O que significa?
+
+A flag `-A` normalmente significa **Almost All**, que pode ser traduzido como **Quase Todos**.
+
+Ela é muito parecida com a flag `-a`, porém existe uma diferença importante.
+
+Enquanto `-a` mostra absolutamente tudo, a flag `-A` mostra praticamente todos os arquivos, **exceto** os diretórios especiais:
+
+- `.`
+- `..`
+
+Essa pequena diferença pode parecer insignificante, mas evita alguns problemas durante scripts e operações recursivas.
+
+---
+
+## Como funciona?
+
+Quando utilizamos:
+
+```bash
+ls -a
+```
+
+A saída será semelhante a:
+
+```text
+.
+..
+.bashrc
+.profile
+Downloads
+Documentos
+```
+
+Observe que aparecem dois diretórios especiais.
+
+```text
+.
+```
+
+Representa o diretório atual.
+
+Já:
+
+```text
+..
+```
+
+Representa o diretório pai.
+
+Quando utilizamos:
+
+```bash
+ls -A
+```
+
+A saída passa a ser:
+
+```text
+.bashrc
+.profile
+Downloads
+Documentos
+```
+
+Os diretórios especiais deixam de aparecer.
+
+Todo o restante continua sendo exibido normalmente.
+
+---
+
+## Qual a diferença entre `-a` e `-A`?
+
+Esta é uma das dúvidas mais comuns entre iniciantes.
+
+### Flag `-a`
+
+Mostra tudo.
+
+Inclusive:
+
+```text
+.
+..
+```
+
+---
+
+### Flag `-A`
+
+Mostra praticamente tudo.
+
+Oculta apenas:
+
+```text
+.
+..
+```
+
+---
+
+## Quando utilizar?
+
+Utilize `-A` quando:
+
+- Desejar visualizar arquivos ocultos.
+- Não precisar visualizar `.` e `..`.
+- Estiver criando scripts que percorrem diretórios.
+- Quiser uma saída mais limpa.
+
+Na maioria das situações práticas, `-A` é mais conveniente do que `-a`.
+
+---
+
+## Comandos que utilizam
+
+A flag `-A` aparece principalmente em:
+
+- `ls`
+
+Alguns outros programas também utilizam essa letra, porém com significados completamente diferentes.
+
+Sempre consulte:
+
+```bash
+man comando
+```
+
+---
+
+## Sintaxe
+
+```bash
+ls -A
+```
+
+ou
+
+```bash
+ls --almost-all
+```
+
+---
+
+# Exemplos
+
+## Exemplo 1
+
+Sem nenhuma flag.
+
+```bash
+ls
+```
+
+Saída
+
+```text
+Documentos
+Downloads
+script.sh
+```
+
+---
+
+## Exemplo 2
+
+Utilizando `-a`
+
+```bash
+ls -a
+```
+
+Saída
+
+```text
+.
+..
+.bash_history
+.bashrc
+.profile
+Documentos
+Downloads
+script.sh
+```
+
+---
+
+## Exemplo 3
+
+Utilizando `-A`
+
+```bash
+ls -A
+```
+
+Saída
+
+```text
+.bash_history
+.bashrc
+.profile
+Documentos
+Downloads
+script.sh
+```
+
+Agora compare:
+
+| Flag | Arquivos ocultos | `.` | `..` |
+|------|------------------|------|------|
+| `-a` | ✅ | ✅ | ✅ |
+| `-A` | ✅ | ❌ | ❌ |
+
+Essa é a única diferença entre elas.
+
+---
+
+## Utilizando com outras flags
+
+É muito comum combinar:
+
+```bash
+ls -Alh
+```
+
+ou
+
+```bash
+ls -Al
+```
+
+Obtendo uma saída detalhada sem mostrar `.` e `..`.
+
+---
+
+# Utilizando em Shell Script
+
+Imagine um script que percorre todos os arquivos de um diretório.
+
+Utilizando:
+
+```bash
+ls -a
+```
+
+Também aparecerão:
+
+```text
+.
+..
+```
+
+Dependendo do script, isso pode causar processamento desnecessário.
+
+Utilizando:
+
+```bash
+ls -A
+```
+
+Esse problema é evitado.
+
+---
+
+# Utilizando em Pentest
+
+Durante um Pentest normalmente queremos visualizar arquivos ocultos.
+
+Na maioria das vezes:
+
+```bash
+ls -lah
+```
+
+já é suficiente.
+
+Entretanto, alguns profissionais preferem:
+
+```bash
+ls -Alh
+```
+
+Porque elimina informações desnecessárias.
+
+Essa escolha depende da preferência do analista.
+
+---
+
+# Boas práticas
+
+✔ Utilize `-A` quando não precisar visualizar `.` e `..`.
+
+✔ Em scripts, `-A` normalmente produz uma saída mais limpa.
+
+---
+
+# Erros comuns
+
+## Pensar que `-A` e `-a` são iguais
+
+Embora pareçam iguais, existe uma diferença.
+
+`-a`
+
+Mostra:
+
+```text
+.
+..
+```
+
+Já:
+
+`-A`
+
+Oculta esses dois diretórios.
+
+---
+
+# Observações
+
+A flag `-A` existe principalmente para evitar que diretórios especiais sejam exibidos.
+
+Na prática ela produz uma saída mais organizada.
+
+---
+
+# Dicas
+
+💡 Se você está apenas explorando um diretório, tanto `-a` quanto `-A` funcionam muito bem.
+
+💡 Em scripts, normalmente prefira `-A`.
+
+---
+
+# Resumo
+
+- Significa **Almost All**.
+- Mostra praticamente todos os arquivos.
+- Não exibe `.` e `..`.
+- Muito utilizada com `ls`.
+- Bastante útil em Shell Script.
+
+---
+
+# Flag `-l`
+
+⭐⭐⭐⭐⭐ **Essencial**
+
+## O que significa?
+
+A flag `-l` normalmente significa **Long Listing Format**, ou simplesmente **Formato Longo**.
+
+Ela faz com que o comando apresente informações detalhadas sobre cada arquivo ou diretório.
+
+Sem ela, normalmente vemos apenas o nome dos arquivos.
+
+Com ela, passamos a visualizar diversas informações importantes.
+
+---
+
+## Como funciona?
+
+Sem a flag:
+
+```bash
+ls
+```
+
+Saída
+
+```text
+script.sh
+senha.txt
+Downloads
+```
+
+Agora:
+
+```bash
+ls -l
+```
+
+Saída
+
+```text
+-rwxr-xr-x 1 kali kali 532 Jul 18 14:22 script.sh
+-rw-r--r-- 1 kali kali 120 Jul 18 09:11 senha.txt
+drwxr-xr-x 2 kali kali 4096 Jul 18 11:00 Downloads
+```
+
+Perceba que agora há muito mais informações.
+
+---
+
+## O que cada coluna significa?
+
+Veja novamente:
+
+```text
+-rwxr-xr-x 1 kali kali 532 Jul 18 14:22 script.sh
+```
+
+Podemos dividir assim:
+
+```text
+-rwxr-xr-x
+```
+
+Permissões.
+
+---
+
+```text
+1
+```
+
+Quantidade de links físicos.
+
+---
+
+```text
+kali
+```
+
+Usuário proprietário.
+
+---
+
+```text
+kali
+```
+
+Grupo proprietário.
+
+---
+
+```text
+532
+```
+
+Tamanho do arquivo em bytes.
+
+---
+
+```text
+Jul 18 14:22
+```
+
+Data da última modificação.
+
+---
+
+```text
+script.sh
+```
+
+Nome do arquivo.
+
+---
+
+## Quando utilizar?
+
+Sempre que precisar visualizar informações detalhadas.
+
+Por exemplo:
+
+- permissões;
+- proprietário;
+- grupo;
+- tamanho;
+- data;
+- tipo do arquivo.
+
+É uma das flags mais utilizadas no Linux.
+
+---
+
+## Comandos que utilizam
+
+Muito comum em:
+
+- `ls`
+
+Outros programas também possuem `-l`, porém com significados diferentes.
+
+---
+
+## Sintaxe
+
+```bash
+ls -l
+```
+
+---
+
+# Exemplos
+
+## Exemplo 1
+
+```bash
+ls -l
+```
+
+Saída
+
+```text
+-rwxr-xr-x 1 kali kali 532 script.sh
+```
+
+Agora sabemos que:
+
+- É um arquivo.
+- Possui permissão de execução.
+- Pertence ao usuário kali.
+
+---
+
+## Exemplo 2
+
+Combinando:
+
+```bash
+ls -la
+```
+
+Agora também aparecem arquivos ocultos.
+
+---
+
+## Exemplo 3
+
+```bash
+ls -lah
+```
+
+Essa combinação é uma das mais famosas do Linux.
+
+Ela reúne:
+
+- `-l` → Informações detalhadas.
+- `-a` → Arquivos ocultos.
+- `-h` → Tamanho legível.
+
+É provavelmente o comando que você mais utilizará durante sua jornada com Linux.
+
+---
+
+# Utilizando em Shell Script
+
+Embora scripts normalmente não utilizem `ls` para processar arquivos (existem formas mais robustas, como `find`), a flag `-l` é útil para inspeções, geração de relatórios e auditorias.
+
+---
+
+# Utilizando em Pentest
+
+Durante um Pentest, visualizar permissões é extremamente importante.
+
+Com:
+
+```bash
+ls -l
+```
+
+É possível identificar:
+
+- arquivos executáveis;
+- scripts;
+- diretórios;
+- arquivos pertencentes ao root;
+- possíveis configurações incorretas.
+
+Essas informações ajudam na enumeração inicial do sistema.
+
+---
+
+# Boas práticas
+
+✔ Sempre utilize `-l` quando precisar analisar um diretório.
+
+✔ Combine com `-a` e `-h`.
+
+---
+
+# Erros comuns
+
+## Pensar que o tamanho mostrado é sempre fácil de interpretar
+
+Sem a flag `-h`, os tamanhos são exibidos em bytes.
+
+Por isso, normalmente utilizamos:
+
+```bash
+ls -lh
+```
+
+---
+
+# Observações
+
+A flag `-l` é considerada uma das mais importantes do Linux.
+
+Grande parte dos administradores utiliza essa opção diariamente.
+
+---
+
+# Dicas
+
+💡 Aprenda a interpretar a primeira coluna (permissões). Ela será extremamente importante quando estudarmos `chmod`, `chown` e segurança em sistemas Linux.
+
+---
+
+# Resumo
+
+- Significa **Long Listing Format**.
+- Exibe informações detalhadas.
+- Mostra permissões, proprietário, grupo, tamanho e data.
+- Muito utilizada em administração de sistemas e Pentest.
+- Geralmente combinada com `-a` e `-h`.

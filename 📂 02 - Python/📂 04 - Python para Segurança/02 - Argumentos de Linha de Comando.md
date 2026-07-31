@@ -1,0 +1,59 @@
+# Argumentos de Linha de Comando em Python
+
+> Anotação criada para organizar os estudos do módulo de Python da Solyd.
+
+---
+
+## O que é?
+
+Conteúdo será adicionado durante os estudos.
+
+---
+
+## Para que serve?
+
+Conteúdo será adicionado durante os estudos.
+
+---
+
+## Sintaxe
+
+```python
+# Exemplo será adicionado aqui.
+```
+
+---
+
+## Exemplo prático
+
+```python
+# Código da aula.
+```
+
+### Saída
+
+```text
+Saída do programa.
+```
+
+---
+
+## Explicação do código
+
+Conteúdo será adicionado durante os estudos.
+
+---
+
+## Observações
+
+- Adicionar observações importantes da aula.
+- Registrar erros encontrados e como foram corrigidos.
+- Relacionar a anotação com o arquivo Python correspondente.
+
+---
+
+## Exercícios
+
+- [ ] Reproduzir o exemplo da aula.
+- [ ] Modificar o exemplo por conta própria.
+- [ ] Criar um exercício sem consultar o vídeo.

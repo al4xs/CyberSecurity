@@ -1,3 +1,9 @@
+---
+
+---
+
+---
+
 # Introdução à Programação Orientada a Objetos
 
 > Anotação criada para organizar os estudos do módulo de Python da Solyd.

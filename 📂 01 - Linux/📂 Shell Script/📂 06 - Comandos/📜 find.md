@@ -11423,3 +11423,1395 @@ Na próxima parte estudaremos:
 - Ações implícitas;
 - Por que alguns comandos aparentemente corretos produzem resultados errados.
 
+---
+
+# Operadores do comando `find`
+
+O `find` não trabalha apenas com filtros isolados.
+
+Também podemos combinar várias condições utilizando operadores lógicos.
+
+Os principais são:
+
+```text
+-a
+-o
+!
+-not
+\( \)
+```
+
+Eles representam:
+
+| Operador | Significado |
+|---|---|
+| `-a` | AND — E |
+| `-o` | OR — OU |
+| `!` | NOT — NÃO |
+| `-not` | Mesmo significado de `!` |
+| `\( \)` | Agrupamento de expressões |
+
+Esses operadores permitem construir buscas mais complexas.
+
+---
+
+# O operador AND
+
+O operador:
+
+```bash
+-a
+```
+
+significa:
+
+```text
+AND
+```
+
+ou:
+
+```text
+E
+```
+
+Ele exige que as duas condições sejam verdadeiras.
+
+---
+
+# Exemplo
+
+```bash
+find . -type f -a -name "*.txt"
+```
+
+Tradução:
+
+> Procure objetos que sejam arquivos comuns **e** tenham o nome terminado em `.txt`.
+
+---
+
+# AND implícito
+
+Na maioria das vezes, não precisamos escrever:
+
+```bash
+-a
+```
+
+O `find` considera automaticamente que expressões colocadas lado a lado estão ligadas por AND.
+
+Por isso, estes comandos são equivalentes:
+
+```bash
+find . -type f -a -name "*.txt"
+```
+
+```bash
+find . -type f -name "*.txt"
+```
+
+A segunda forma é mais comum.
+
+---
+
+# Como pensar no AND
+
+Considere:
+
+```bash
+find /var/www -type f -user www-data -name "*.php"
+```
+
+Internamente:
+
+```text
+-type f
+AND
+-user www-data
+AND
+-name "*.php"
+```
+
+O objeto precisa atender a todas as condições.
+
+---
+
+# Exemplo prático
+
+Estrutura:
+
+```text
+index.php        → arquivo, usuário www-data
+config.php       → arquivo, usuário root
+uploads          → diretório, usuário www-data
+readme.txt       → arquivo, usuário www-data
+```
+
+Comando:
+
+```bash
+find . -type f -user www-data -name "*.php"
+```
+
+Resultado:
+
+```text
+./index.php
+```
+
+Por quê?
+
+| Objeto | Arquivo? | www-data? | Termina em `.php`? | Resultado |
+|---|:---:|:---:|:---:|:---:|
+| `index.php` | Sim | Sim | Sim | Mostrar |
+| `config.php` | Sim | Não | Sim | Ignorar |
+| `uploads` | Não | Sim | Não | Ignorar |
+| `readme.txt` | Sim | Sim | Não | Ignorar |
+
+---
+
+# O operador OR
+
+O operador:
+
+```bash
+-o
+```
+
+significa:
+
+```text
+OR
+```
+
+ou:
+
+```text
+OU
+```
+
+Ele exige que pelo menos uma das condições seja verdadeira.
+
+---
+
+# Exemplo simples
+
+```bash
+find . -name "*.zip" -o -name "*.tar"
+```
+
+Tradução:
+
+> Procure objetos cujo nome termine em `.zip` ou `.tar`.
+
+Possível resultado:
+
+```text
+./backup.zip
+./site.tar
+```
+
+---
+
+# Como o OR funciona
+
+Fluxo simplificado:
+
+```text
+O nome termina em .zip?
+        │
+       Sim
+        │
+      Mostrar
+```
+
+Se não:
+
+```text
+O nome termina em .tar?
+        │
+       Sim
+        │
+      Mostrar
+```
+
+Caso nenhuma condição seja verdadeira:
+
+```text
+Ignorar
+```
+
+---
+
+# O operador NOT
+
+O operador:
+
+```bash
+!
+```
+
+inverte o resultado de uma expressão.
+
+Também pode ser escrito como:
+
+```bash
+-not
+```
+
+---
+
+# Exemplo
+
+```bash
+find . ! -name "*.txt"
+```
+
+Tradução:
+
+> Mostre objetos cujo nome não termine em `.txt`.
+
+---
+
+# Outro exemplo
+
+```bash
+find . -type f ! -name "*.log"
+```
+
+Tradução:
+
+> Procure arquivos comuns que não terminem em `.log`.
+
+---
+
+# `!` versus `-not`
+
+Estes comandos são equivalentes:
+
+```bash
+find . ! -name "*.txt"
+```
+
+```bash
+find . -not -name "*.txt"
+```
+
+A forma com:
+
+```bash
+!
+```
+
+é mais curta.
+
+A forma:
+
+```bash
+-not
+```
+
+pode ser mais fácil de ler em comandos longos.
+
+---
+
+# Atenção ao shell
+
+Em alguns shells interativos, o caractere:
+
+```text
+!
+```
+
+pode ser utilizado para expansão de histórico.
+
+Por isso, dependendo do ambiente, pode ser necessário escrever:
+
+```bash
+\!
+```
+
+ou utilizar:
+
+```bash
+-not
+```
+
+Exemplo:
+
+```bash
+find . -type f -not -name "*.txt"
+```
+
+No Bash não interativo, essa expansão normalmente não ocorre da mesma forma.
+
+---
+
+# Agrupamento com parênteses
+
+Os parênteses permitem agrupar expressões.
+
+No `find`, escrevemos:
+
+```bash
+\( EXPRESSÕES \)
+```
+
+---
+
+# Por que existe a barra invertida?
+
+O shell interpreta os caracteres:
+
+```text
+(
+)
+```
+
+como sintaxe própria.
+
+Para impedir que o shell os processe antes de o `find` recebê-los, usamos:
+
+```bash
+\(
+\)
+```
+
+Também seria possível usar aspas:
+
+```bash
+'('
+')'
+```
+
+Mas a forma mais comum é:
+
+```bash
+\(
+\)
+```
+
+---
+
+# Exemplo de agrupamento
+
+```bash
+find . -type f \
+\( -name "*.zip" -o -name "*.tar" \)
+```
+
+Tradução:
+
+> Procure objetos que sejam arquivos comuns e cujo nome termine em `.zip` ou `.tar`.
+
+Lógica:
+
+```text
+-type f
+AND
+(
+    -name "*.zip"
+    OR
+    -name "*.tar"
+)
+```
+
+---
+
+# Por que os parênteses são importantes?
+
+Observe este comando:
+
+```bash
+find . -type f -name "*.bak" -o -name "*.zip"
+```
+
+Muitas pessoas interpretam assim:
+
+```text
+É arquivo
+AND
+(
+    termina em .bak
+    OR
+    termina em .zip
+)
+```
+
+Mas não é necessariamente assim que o `find` avalia.
+
+Devido à precedência dos operadores, ele interpreta como:
+
+```text
+(
+    -type f
+    AND
+    -name "*.bak"
+)
+OR
+-name "*.zip"
+```
+
+Isso significa que:
+
+```text
+-type f
+```
+
+aplica-se apenas ao primeiro lado.
+
+---
+
+# Consequência prática
+
+Imagine existir um diretório chamado:
+
+```text
+arquivos.zip
+```
+
+O comando:
+
+```bash
+find . -type f -name "*.bak" -o -name "*.zip"
+```
+
+pode retornar:
+
+```text
+./backup.bak
+./arquivos.zip
+```
+
+Mesmo que:
+
+```text
+./arquivos.zip
+```
+
+seja um diretório.
+
+Isso acontece porque o segundo teste:
+
+```bash
+-name "*.zip"
+```
+
+não está necessariamente protegido pelo:
+
+```bash
+-type f
+```
+
+---
+
+# Forma correta
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.zip" \)
+```
+
+Agora:
+
+```text
+-type f
+```
+
+aplica-se a todo o grupo.
+
+---
+
+# O comando dos backups corrigido
+
+O comando:
+
+```bash
+find / -type f \
+-name "*.bak" \
+-o -name "*.old" \
+-o -name "*.zip" \
+-o -name "*.tar" \
+-o -name "*.gz" \
+2>/dev/null
+```
+
+possui um problema lógico.
+
+A forma correta é:
+
+```bash
+find / -type f \
+\( \
+    -name "*.bak" \
+    -o -name "*.old" \
+    -o -name "*.zip" \
+    -o -name "*.tar" \
+    -o -name "*.gz" \
+\) 2>/dev/null
+```
+
+---
+
+# Tradução correta
+
+```text
+Procure em /
+AND
+considere apenas arquivos comuns
+AND
+(
+    nome termina em .bak
+    OU
+    nome termina em .old
+    OU
+    nome termina em .zip
+    OU
+    nome termina em .tar
+    OU
+    nome termina em .gz
+)
+```
+
+---
+
+# Precedência dos operadores
+
+Assim como em matemática, alguns operadores são avaliados antes de outros.
+
+No `find`, a ordem geral é aproximadamente:
+
+```text
+1. Parênteses
+2. NOT
+3. AND
+4. OR
+```
+
+Ou seja:
+
+```text
+\( \)
+```
+
+possui alta prioridade porque força o agrupamento.
+
+Depois:
+
+```text
+!
+```
+
+Depois:
+
+```text
+-a
+```
+
+ou AND implícito.
+
+Por último:
+
+```text
+-o
+```
+
+---
+
+# Tabela de precedência
+
+| Prioridade | Operador |
+|---:|---|
+| 1 | `\( ... \)` |
+| 2 | `!` ou `-not` |
+| 3 | `-a` ou AND implícito |
+| 4 | `-o` |
+
+---
+
+# Comparação com matemática
+
+Expressão matemática:
+
+```text
+2 + 3 × 4
+```
+
+A multiplicação acontece primeiro:
+
+```text
+2 + 12 = 14
+```
+
+Para alterar a ordem:
+
+```text
+(2 + 3) × 4 = 20
+```
+
+No `find`, os parênteses possuem função semelhante.
+
+---
+
+# Exemplo sem agrupamento
+
+```bash
+find . -type f -name "*.txt" -o -name "*.md"
+```
+
+Interpretação real aproximada:
+
+```text
+(
+    -type f
+    AND
+    -name "*.txt"
+)
+OR
+-name "*.md"
+```
+
+---
+
+# Exemplo com agrupamento
+
+```bash
+find . -type f \
+\( -name "*.txt" -o -name "*.md" \)
+```
+
+Interpretação:
+
+```text
+-type f
+AND
+(
+    -name "*.txt"
+    OR
+    -name "*.md"
+)
+```
+
+---
+
+# Agrupando tipos diferentes
+
+Podemos procurar arquivos ou links simbólicos.
+
+```bash
+find . \
+\( -type f -o -type l \)
+```
+
+Tradução:
+
+> Mostre objetos que sejam arquivos comuns ou links simbólicos.
+
+---
+
+# Agrupando nomes e tipos
+
+```bash
+find . \
+\( -type f -name "*.txt" \) \
+-o \
+\( -type d -name "backup" \)
+```
+
+Tradução:
+
+> Mostre arquivos `.txt` ou diretórios chamados `backup`.
+
+---
+
+# Negando um grupo
+
+```bash
+find . \
+! \( -name "*.txt" -o -name "*.log" \)
+```
+
+Tradução:
+
+> Mostre objetos que não terminem em `.txt` nem `.log`.
+
+Lógica:
+
+```text
+NOT
+(
+    termina em .txt
+    OR
+    termina em .log
+)
+```
+
+---
+
+# Excluir vários diretórios
+
+```bash
+find . \
+! -path "*/.git/*" \
+! -path "*/node_modules/*" \
+-type f
+```
+
+Tradução:
+
+> Procure arquivos fora de `.git` e `node_modules`.
+
+Esse comando filtra os resultados, mas ainda pode entrar nesses diretórios.
+
+Para impedir a travessia, utilize `-prune`.
+
+---
+
+# Combinando `-prune`
+
+```bash
+find . \
+\( -path "*/.git" -o -path "*/node_modules" \) \
+-prune \
+-o -type f -print
+```
+
+Lógica:
+
+```text
+(
+    caminho é .git
+    OU
+    caminho é node_modules
+)
+AND
+-prune
+OR
+(
+    é arquivo
+    AND
+    -print
+)
+```
+
+---
+
+# Curto-circuito lógico
+
+O `find` utiliza uma avaliação semelhante a curto-circuito.
+
+Isso significa que algumas partes podem não ser avaliadas quando o resultado já é conhecido.
+
+---
+
+# AND com curto-circuito
+
+Em:
+
+```text
+A AND B
+```
+
+se `A` for falso, não é necessário avaliar `B`.
+
+Exemplo:
+
+```bash
+find . -type f -name "*.txt"
+```
+
+Se o objeto for um diretório:
+
+```text
+-type f → falso
+```
+
+O `find` não precisa verificar o nome para decidir o resultado do AND.
+
+---
+
+# OR com curto-circuito
+
+Em:
+
+```text
+A OR B
+```
+
+se `A` for verdadeiro, não é necessário avaliar `B`.
+
+Exemplo:
+
+```bash
+find . -name "*.zip" -o -name "*.tar"
+```
+
+Se o nome terminar em `.zip`, o segundo teste pode não precisar ser avaliado.
+
+---
+
+# Por que isso importa?
+
+Porque ações também participam da expressão.
+
+Exemplo:
+
+```bash
+find . -type f -print -o -type d -print
+```
+
+O comportamento depende dos resultados lógicos e da ordem de avaliação.
+
+Comandos complexos devem ser agrupados claramente.
+
+---
+
+# Ação padrão e operadores
+
+Quando nenhuma ação é informada, o `find` adiciona um comportamento semelhante a:
+
+```bash
+-print
+```
+
+Mas isso pode produzir surpresas quando usamos `-o`.
+
+---
+
+# Exemplo surpreendente
+
+```bash
+find . -name "*.txt" -o -name "*.md"
+```
+
+Normalmente os resultados correspondentes são impressos porque não foi informada outra ação.
+
+Agora observe:
+
+```bash
+find . -name "*.txt" -print -o -name "*.md"
+```
+
+Nesse caso:
+
+- Arquivos `.txt` executam `-print`;
+- Para arquivos `.md`, o segundo lado pode ser verdadeiro;
+- Mas não existe uma ação de impressão associada ao segundo lado.
+
+Resultado:
+
+```text
+Os arquivos .md podem não ser mostrados.
+```
+
+---
+
+# Forma correta
+
+```bash
+find . \
+\( -name "*.txt" -o -name "*.md" \) \
+-print
+```
+
+Agora o `-print` aplica-se ao grupo completo.
+
+---
+
+# Outro exemplo
+
+Problemático:
+
+```bash
+find . -type f -name "*.bak" -delete -o -name "*.old" -delete
+```
+
+Melhor:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.old" \) \
+-delete
+```
+
+Primeiro agrupamos os nomes.
+
+Depois aplicamos a ação.
+
+---
+
+# AND explícito versus implícito
+
+Estas formas são equivalentes:
+
+```bash
+find . -type f -name "*.txt"
+```
+
+```bash
+find . -type f -a -name "*.txt"
+```
+
+A forma implícita é mais comum.
+
+Use `-a` explicitamente apenas quando ajudar na leitura de uma expressão complexa.
+
+---
+
+# Negação aplicada a uma expressão
+
+```bash
+find . -type f ! -name "*.txt"
+```
+
+Interpretação:
+
+```text
+-type f
+AND
+NOT -name "*.txt"
+```
+
+---
+
+# Negação aplicada a um grupo
+
+```bash
+find . -type f \
+! \( -name "*.txt" -o -name "*.log" \)
+```
+
+Interpretação:
+
+```text
+-type f
+AND
+NOT
+(
+    -name "*.txt"
+    OR
+    -name "*.log"
+)
+```
+
+---
+
+# Exemplo: backups e arquivos compactados
+
+```bash
+find /home /opt /var/backups \
+-type f \
+\( \
+    -iname "*.bak" \
+    -o -iname "*.old" \
+    -o -iname "*.backup" \
+    -o -iname "*.zip" \
+    -o -iname "*.tar" \
+    -o -iname "*.tar.gz" \
+    -o -iname "*.tgz" \
+\) \
+2>/dev/null
+```
+
+---
+
+# Exemplo: arquivos de configuração
+
+```bash
+find /var/www /opt /home \
+-type f \
+\( \
+    -iname "*.conf" \
+    -o -iname "*.cfg" \
+    -o -iname "*.ini" \
+    -o -iname "*.env" \
+    -o -iname "*.yml" \
+    -o -iname "*.yaml" \
+    -o -iname "*.json" \
+\) \
+2>/dev/null
+```
+
+---
+
+# Exemplo: excluir arquivos de log
+
+```bash
+find /var/www \
+-type f \
+! -name "*.log"
+```
+
+---
+
+# Exemplo: arquivos recentes, grandes e compactados
+
+```bash
+find /home \
+-type f \
+-size +10M \
+-mtime -7 \
+\( \
+    -iname "*.zip" \
+    -o -iname "*.tar" \
+    -o -iname "*.gz" \
+\)
+```
+
+Tradução:
+
+> Procure arquivos maiores que 10 MiB, modificados nos últimos sete dias e cujo nome termine em `.zip`, `.tar` ou `.gz`.
+
+---
+
+# Exemplo: arquivos do root graváveis
+
+```bash
+find / \
+-type f \
+-user root \
+\( -writable -o -perm -002 \) \
+2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos pertencentes ao root que sejam graváveis pelo usuário atual ou possuam escrita para outros usuários.
+
+---
+
+# Exemplo: arquivos SUID ou SGID
+
+```bash
+find / \
+-type f \
+-perm /6000 \
+2>/dev/null
+```
+
+Também poderíamos representar a lógica de forma mais explícita:
+
+```bash
+find / -type f \
+\( -perm -4000 -o -perm -2000 \) \
+2>/dev/null
+```
+
+---
+
+# Exemplo: diretórios graváveis sem Sticky Bit
+
+```bash
+find / \
+-type d \
+-perm -002 \
+! -perm -1000 \
+2>/dev/null
+```
+
+Tradução:
+
+> Procure diretórios graváveis por outros usuários que não possuam Sticky Bit.
+
+---
+
+# Exemplo em Shell Script
+
+```bash
+#!/usr/bin/env bash
+
+diretorio=${1:-.}
+
+find "$diretorio" \
+-type f \
+\( -name "*.txt" -o -name "*.md" \) \
+-print0 |
+while IFS= read -r -d '' arquivo; do
+    printf 'Documento: %s\n' "$arquivo"
+done
+```
+
+---
+
+# Exemplo com ação diferente para cada grupo
+
+```bash
+find . \
+\( -type f -name "*.txt" -printf "TXT: %p\n" \) \
+-o \
+\( -type f -name "*.sh" -printf "SCRIPT: %p\n" \)
+```
+
+Nesse caso:
+
+- Arquivos `.txt` recebem uma saída;
+- Scripts `.sh` recebem outra saída.
+
+---
+
+# Como construir comandos complexos
+
+Use esta ordem mental:
+
+```text
+1. Onde procurar?
+2. Qual tipo de objeto?
+3. Quais filtros obrigatórios?
+4. Quais alternativas?
+5. O que deve ser negado?
+6. Quais partes precisam de parênteses?
+7. Qual ação será executada?
+```
+
+---
+
+# Modelo de construção
+
+```bash
+find DIRETORIO \
+FILTROS_OBRIGATORIOS \
+\( ALTERNATIVA_1 -o ALTERNATIVA_2 \) \
+NEGAÇÕES \
+AÇÃO
+```
+
+---
+
+# Exemplo preenchido
+
+```bash
+find /var/www \
+-type f \
+-user www-data \
+\( -name "*.php" -o -name "*.conf" \) \
+! -path "*/cache/*" \
+-print
+```
+
+---
+
+# Como ler esse comando
+
+```text
+Procure em /var/www
+
+E
+
+considere apenas arquivos
+
+E
+
+pertencentes ao usuário www-data
+
+E
+
+cujo nome termine em .php ou .conf
+
+E
+
+que não estejam em caminhos de cache
+
+E
+
+mostre os resultados
+```
+
+---
+
+# Erros comuns
+
+## Não agrupar alternativas
+
+Problemático:
+
+```bash
+find . -type f -name "*.bak" -o -name "*.zip"
+```
+
+Correto:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.zip" \)
+```
+
+---
+
+## Esquecer de escapar os parênteses
+
+Errado:
+
+```bash
+find . ( -name "*.txt" -o -name "*.md" )
+```
+
+O shell pode gerar erro de sintaxe.
+
+Correto:
+
+```bash
+find . \( -name "*.txt" -o -name "*.md" \)
+```
+
+---
+
+## Colocar `-print` em apenas um lado
+
+Problemático:
+
+```bash
+find . -name "*.txt" -print -o -name "*.md"
+```
+
+Correto:
+
+```bash
+find . \
+\( -name "*.txt" -o -name "*.md" \) \
+-print
+```
+
+---
+
+## Confiar em comandos longos sem traduzi-los
+
+Antes de executar, leia o comando em português.
+
+Se não conseguir explicar cada grupo, ainda não está pronto para executá-lo.
+
+---
+
+## Misturar filtros e ações sem agrupamento
+
+Problemático:
+
+```bash
+find . -name "*.bak" -delete -o -name "*.old" -print
+```
+
+Mais claro:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.old" \) \
+-print
+```
+
+Depois de conferir:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.old" \) \
+-delete
+```
+
+---
+
+# Boas práticas
+
+1. Agrupe alternativas com `\( ... \)`.
+2. Coloque os filtros comuns antes do grupo.
+3. Aplique a ação depois do grupo.
+4. Use indentação em comandos multilinha.
+5. Traduza o comando antes de executá-lo.
+6. Teste com `-print` antes de `-delete`.
+7. Evite depender da ação implícita em expressões complexas.
+8. Use `-print` explicitamente quando houver `-o`.
+9. Lembre que AND possui prioridade maior que OR.
+10. Prefira clareza a comandos excessivamente curtos.
+
+---
+
+# Formatação recomendada
+
+Em vez de:
+
+```bash
+find / -type f \( -name "*.bak" -o -name "*.old" -o -name "*.zip" \) 2>/dev/null
+```
+
+prefira:
+
+```bash
+find / \
+-type f \
+\( \
+    -name "*.bak" \
+    -o -name "*.old" \
+    -o -name "*.zip" \
+\) \
+2>/dev/null
+```
+
+Essa forma facilita:
+
+- Leitura;
+- Manutenção;
+- Detecção de erros;
+- Inclusão de novos filtros;
+- Documentação no Obsidian.
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Sintaxe |
+|---|---|
+| AND explícito | `EXP1 -a EXP2` |
+| AND implícito | `EXP1 EXP2` |
+| OR | `EXP1 -o EXP2` |
+| NOT | `! EXP` |
+| NOT alternativo | `-not EXP` |
+| Agrupar | `\( EXP \)` |
+| Arquivo TXT ou MD | `-type f \( -name "*.txt" -o -name "*.md" \)` |
+| Excluir logs | `-type f ! -name "*.log"` |
+| Negar grupo | `! \( -name "*.txt" -o -name "*.log" \)` |
+| SUID ou SGID | `-type f -perm /6000` |
+
+---
+
+# Resumo
+
+Os operadores lógicos do `find` permitem combinar expressões.
+
+```text
+-a   → AND
+-o   → OR
+!    → NOT
+-not → NOT
+\( \) → agrupamento
+```
+
+A regra mais importante desta parte é:
+
+```text
+AND possui prioridade maior que OR.
+```
+
+Por isso, alternativas devem ser agrupadas:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.zip" \)
+```
+
+Outra regra importante:
+
+```text
+filtros primeiro
+ação depois
+```
+
+Na próxima parte vamos concluir a anotação com:
+
+- Exemplos reais para Linux;
+- Exemplos para Shell Script;
+- Exemplos para Pentest e CTF;
+- Performance;
+- Portabilidade;
+- Erros comuns gerais;
+- Checklist;
+- Cheatsheet completo do `find`.
+
+	

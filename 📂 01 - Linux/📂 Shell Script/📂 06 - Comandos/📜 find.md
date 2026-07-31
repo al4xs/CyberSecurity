@@ -2864,3 +2864,474 @@ Na próxima parte estudaremos:
 - Casos práticos
 - Depois entraremos em `-path` e `-ipath`.
 
+---
+
+# A opção `-iname`
+
+Até agora aprendemos a utilizar:
+
+```bash
+-name
+```
+
+Essa opção procura arquivos utilizando seu nome.
+
+Porém, ela possui uma limitação importante.
+
+Ela diferencia letras maiúsculas de minúsculas.
+
+Esse comportamento é chamado de **Case Sensitive**.
+
+---
+
+# O que significa Case Sensitive?
+
+Um sistema **Case Sensitive** diferencia letras maiúsculas de minúsculas.
+
+Por exemplo:
+
+```text
+config.php
+```
+
+é diferente de:
+
+```text
+Config.php
+```
+
+que também é diferente de:
+
+```text
+CONFIG.PHP
+```
+
+Embora os três nomes pareçam semelhantes, para o Linux eles representam arquivos completamente diferentes.
+
+---
+
+# Exemplo
+
+Imagine o seguinte diretório.
+
+```text
+.
+
+├── config.php
+├── Config.php
+├── CONFIG.PHP
+├── login.php
+└── index.php
+```
+
+Agora execute:
+
+```bash
+find . -name "config.php"
+```
+
+Resultado:
+
+```text
+./config.php
+```
+
+Observe que apenas um arquivo foi encontrado.
+
+Os demais foram ignorados.
+
+---
+
+# Como resolver isso?
+
+Para realizar buscas ignorando letras maiúsculas e minúsculas existe a opção:
+
+```bash
+-iname
+```
+
+O "i" significa:
+
+```text
+Insensitive
+```
+
+Ou seja:
+
+```text
+Case Insensitive
+```
+
+---
+
+# Como funciona?
+
+Sintaxe:
+
+```bash
+find DIRETORIO -iname PADRÃO
+```
+
+Exemplo:
+
+```bash
+find . -iname "config.php"
+```
+
+Resultado:
+
+```text
+./config.php
+
+./Config.php
+
+./CONFIG.PHP
+```
+
+Agora todos os arquivos foram encontrados.
+
+---
+
+# Diferença entre `-name` e `-iname`
+
+## Utilizando `-name`
+
+```bash
+find . -name "*.jpg"
+```
+
+Arquivos:
+
+```text
+foto.jpg
+
+Foto.jpg
+
+FOTO.JPG
+```
+
+Resultado:
+
+```text
+foto.jpg
+```
+
+---
+
+## Utilizando `-iname`
+
+```bash
+find . -iname "*.jpg"
+```
+
+Resultado:
+
+```text
+foto.jpg
+
+Foto.jpg
+
+FOTO.JPG
+```
+
+Observe como todas as variações foram encontradas.
+
+---
+
+# Quando utilizar `-iname`?
+
+Utilize quando não tiver certeza da capitalização do nome.
+
+Por exemplo.
+
+Você sabe que existe um arquivo chamado:
+
+```text
+backup.zip
+```
+
+Mas não sabe se ele foi salvo como:
+
+```text
+backup.zip
+
+Backup.zip
+
+BACKUP.ZIP
+```
+
+Nesse caso:
+
+```bash
+find . -iname "*backup*"
+```
+
+é uma excelente escolha.
+
+---
+
+# Procurando arquivos PHP
+
+```bash
+find /var/www -iname "*.php"
+```
+
+Resultado:
+
+```text
+index.php
+
+Config.PHP
+
+Login.Php
+
+ADMIN.PHP
+```
+
+---
+
+# Procurando imagens
+
+```bash
+find . -iname "*.png"
+```
+
+Resultado:
+
+```text
+foto.PNG
+
+imagem.png
+
+Logo.PnG
+```
+
+---
+
+# Procurando backups
+
+```bash
+find / -iname "*.bak" 2>/dev/null
+```
+
+Resultado:
+
+```text
+passwd.BAK
+
+config.bak
+
+Backup.Bak
+```
+
+---
+
+# Casos de uso em Pentest
+
+Durante um Pentest, muitas vezes encontramos arquivos criados manualmente pelos desenvolvedores.
+
+Nem sempre eles seguem um padrão.
+
+Exemplo:
+
+```text
+Config.php
+
+config.php
+
+CONFIG.PHP
+
+Database.php
+
+DATABASE.php
+```
+
+Utilizando:
+
+```bash
+-name
+```
+
+alguns arquivos podem passar despercebidos.
+
+Já:
+
+```bash
+-iname
+```
+
+encontra todos eles.
+
+---
+
+# Casos de uso em CTF
+
+Em diversos laboratórios os organizadores utilizam nomes incomuns justamente para dificultar a enumeração.
+
+Exemplo:
+
+```text
+Secret.txt
+
+FLAG.TXT
+
+Backup.ZIP
+```
+
+Utilizando:
+
+```bash
+find / -iname "*.txt"
+```
+
+todos esses arquivos serão encontrados.
+
+---
+
+# Comparando
+
+| Opção | Diferencia maiúsculas? |
+|--------|------------------------|
+| `-name` | Sim |
+| `-iname` | Não |
+
+---
+
+# Boas práticas
+
+Utilize:
+
+```bash
+-name
+```
+
+quando souber exatamente o nome do arquivo.
+
+Exemplo:
+
+```text
+config.php
+```
+
+---
+
+Utilize:
+
+```bash
+-iname
+```
+
+quando não souber como o arquivo foi nomeado.
+
+---
+
+# Erros comuns
+
+## Pensar que `-iname` é mais lento
+
+Na maioria dos casos, a diferença é praticamente imperceptível.
+
+Escolha a opção pensando na necessidade da busca, e não em desempenho.
+
+---
+
+## Utilizar `-iname` sempre
+
+Embora funcione, muitas vezes é desnecessário.
+
+Se você sabe exatamente o nome do arquivo, prefira:
+
+```bash
+-name
+```
+
+---
+
+# Exemplo comparando os dois
+
+Estrutura:
+
+```text
+.
+
+├── backup.zip
+├── Backup.zip
+├── BACKUP.ZIP
+└── script.sh
+```
+
+Comando:
+
+```bash
+find . -name "*.zip"
+```
+
+Resultado:
+
+```text
+backup.zip
+```
+
+Agora:
+
+```bash
+find . -iname "*.zip"
+```
+
+Resultado:
+
+```text
+backup.zip
+
+Backup.zip
+
+BACKUP.ZIP
+```
+
+---
+
+# Dica para Pentesters
+
+Durante uma enumeração Linux, normalmente prefiro utilizar:
+
+```bash
+-iname
+```
+
+quando procuro:
+
+- arquivos `.env`;
+- backups;
+- arquivos PHP;
+- arquivos de configuração;
+- bancos de dados;
+- scripts.
+
+Isso reduz as chances de deixar passar um arquivo importante apenas porque o desenvolvedor utilizou letras maiúsculas.
+
+---
+
+# Resumo
+
+A opção:
+
+```bash
+-iname
+```
+
+funciona exatamente como:
+
+```bash
+-name
+```
+
+A única diferença é que ela ignora letras maiúsculas e minúsculas.
+
+Na próxima parte estudaremos outro conceito extremamente importante:
+
+- `-path`
+- `-ipath`
+- Como procurar utilizando caminhos completos
+- Diferença entre pesquisar pelo nome e pesquisar pelo caminho
+- Casos reais de Pentest e CTF
+

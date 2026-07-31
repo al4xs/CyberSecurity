@@ -12814,4 +12814,1808 @@ Na próxima parte vamos concluir a anotação com:
 - Checklist;
 - Cheatsheet completo do `find`.
 
-	
+	---
+
+# Exemplos práticos do comando `find`
+
+Agora que aprendemos os principais componentes do `find`, podemos combinar tudo em situações reais.
+
+A estrutura mental deve ser sempre:
+
+```text
+Onde procurar?
+        ↓
+Que tipo de objeto?
+        ↓
+Quais condições?
+        ↓
+O que fazer com o resultado?
+```
+
+Modelo:
+
+```bash
+find DIRETÓRIO FILTROS AÇÃO
+```
+
+Exemplo:
+
+```bash
+find /home -type f -name "*.txt" -print
+```
+
+Tradução:
+
+> Procure em `/home` arquivos comuns cujo nome termine em `.txt` e mostre os caminhos encontrados.
+
+---
+
+# Exemplos básicos de Linux
+
+## Listar tudo no diretório atual
+
+```bash
+find .
+```
+
+O ponto representa o diretório atual.
+
+Possível saída:
+
+```text
+.
+./arquivo.txt
+./Documentos
+./Documentos/relatorio.pdf
+./scripts
+./scripts/backup.sh
+```
+
+---
+
+## Listar apenas arquivos
+
+```bash
+find . -type f
+```
+
+Possível saída:
+
+```text
+./arquivo.txt
+./Documentos/relatorio.pdf
+./scripts/backup.sh
+```
+
+---
+
+## Listar apenas diretórios
+
+```bash
+find . -type d
+```
+
+Possível saída:
+
+```text
+.
+./Documentos
+./scripts
+```
+
+---
+
+## Procurar um arquivo pelo nome exato
+
+```bash
+find /home -type f -name "config.txt"
+```
+
+---
+
+## Procurar ignorando maiúsculas e minúsculas
+
+```bash
+find /home -type f -iname "config.txt"
+```
+
+Pode encontrar:
+
+```text
+config.txt
+Config.txt
+CONFIG.TXT
+```
+
+---
+
+## Procurar arquivos por extensão
+
+```bash
+find . -type f -name "*.pdf"
+```
+
+---
+
+## Procurar duas extensões
+
+```bash
+find . -type f \
+\( -name "*.pdf" -o -name "*.txt" \)
+```
+
+---
+
+## Excluir uma extensão
+
+```bash
+find . -type f ! -name "*.log"
+```
+
+---
+
+## Procurar arquivos vazios
+
+```bash
+find . -type f -empty
+```
+
+---
+
+## Procurar diretórios vazios
+
+```bash
+find . -type d -empty
+```
+
+---
+
+## Procurar arquivos grandes
+
+```bash
+find /home -type f -size +100M
+```
+
+---
+
+## Procurar arquivos pequenos
+
+```bash
+find . -type f -size -10k
+```
+
+---
+
+## Procurar arquivos recentes
+
+```bash
+find . -type f -mtime -1
+```
+
+Procura arquivos modificados há menos de um período completo de 24 horas.
+
+---
+
+## Procurar arquivos antigos
+
+```bash
+find /var/log -type f -mtime +30
+```
+
+---
+
+## Procurar arquivos modificados nos últimos 30 minutos
+
+```bash
+find . -type f -mmin -30
+```
+
+---
+
+## Procurar arquivos pertencentes a um usuário
+
+```bash
+find /home -type f -user allan
+```
+
+---
+
+## Procurar arquivos pertencentes a um grupo
+
+```bash
+find /var/www -type f -group www-data
+```
+
+---
+
+## Procurar arquivos executáveis
+
+```bash
+find . -type f -executable
+```
+
+---
+
+## Procurar arquivos graváveis pelo usuário atual
+
+```bash
+find . -type f -writable
+```
+
+---
+
+## Procurar arquivos legíveis pelo usuário atual
+
+```bash
+find . -type f -readable
+```
+
+---
+
+# Exemplos com profundidade
+
+## Mostrar somente o diretório atual
+
+```bash
+find . -maxdepth 0
+```
+
+Saída:
+
+```text
+.
+```
+
+---
+
+## Mostrar somente o primeiro nível
+
+```bash
+find . -maxdepth 1
+```
+
+---
+
+## Mostrar filhos sem mostrar o próprio diretório
+
+```bash
+find . -mindepth 1 -maxdepth 1
+```
+
+---
+
+## Procurar arquivos até dois níveis
+
+```bash
+find /opt -maxdepth 2 -type f
+```
+
+---
+
+## Ignorar `.git`
+
+```bash
+find . \
+-path "*/.git" -prune \
+-o -type f -print
+```
+
+---
+
+## Ignorar `.git`, `node_modules` e `venv`
+
+```bash
+find . \
+\( \
+    -path "*/.git" \
+    -o -path "*/node_modules" \
+    -o -path "*/venv" \
+\) \
+-prune \
+-o -type f -print
+```
+
+---
+
+# Exemplos com permissões
+
+## Procurar arquivos com permissão exatamente `644`
+
+```bash
+find . -type f -perm 644
+```
+
+---
+
+## Procurar arquivos com todos os bits de `600`
+
+```bash
+find . -type f -perm -600
+```
+
+---
+
+## Procurar arquivos executáveis por alguém
+
+```bash
+find . -type f -perm /111
+```
+
+---
+
+## Procurar arquivos graváveis por outros usuários
+
+```bash
+find / -type f -perm -002 2>/dev/null
+```
+
+---
+
+## Procurar diretórios graváveis por outros
+
+```bash
+find / -type d -perm -002 2>/dev/null
+```
+
+---
+
+## Diretórios graváveis sem Sticky Bit
+
+```bash
+find / \
+-type d \
+-perm -002 \
+! -perm -1000 \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos SUID
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+---
+
+## Procurar arquivos SGID
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+---
+
+## Procurar SUID ou SGID
+
+```bash
+find / -type f -perm /6000 2>/dev/null
+```
+
+---
+
+# Exemplos com saída formatada
+
+## Mostrar permissões, proprietário, grupo e caminho
+
+```bash
+find /opt -type f \
+-printf "%M %u:%g %p\n"
+```
+
+Possível saída:
+
+```text
+-rwxr-xr-x root:root /opt/backup.sh
+-rw-r----- root:developers /opt/config.ini
+```
+
+---
+
+## Mostrar permissões em octal
+
+```bash
+find . -type f -printf "%m %p\n"
+```
+
+Possível saída:
+
+```text
+644 ./arquivo.txt
+755 ./script.sh
+600 ./senha.txt
+```
+
+---
+
+## Mostrar tamanho em bytes
+
+```bash
+find . -type f -printf "%s %p\n"
+```
+
+---
+
+## Mostrar data de modificação
+
+```bash
+find . -type f -printf "%T+ %p\n"
+```
+
+---
+
+## Mostrar tipo do objeto
+
+```bash
+find . -printf "%y %p\n"
+```
+
+---
+
+# Exemplos com `-exec`
+
+## Executar `file` em cada resultado
+
+```bash
+find /opt -type f -exec file {} \;
+```
+
+---
+
+## Executar `ls -l` em lotes
+
+```bash
+find /opt -type f -exec ls -l {} +
+```
+
+---
+
+## Contar linhas de arquivos de texto
+
+```bash
+find . -type f -name "*.txt" -exec wc -l {} +
+```
+
+---
+
+## Procurar palavra dentro de arquivos
+
+```bash
+find /var/www -type f \
+\( \
+    -name "*.php" \
+    -o -name "*.conf" \
+    -o -name "*.env" \
+\) \
+-exec grep -nHi "password" {} + \
+2>/dev/null
+```
+
+---
+
+## Alterar permissão de scripts
+
+```bash
+find ./scripts -type f -name "*.sh" \
+-exec chmod 750 {} +
+```
+
+Antes de modificar, confira:
+
+```bash
+find ./scripts -type f -name "*.sh" -print
+```
+
+---
+
+## Compactar logs antigos
+
+Primeiro:
+
+```bash
+find /var/log/minha-app \
+-type f \
+-name "*.log" \
+-mtime +7 \
+-print
+```
+
+Depois de conferir:
+
+```bash
+find /var/log/minha-app \
+-type f \
+-name "*.log" \
+-mtime +7 \
+-exec gzip {} +
+```
+
+---
+
+# Exemplos seguros com nomes de arquivos
+
+Nomes de arquivos podem conter:
+
+- Espaços;
+- Tabulações;
+- Quebras de linha;
+- Aspas;
+- Caracteres especiais.
+
+Por isso, evite processar resultados usando:
+
+```bash
+for arquivo in $(find ...)
+```
+
+Esse formato quebra nomes contendo espaços ou novas linhas.
+
+---
+
+## Forma segura com `-print0`
+
+```bash
+find . -type f -print0 |
+while IFS= read -r -d '' arquivo; do
+    printf 'Arquivo: %s\n' "$arquivo"
+done
+```
+
+---
+
+## Forma segura com `xargs`
+
+```bash
+find . -type f -print0 |
+xargs -0 ls -l
+```
+
+---
+
+# Exemplos em Shell Script
+
+## Verificar se existe determinado arquivo
+
+```bash
+#!/usr/bin/env bash
+
+arquivo=$(find /opt \
+    -type f \
+    -name "backup.sh" \
+    -print \
+    -quit \
+    2>/dev/null)
+
+if [[ -n "$arquivo" ]]; then
+    printf 'Encontrado: %s\n' "$arquivo"
+else
+    printf 'Arquivo não encontrado.\n'
+fi
+```
+
+---
+
+## Listar scripts encontrados
+
+```bash
+#!/usr/bin/env bash
+
+diretorio=${1:-.}
+
+find "$diretorio" \
+-type f \
+-name "*.sh" \
+-print0 |
+while IFS= read -r -d '' script; do
+    printf 'Script encontrado: %s\n' "$script"
+done
+```
+
+---
+
+## Contar arquivos encontrados
+
+```bash
+quantidade=$(find . -type f -name "*.txt" -printf '.' |
+wc -c)
+
+printf 'Quantidade: %d\n' "$quantidade"
+```
+
+Essa técnica depende do GNU `find`.
+
+Uma forma mais portável pode utilizar:
+
+```bash
+find . -type f -name "*.txt" -print |
+wc -l
+```
+
+Porém, nomes contendo quebras de linha podem alterar a contagem.
+
+---
+
+## Verificar arquivos vazios
+
+```bash
+#!/usr/bin/env bash
+
+if find ./dados -type f -empty -print -quit |
+   grep -q .; then
+    echo "Existem arquivos vazios."
+else
+    echo "Nenhum arquivo vazio."
+fi
+```
+
+---
+
+## Processar somente arquivos recentes
+
+```bash
+#!/usr/bin/env bash
+
+find ./uploads \
+-type f \
+-mtime -1 \
+-print0 |
+while IFS= read -r -d '' arquivo; do
+    printf 'Arquivo recente: %s\n' "$arquivo"
+done
+```
+
+---
+
+# Exemplos para Pentest e CTF
+
+> [!warning]
+> Utilize estes comandos somente em laboratórios, CTFs ou sistemas para os quais exista autorização explícita.
+
+---
+
+## Procurar arquivos SUID
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+Objetivo:
+
+- Identificar executáveis com SUID;
+- Analisar binários incomuns;
+- Consultar documentação e GTFOBins;
+- Verificar arquivos personalizados.
+
+---
+
+## Procurar arquivos SGID
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+---
+
+## Procurar arquivos graváveis pelo usuário atual
+
+```bash
+find / -type f -writable 2>/dev/null
+```
+
+Essa busca pode gerar muitos resultados.
+
+Diretórios mais interessantes:
+
+```bash
+find /opt /usr/local/bin /var/www \
+-type f \
+-writable \
+2>/dev/null
+```
+
+---
+
+## Procurar diretórios graváveis
+
+```bash
+find / -type d -writable 2>/dev/null
+```
+
+---
+
+## Procurar arquivos do root graváveis
+
+```bash
+find / \
+-type f \
+-user root \
+-writable \
+2>/dev/null
+```
+
+O resultado merece investigação quando o arquivo:
+
+- É executado por um serviço;
+- É chamado por Cron;
+- É um script;
+- É uma configuração;
+- Está em `/opt`;
+- Está em `/usr/local/bin`.
+
+---
+
+## Procurar scripts pertencentes ao root
+
+```bash
+find /opt /usr/local/bin \
+-type f \
+-user root \
+\( -name "*.sh" -o -name "*.py" \) \
+-ls \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos de configuração
+
+```bash
+find /var/www /opt /home \
+-type f \
+\( \
+    -iname "*.conf" \
+    -o -iname "*.cfg" \
+    -o -iname "*.ini" \
+    -o -iname "*.env" \
+    -o -iname "*.yml" \
+    -o -iname "*.yaml" \
+    -o -iname "*.json" \
+\) \
+2>/dev/null
+```
+
+---
+
+## Procurar backups
+
+```bash
+find /home /opt /var/backups /var/www \
+-type f \
+\( \
+    -iname "*.bak" \
+    -o -iname "*.old" \
+    -o -iname "*.backup" \
+    -o -iname "*.zip" \
+    -o -iname "*.tar" \
+    -o -iname "*.tar.gz" \
+    -o -iname "*.tgz" \
+    -o -iname "*.gz" \
+\) \
+2>/dev/null
+```
+
+---
+
+## Procurar bancos de dados
+
+```bash
+find /home /opt /var/www \
+-type f \
+\( \
+    -iname "*.sql" \
+    -o -iname "*.db" \
+    -o -iname "*.sqlite" \
+    -o -iname "*.sqlite3" \
+\) \
+2>/dev/null
+```
+
+---
+
+## Procurar chaves privadas SSH
+
+```bash
+find /home \
+-type f \
+\( \
+    -name "id_rsa" \
+    -o -name "id_ed25519" \
+    -o -name "id_ecdsa" \
+\) \
+2>/dev/null
+```
+
+Também é possível procurar cabeçalhos de chave privada com `grep`, desde que o escopo autorize a leitura dos arquivos.
+
+---
+
+## Procurar arquivos `.env`
+
+```bash
+find /var/www /opt /home \
+-type f \
+-name ".env" \
+2>/dev/null
+```
+
+---
+
+## Procurar históricos de shell
+
+```bash
+find /home \
+-type f \
+\( \
+    -name ".bash_history" \
+    -o -name ".zsh_history" \
+    -o -name ".sh_history" \
+\) \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos modificados recentemente
+
+```bash
+find /opt /var/www /tmp /dev/shm \
+-type f \
+-mmin -60 \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos grandes
+
+```bash
+find /home /opt /var/backups \
+-type f \
+-size +100M \
+-ls \
+2>/dev/null
+```
+
+---
+
+## Procurar binários personalizados
+
+```bash
+find /opt /usr/local/bin /usr/local/sbin \
+-type f \
+-executable \
+-ls \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos sem proprietário válido
+
+```bash
+find / \
+-type f \
+-nouser \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos sem grupo válido
+
+```bash
+find / \
+-type f \
+-nogroup \
+2>/dev/null
+```
+
+---
+
+## Procurar arquivos SUID ou SGID no sistema principal
+
+```bash
+find / \
+-xdev \
+-type f \
+-perm /6000 \
+2>/dev/null
+```
+
+Lembre-se de que `-xdev` pode ignorar partições separadas, incluindo `/home` ou `/var`.
+
+---
+
+# Como analisar um resultado encontrado
+
+Encontrar um arquivo não significa encontrar uma vulnerabilidade.
+
+Para cada resultado interessante, analise:
+
+```bash
+ls -la /caminho/do/arquivo
+```
+
+```bash
+stat /caminho/do/arquivo
+```
+
+```bash
+file /caminho/do/arquivo
+```
+
+```bash
+readlink -f /caminho/do/arquivo
+```
+
+Quando for um binário dinâmico:
+
+```bash
+ldd /caminho/do/binario
+```
+
+Para visualizar strings:
+
+```bash
+strings /caminho/do/binario | less
+```
+
+---
+
+## Perguntas importantes
+
+1. Quem é o proprietário?
+2. Qual é o grupo?
+3. Quais permissões possui?
+4. O usuário atual consegue ler?
+5. O usuário atual consegue escrever?
+6. O arquivo é executado automaticamente?
+7. É utilizado por root?
+8. Está em um diretório incomum?
+9. É um script ou binário personalizado?
+10. Existe uma razão legítima para essa configuração?
+11. Existe documentação oficial?
+12. Está listado no GTFOBins?
+13. Qual seria o impacto de modificá-lo?
+14. Como confirmar a hipótese sem causar dano?
+
+---
+
+# Performance
+
+Buscas com `find` podem consumir:
+
+- Tempo;
+- Processamento;
+- Leitura de disco;
+- Recursos de rede;
+- Recursos de sistemas de arquivos montados.
+
+Uma busca como:
+
+```bash
+find /
+```
+
+pode percorrer uma grande quantidade de objetos.
+
+---
+
+# Como melhorar o desempenho
+
+## Use um caminho específico
+
+Mais amplo:
+
+```bash
+find /
+```
+
+Mais eficiente:
+
+```bash
+find /var/www
+```
+
+---
+
+## Limite a profundidade
+
+```bash
+find /home -maxdepth 3 -type f
+```
+
+---
+
+## Ignore diretórios desnecessários
+
+```bash
+find . \
+\( -path "*/.git" -o -path "*/node_modules" \) \
+-prune \
+-o -type f -print
+```
+
+---
+
+## Não atravesse outros sistemas de arquivos
+
+```bash
+find / -xdev -type f
+```
+
+Use somente quando não precisar analisar outras partições.
+
+---
+
+## Pare no primeiro resultado
+
+```bash
+find / -type f -name "config.php" -print -quit \
+2>/dev/null
+```
+
+---
+
+## Use `-exec ... {} +`
+
+Menos eficiente:
+
+```bash
+find . -type f -exec file {} \;
+```
+
+Mais eficiente:
+
+```bash
+find . -type f -exec file {} +
+```
+
+---
+
+## Evite pipelines desnecessários
+
+Em vez de:
+
+```bash
+find . -type f | grep '\.txt$'
+```
+
+prefira:
+
+```bash
+find . -type f -name "*.txt"
+```
+
+O filtro é aplicado diretamente pelo `find`.
+
+---
+
+# Portabilidade
+
+Nem todas as implementações do `find` possuem exatamente os mesmos recursos.
+
+Recursos comuns no GNU `find`, mas que podem variar em outros sistemas:
+
+```text
+-printf
+-newermt
+-readable
+-writable
+-executable
+-regex
+-regextype
+```
+
+Em ambientes como:
+
+- BSD;
+- macOS;
+- BusyBox;
+- Sistemas embarcados;
+
+algumas opções podem ter comportamento diferente ou não existir.
+
+---
+
+# Como consultar a implementação
+
+```bash
+find --version
+```
+
+No GNU `find`, pode aparecer:
+
+```text
+find (GNU findutils)
+```
+
+Também consulte:
+
+```bash
+man find
+```
+
+```bash
+find --help
+```
+
+Em sistemas BusyBox:
+
+```bash
+busybox find --help
+```
+
+---
+
+# Erros comuns gerais
+
+## Esquecer as aspas em padrões
+
+Problemático:
+
+```bash
+find . -name *.txt
+```
+
+Correto:
+
+```bash
+find . -name "*.txt"
+```
+
+As aspas impedem que o shell expanda o wildcard antes de o `find` recebê-lo.
+
+---
+
+## Não agrupar expressões com OR
+
+Problemático:
+
+```bash
+find . -type f -name "*.bak" -o -name "*.zip"
+```
+
+Correto:
+
+```bash
+find . -type f \
+\( -name "*.bak" -o -name "*.zip" \)
+```
+
+---
+
+## Confundir `-name` com `-path`
+
+```text
+-name → verifica o nome final
+-path → verifica o caminho correspondente
+```
+
+---
+
+## Confundir `-mtime 1` com últimas 24 horas
+
+Para arquivos das últimas 24 horas, normalmente use:
+
+```bash
+-mtime -1
+```
+
+Para maior precisão:
+
+```bash
+-mmin -1440
+```
+
+---
+
+## Confundir `ctime` com criação
+
+```text
+ctime = Change Time
+```
+
+Não significa necessariamente data de criação.
+
+---
+
+## Esquecer a unidade de `-size`
+
+```bash
+-size 100
+```
+
+utiliza blocos de 512 bytes.
+
+Prefira informar:
+
+```bash
+-size 100c
+```
+
+```bash
+-size 100k
+```
+
+```bash
+-size 100M
+```
+
+---
+
+## Usar `-perm 4000` para SUID
+
+Problemático:
+
+```bash
+find / -perm 4000
+```
+
+Normalmente prefira:
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+---
+
+## Executar `-delete` sem verificar
+
+Nunca comece com:
+
+```bash
+find . -name "*.tmp" -delete
+```
+
+Primeiro:
+
+```bash
+find . -name "*.tmp" -print
+```
+
+---
+
+## Colocar a ação antes dos filtros
+
+Perigoso:
+
+```bash
+find . -delete -name "*.tmp"
+```
+
+Correto:
+
+```bash
+find . -type f -name "*.tmp" -delete
+```
+
+---
+
+## Usar `for` com substituição de comandos
+
+Problemático:
+
+```bash
+for arquivo in $(find . -type f); do
+    echo "$arquivo"
+done
+```
+
+Use:
+
+```bash
+find . -type f -print0 |
+while IFS= read -r -d '' arquivo; do
+    printf '%s\n' "$arquivo"
+done
+```
+
+---
+
+## Esconder todos os erros sem analisar
+
+```bash
+2>/dev/null
+```
+
+reduz o ruído, mas também esconde informações.
+
+Durante troubleshooting, execute o comando sem o redirecionamento para identificar:
+
+- Permissões negadas;
+- Caminhos inexistentes;
+- Sistemas de arquivos indisponíveis;
+- Erros de sintaxe.
+
+---
+
+# Boas práticas gerais
+
+1. Comece em um diretório específico.
+2. Use `-type` para reduzir os resultados.
+3. Coloque padrões entre aspas.
+4. Agrupe alternativas com `\( ... \)`.
+5. Escreva `-print` explicitamente em expressões complexas.
+6. Use `-print0` para processamento automático.
+7. Prefira `-exec ... {} +` quando possível.
+8. Teste com `-print` antes de ações destrutivas.
+9. Indente comandos grandes.
+10. Traduza cada expressão para português.
+11. Consulte `man find` para confirmar portabilidade.
+12. Analise resultados; não presuma vulnerabilidade.
+13. Use apenas em ambientes autorizados.
+14. Documente o comando e o motivo de cada filtro.
+
+---
+
+# Modelo para comandos simples
+
+```bash
+find DIRETÓRIO \
+-type TIPO \
+-name "PADRÃO" \
+-print
+```
+
+Exemplo:
+
+```bash
+find /home \
+-type f \
+-name "*.txt" \
+-print
+```
+
+---
+
+# Modelo com alternativas
+
+```bash
+find DIRETÓRIO \
+-type f \
+\( \
+    -name "PADRÃO_1" \
+    -o -name "PADRÃO_2" \
+\) \
+-print
+```
+
+---
+
+# Modelo com exclusão de diretório
+
+```bash
+find DIRETÓRIO \
+-path "CAMINHO_IGNORADO" \
+-prune \
+-o \
+FILTROS \
+-print
+```
+
+---
+
+# Modelo com execução de comando
+
+```bash
+find DIRETÓRIO \
+FILTROS \
+-exec COMANDO {} +
+```
+
+---
+
+# Modelo de enumeração
+
+```bash
+find DIRETÓRIOS \
+-type f \
+FILTROS \
+-ls \
+2>/dev/null
+```
+
+---
+
+# Checklist para montar um comando
+
+Antes de executar, responda:
+
+- [ ] Onde a busca deve começar?
+- [ ] Preciso pesquisar o sistema inteiro?
+- [ ] Quero arquivos, diretórios ou links?
+- [ ] Preciso diferenciar maiúsculas?
+- [ ] Estou filtrando nome ou caminho?
+- [ ] Existem várias alternativas?
+- [ ] Preciso usar parênteses?
+- [ ] Preciso excluir algum diretório?
+- [ ] Preciso limitar profundidade?
+- [ ] Preciso evitar outras partições?
+- [ ] Quero apenas mostrar ou executar uma ação?
+- [ ] A ação modifica ou remove arquivos?
+- [ ] Testei primeiro com `-print`?
+- [ ] Os nomes podem conter espaços?
+- [ ] O comando é compatível com o sistema?
+- [ ] Consigo explicar cada parte?
+
+---
+
+# Cheatsheet completo
+
+## Caminho inicial
+
+| Objetivo | Exemplo |
+|---|---|
+| Sistema inteiro | `find /` |
+| Diretório atual | `find .` |
+| Diretório pai | `find ..` |
+| Vários locais | `find /opt /home /var/www` |
+
+---
+
+## Tipos
+
+| Tipo | Significado |
+|---|---|
+| `-type f` | Arquivo comum |
+| `-type d` | Diretório |
+| `-type l` | Link simbólico |
+| `-type s` | Socket |
+| `-type p` | Pipe |
+| `-type b` | Dispositivo de bloco |
+| `-type c` | Dispositivo de caractere |
+
+---
+
+## Nome e caminho
+
+| Opção | Função |
+|---|---|
+| `-name` | Nome com distinção de maiúsculas |
+| `-iname` | Nome sem distinção de maiúsculas |
+| `-path` | Caminho com distinção de maiúsculas |
+| `-ipath` | Caminho sem distinção de maiúsculas |
+
+---
+
+## Proprietário e grupo
+
+| Opção | Função |
+|---|---|
+| `-user` | Nome do proprietário |
+| `-group` | Nome do grupo |
+| `-uid` | UID numérico |
+| `-gid` | GID numérico |
+| `-nouser` | Sem usuário correspondente |
+| `-nogroup` | Sem grupo correspondente |
+
+---
+
+## Permissões
+
+| Objetivo | Exemplo |
+|---|---|
+| Permissão exata | `-perm 644` |
+| Todos os bits | `-perm -600` |
+| Qualquer bit | `-perm /111` |
+| SUID | `-perm -4000` |
+| SGID | `-perm -2000` |
+| Sticky Bit | `-perm -1000` |
+| SUID ou SGID | `-perm /6000` |
+| Gravável pelo usuário atual | `-writable` |
+| Legível pelo usuário atual | `-readable` |
+| Executável pelo usuário atual | `-executable` |
+
+---
+
+## Tempo
+
+| Opção | Função |
+|---|---|
+| `-mtime` | Modificação do conteúdo em dias |
+| `-mmin` | Modificação do conteúdo em minutos |
+| `-ctime` | Alteração do estado em dias |
+| `-cmin` | Alteração do estado em minutos |
+| `-atime` | Último acesso em dias |
+| `-amin` | Último acesso em minutos |
+| `-newer` | Mais novo que um arquivo |
+| `-newermt` | Mais novo que uma data no GNU `find` |
+
+---
+
+## Tamanho e estado
+
+| Opção | Função |
+|---|---|
+| `-size +100M` | Maior que 100 MiB |
+| `-size -10k` | Menor que 10 KiB |
+| `-size 100c` | Correspondente a 100 bytes |
+| `-empty` | Arquivo ou diretório vazio |
+| `-links N` | Quantidade de hard links |
+| `-inum N` | Número do inode |
+
+---
+
+## Profundidade e percurso
+
+| Opção | Função |
+|---|---|
+| `-maxdepth N` | Profundidade máxima |
+| `-mindepth N` | Profundidade mínima |
+| `-depth` | Conteúdo antes do diretório |
+| `-prune` | Não entrar em uma árvore |
+| `-xdev` | Não atravessar sistemas de arquivos |
+| `-mount` | Equivalente a `-xdev` no GNU |
+
+---
+
+## Operadores
+
+| Operador | Significado |
+|---|---|
+| `-a` | AND |
+| AND implícito | Expressões lado a lado |
+| `-o` | OR |
+| `!` | NOT |
+| `-not` | NOT |
+| `\( ... \)` | Agrupamento |
+
+---
+
+## Ações
+
+| Ação | Função |
+|---|---|
+| `-print` | Mostrar caminho |
+| `-print0` | Mostrar com NUL |
+| `-printf` | Formatar a saída |
+| `-ls` | Informações detalhadas |
+| `-exec` | Executar comando |
+| `-execdir` | Executar no diretório do resultado |
+| `-ok` | Executar após confirmação |
+| `-okdir` | Confirmação no diretório do resultado |
+| `-delete` | Remover |
+| `-quit` | Parar a busca |
+
+---
+
+# Comandos mais utilizados
+
+## Arquivos por extensão
+
+```bash
+find . -type f -name "*.txt"
+```
+
+---
+
+## Ignorar maiúsculas
+
+```bash
+find . -type f -iname "*.jpg"
+```
+
+---
+
+## Arquivos maiores que 100 MiB
+
+```bash
+find / -type f -size +100M 2>/dev/null
+```
+
+---
+
+## Arquivos modificados recentemente
+
+```bash
+find . -type f -mmin -60
+```
+
+---
+
+## Arquivos vazios
+
+```bash
+find . -type f -empty
+```
+
+---
+
+## Diretórios vazios
+
+```bash
+find . -type d -empty
+```
+
+---
+
+## Arquivos graváveis
+
+```bash
+find / -type f -writable 2>/dev/null
+```
+
+---
+
+## Arquivos SUID
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+---
+
+## Arquivos SGID
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+---
+
+## Backups
+
+```bash
+find /home /opt /var/backups \
+-type f \
+\( \
+    -iname "*.bak" \
+    -o -iname "*.old" \
+    -o -iname "*.zip" \
+    -o -iname "*.tar" \
+    -o -iname "*.gz" \
+\) \
+2>/dev/null
+```
+
+---
+
+## Ignorar `.git`
+
+```bash
+find . \
+-path "*/.git" -prune \
+-o -type f -print
+```
+
+---
+
+## Executar comando em lotes
+
+```bash
+find . -type f -exec file {} +
+```
+
+---
+
+## Processar nomes com segurança
+
+```bash
+find . -type f -print0 |
+while IFS= read -r -d '' arquivo; do
+    printf '%s\n' "$arquivo"
+done
+```
+
+---
+
+# Resumo mental
+
+Ao construir um comando, pense:
+
+```text
+find
+  ↓
+Onde procurar?
+  ↓
+Qual tipo?
+  ↓
+Qual nome, tamanho, dono, permissão ou data?
+  ↓
+Existem alternativas?
+  ↓
+Preciso agrupar?
+  ↓
+Quero mostrar, executar ou remover?
+```
+
+Exemplo:
+
+```bash
+find /var/www \
+-type f \
+-user www-data \
+\( \
+    -name "*.php" \
+    -o -name "*.conf" \
+\) \
+-mtime -7 \
+-print
+```
+
+Tradução:
+
+> Procure em `/var/www` arquivos pertencentes a `www-data`, terminados em `.php` ou `.conf`, modificados nos últimos sete dias, e mostre os caminhos.
+
+---
+
+# Conclusão
+
+O `find` não deve ser decorado como uma coleção de comandos prontos.
+
+Ele deve ser entendido como uma linguagem de busca formada por:
+
+```text
+caminhos
++
+testes
++
+operadores
++
+ações
+```
+
+Estrutura:
+
+```bash
+find CAMINHOS TESTES OPERADORES AÇÕES
+```
+
+Quando você entende essa estrutura, consegue criar buscas novas sem depender de copiar comandos.
+
+A principal habilidade é saber transformar uma pergunta em condições.
+
+Exemplo:
+
+> Quero arquivos de backup maiores que 10 MiB em `/home`, criados ou modificados recentemente.
+
+Transformando em partes:
+
+```text
+Onde?
+→ /home
+
+Tipo?
+→ arquivo
+
+Nome?
+→ .bak, .zip ou .tar
+
+Tamanho?
+→ maior que 10 MiB
+
+Tempo?
+→ modificado recentemente
+
+Ação?
+→ mostrar
+```
+
+Comando:
+
+```bash
+find /home \
+-type f \
+-size +10M \
+-mtime -7 \
+\( \
+    -iname "*.bak" \
+    -o -iname "*.zip" \
+    -o -iname "*.tar" \
+\) \
+-print
+```
+
+Esse é o objetivo final da anotação:
+
+```text
+não decorar
+        ↓
+entender
+        ↓
+combinar
+        ↓
+construir
+```

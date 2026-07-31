@@ -4521,3 +4521,957 @@ Na próxima parte estudaremos finalmente a opção:
 - Casos reais de Pentest
 - SUID, SGID e Sticky Bit utilizando `find`.
 
+---
+
+# A opção `-perm`
+
+A opção:
+
+```bash
+-perm
+```
+
+permite localizar arquivos e diretórios com base em suas permissões.
+
+Ela pode trabalhar com:
+
+- Permissões exatas;
+- Bits obrigatórios;
+- Qualquer bit presente;
+- Permissões especiais;
+- Forma numérica;
+- Forma simbólica.
+
+---
+
+# Sintaxe
+
+```bash
+find DIRETORIO -perm MODO
+```
+
+Exemplo:
+
+```bash
+find . -perm 644
+```
+
+Tradução:
+
+> Procure objetos cuja permissão seja exatamente `644`.
+
+---
+
+# Exemplo básico
+
+Imagine estes arquivos:
+
+```text
+arquivo1.txt → 644
+arquivo2.txt → 600
+script.sh    → 755
+backup.sh    → 744
+```
+
+Comando:
+
+```bash
+find . -type f -perm 644
+```
+
+Resultado:
+
+```text
+./arquivo1.txt
+```
+
+Apenas o arquivo com permissão exatamente igual a `644` será exibido.
+
+---
+
+# As três formas principais de usar `-perm`
+
+Existem três formas muito importantes:
+
+```bash
+-perm  MODO
+-perm -MODO
+-perm /MODO
+```
+
+Elas possuem significados diferentes.
+
+---
+
+# Correspondência exata
+
+```bash
+-perm 644
+```
+
+Sem nenhum símbolo antes do número, o `find` procura uma correspondência exata.
+
+Exemplo:
+
+```bash
+find . -type f -perm 644
+```
+
+Isso encontra apenas arquivos com:
+
+```text
+rw-r--r--
+```
+
+Não encontra:
+
+```text
+600
+640
+664
+755
+```
+
+Mesmo que algumas permissões sejam parecidas.
+
+---
+
+## Quando utilizar?
+
+Use quando precisa encontrar um modo específico.
+
+Exemplos:
+
+```bash
+find /var/www -type f -perm 644
+```
+
+```bash
+find /home -type d -perm 700
+```
+
+---
+
+# Todos os bits especificados
+
+```bash
+-perm -MODO
+```
+
+Quando existe um hífen antes do modo, todos os bits informados precisam estar presentes.
+
+O arquivo pode possuir permissões adicionais.
+
+Exemplo:
+
+```bash
+find . -type f -perm -600
+```
+
+O valor:
+
+```text
+600
+```
+
+representa:
+
+```text
+rw-------
+```
+
+O comando procura arquivos em que o proprietário possua:
+
+- Leitura;
+- Escrita.
+
+Eles podem possuir outras permissões também.
+
+Por isso, ele pode encontrar:
+
+```text
+600
+640
+644
+660
+664
+700
+755
+777
+```
+
+Desde que os bits de leitura e escrita do proprietário estejam presentes.
+
+---
+
+# Como pensar em `-perm -MODO`
+
+Pense assim:
+
+> O arquivo precisa possuir pelo menos todos esses bits.
+
+Exemplo:
+
+```bash
+-perm -400
+```
+
+O bit `400` representa leitura do proprietário.
+
+O comando encontra arquivos em que o dono consegue ler.
+
+---
+
+Outro exemplo:
+
+```bash
+-perm -200
+```
+
+Encontra arquivos em que o dono possui permissão de escrita.
+
+---
+
+Outro exemplo:
+
+```bash
+-perm -100
+```
+
+Encontra arquivos executáveis pelo proprietário.
+
+---
+
+# Qualquer bit especificado
+
+```bash
+-perm /MODO
+```
+
+Com uma barra antes do modo, basta que pelo menos um dos bits informados esteja presente.
+
+Exemplo:
+
+```bash
+find . -type f -perm /600
+```
+
+O modo `600` contém:
+
+- `400` → leitura do proprietário;
+- `200` → escrita do proprietário.
+
+O arquivo será encontrado se possuir pelo menos um desses bits.
+
+Assim, podem aparecer arquivos com:
+
+```text
+400
+200
+600
+644
+755
+777
+```
+
+Desde que possuam leitura ou escrita do proprietário.
+
+---
+
+# Comparando as três formas
+
+| Forma | Significado |
+|---|---|
+| `-perm 644` | Permissão exatamente igual a `644` |
+| `-perm -644` | Todos os bits de `644` precisam existir |
+| `-perm /644` | Pelo menos um dos bits de `644` precisa existir |
+
+---
+
+# Exemplo visual
+
+Imagine os arquivos:
+
+```text
+a.txt → 644
+b.txt → 600
+c.txt → 444
+d.txt → 666
+e.txt → 755
+```
+
+## Comando exato
+
+```bash
+find . -type f -perm 644
+```
+
+Resultado:
+
+```text
+a.txt
+```
+
+---
+
+## Todos os bits
+
+```bash
+find . -type f -perm -600
+```
+
+Resultado possível:
+
+```text
+a.txt
+b.txt
+d.txt
+e.txt
+```
+
+Todos possuem leitura e escrita do proprietário.
+
+---
+
+## Qualquer bit
+
+```bash
+find . -type f -perm /600
+```
+
+Resultado possível:
+
+```text
+a.txt
+b.txt
+c.txt
+d.txt
+e.txt
+```
+
+Basta possuir leitura ou escrita do proprietário.
+
+---
+
+# Permissões simbólicas
+
+O `find` também aceita modos simbólicos em algumas implementações.
+
+Exemplo:
+
+```bash
+find . -perm u=rwx
+```
+
+Significa:
+
+```text
+O proprietário possui exatamente leitura, escrita e execução.
+```
+
+Outro exemplo:
+
+```bash
+find . -perm -u=x
+```
+
+Significa:
+
+```text
+O bit de execução do proprietário precisa estar presente.
+```
+
+Entretanto, em scripts e anotações de Pentest, a forma octal costuma ser mais comum e mais fácil de comparar visualmente.
+
+---
+
+# Procurar arquivos executáveis
+
+## Executáveis pelo proprietário
+
+```bash
+find . -type f -perm -100
+```
+
+---
+
+## Executáveis pelo grupo
+
+```bash
+find . -type f -perm -010
+```
+
+---
+
+## Executáveis por outros usuários
+
+```bash
+find . -type f -perm -001
+```
+
+---
+
+## Executáveis por qualquer categoria
+
+```bash
+find . -type f -perm /111
+```
+
+O modo:
+
+```text
+111
+```
+
+representa os três bits de execução.
+
+Com `/111`, basta que o arquivo seja executável pelo:
+
+- Proprietário;
+- Grupo;
+- Ou outros.
+
+---
+
+# Procurar arquivos graváveis
+
+## Graváveis pelo proprietário
+
+```bash
+find . -type f -perm -200
+```
+
+---
+
+## Graváveis pelo grupo
+
+```bash
+find . -type f -perm -020
+```
+
+---
+
+## Graváveis por outros
+
+```bash
+find . -type f -perm -002
+```
+
+Essa última busca é especialmente importante durante enumerações.
+
+---
+
+# Arquivos world-writable
+
+Arquivos graváveis por qualquer usuário possuem o bit:
+
+```text
+002
+```
+
+Exemplo:
+
+```bash
+find / -type f -perm -002 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns que possam ser modificados por outros usuários.
+
+Esses arquivos podem ser perigosos quando:
+
+- São executados pelo `root`;
+- São utilizados por serviços;
+- São scripts de backup;
+- São arquivos de configuração;
+- Estão em diretórios importantes.
+
+---
+
+# Diretórios world-writable
+
+```bash
+find / -type d -perm -002 2>/dev/null
+```
+
+Isso encontra diretórios nos quais outros usuários podem escrever.
+
+Exemplos esperados:
+
+```text
+/tmp
+/var/tmp
+/dev/shm
+```
+
+Esses diretórios normalmente possuem proteção adicional com Sticky Bit.
+
+---
+
+# Permissões especiais
+
+Além de `r`, `w` e `x`, o Linux possui três bits especiais.
+
+| Valor | Nome |
+|---:|---|
+| `4000` | SUID |
+| `2000` | SGID |
+| `1000` | Sticky Bit |
+
+Esses valores ocupam a primeira posição em modos de quatro dígitos.
+
+Exemplo:
+
+```text
+4755
+```
+
+Separando:
+
+```text
+4 → SUID
+755 → permissões normais
+```
+
+---
+
+# Procurar SUID
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns que possuam o bit SUID.
+
+Esse é um dos comandos mais usados em Linux Post Exploitation.
+
+Exemplo de saída:
+
+```text
+/usr/bin/passwd
+/usr/bin/su
+/usr/local/bin/backup
+```
+
+Nem todo resultado é vulnerável.
+
+O objetivo é identificar binários incomuns, personalizados ou exploráveis.
+
+---
+
+# Por que usamos `-4000` e não `4000`?
+
+Com:
+
+```bash
+-perm 4000
+```
+
+a permissão precisaria ser exatamente:
+
+```text
+4000
+```
+
+Isso raramente acontece.
+
+Um binário SUID normalmente possui algo como:
+
+```text
+4755
+```
+
+Por isso usamos:
+
+```bash
+-perm -4000
+```
+
+O hífen significa:
+
+> O bit SUID precisa estar presente, mas outros bits podem existir.
+
+---
+
+# Procurar SGID
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+O SGID faz com que o processo seja executado com o grupo efetivo do arquivo.
+
+Exemplo:
+
+```text
+-rwxr-sr-x
+```
+
+---
+
+# Procurar Sticky Bit
+
+```bash
+find / -type d -perm -1000 2>/dev/null
+```
+
+O Sticky Bit costuma aparecer em diretórios compartilhados.
+
+Exemplo clássico:
+
+```text
+/tmp
+```
+
+Mesmo que vários usuários possam criar arquivos, cada um normalmente só consegue remover os próprios arquivos.
+
+---
+
+# Procurar SUID ou SGID
+
+```bash
+find / -type f -perm /6000 2>/dev/null
+```
+
+Porque:
+
+```text
+4000 → SUID
+2000 → SGID
+6000 → os dois bits combinados
+```
+
+Como usamos:
+
+```bash
+/6000
+```
+
+basta possuir SUID ou SGID.
+
+---
+
+# Procurar SUID e SGID ao mesmo tempo
+
+```bash
+find / -type f -perm -6000 2>/dev/null
+```
+
+Nesse caso, os dois bits precisam estar presentes.
+
+Isso é bem menos comum.
+
+---
+
+# Procurar arquivos com permissão `777`
+
+```bash
+find / -type f -perm 777 2>/dev/null
+```
+
+Isso procura correspondência exata.
+
+Para encontrar arquivos em que todos os usuários possuem leitura, escrita e execução, mas que podem possuir bits especiais adicionais:
+
+```bash
+find / -type f -perm -0777 2>/dev/null
+```
+
+---
+
+# O zero inicial
+
+Às vezes você verá:
+
+```bash
+-perm -04000
+```
+
+ou:
+
+```bash
+-perm -4000
+```
+
+Na prática, ambos representam o modo octal relacionado ao SUID.
+
+Também é comum escrever permissões comuns assim:
+
+```text
+0644
+0755
+0777
+```
+
+O zero inicial ajuda a deixar claro que o valor está sendo interpretado como octal.
+
+---
+
+# Casos de uso em Administração Linux
+
+## Encontrar arquivos com permissão exata `644`
+
+```bash
+find /var/www -type f -perm 644
+```
+
+---
+
+## Encontrar diretórios com permissão exata `755`
+
+```bash
+find /var/www -type d -perm 755
+```
+
+---
+
+## Encontrar arquivos graváveis por outros
+
+```bash
+find /srv -type f -perm -002
+```
+
+---
+
+# Casos de uso em Shell Script
+
+## Verificar scripts executáveis
+
+```bash
+find ./scripts -type f -perm /111
+```
+
+---
+
+## Encontrar arquivos com escrita para o grupo
+
+```bash
+find ./projeto -type f -perm -020
+```
+
+---
+
+# Casos de uso em Pentest e CTF
+
+## Enumerar SUID
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+---
+
+## Enumerar SGID
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+---
+
+## Procurar arquivos world-writable
+
+```bash
+find / -type f -perm -002 2>/dev/null
+```
+
+---
+
+## Procurar diretórios world-writable sem Sticky Bit
+
+```bash
+find / -type d -perm -002 ! -perm -1000 2>/dev/null
+```
+
+Tradução:
+
+> Procure diretórios graváveis por outros usuários que não possuam Sticky Bit.
+
+Esses diretórios podem representar uma configuração insegura.
+
+---
+
+# Diferença entre `-writable` e `-perm`
+
+O `find` também possui:
+
+```bash
+-writable
+```
+
+Ela verifica se o usuário atual consegue escrever no objeto.
+
+Já:
+
+```bash
+-perm
+```
+
+verifica os bits de permissão informados.
+
+Exemplo:
+
+```bash
+find / -type f -writable 2>/dev/null
+```
+
+Pergunta:
+
+> O usuário atual consegue escrever nesse arquivo?
+
+Enquanto:
+
+```bash
+find / -type f -perm -002 2>/dev/null
+```
+
+Pergunta:
+
+> O arquivo possui escrita habilitada para outros usuários?
+
+Essas duas buscas não são exatamente iguais, porque ACLs, proprietário, grupo e outras regras podem afetar o acesso real.
+
+---
+
+# Erros comuns
+
+## Usar modo exato sem querer
+
+```bash
+find / -perm 4000
+```
+
+Normalmente não encontra os binários SUID esperados.
+
+Prefira:
+
+```bash
+find / -perm -4000
+```
+
+---
+
+## Confundir hífen com opção
+
+Em:
+
+```bash
+-perm -4000
+```
+
+o primeiro hífen pertence a:
+
+```text
+-perm
+```
+
+O segundo hífen define o tipo de comparação do modo.
+
+---
+
+## Achar que todo arquivo SUID é vulnerável
+
+Programas como:
+
+```text
+passwd
+su
+mount
+umount
+```
+
+podem aparecer legitimamente.
+
+É necessário analisar:
+
+- Caminho;
+- Proprietário;
+- Versão;
+- Funções;
+- Presença no GTFOBins;
+- Se o programa preserva privilégios.
+
+---
+
+## Confundir `777` com SUID
+
+```text
+777
+```
+
+representa permissões comuns completas.
+
+```text
+4777
+```
+
+representa:
+
+- SUID;
+- Permissões comuns `777`.
+
+O primeiro dígito possui significado especial.
+
+---
+
+# Tabela de consulta rápida
+
+| Objetivo | Comando |
+|---|---|
+| Permissão exatamente `644` | `find . -perm 644` |
+| Todos os bits de `600` | `find . -perm -600` |
+| Qualquer bit de `600` | `find . -perm /600` |
+| Executável por alguém | `find . -type f -perm /111` |
+| Gravável por outros | `find / -type f -perm -002 2>/dev/null` |
+| SUID | `find / -type f -perm -4000 2>/dev/null` |
+| SGID | `find / -type f -perm -2000 2>/dev/null` |
+| Sticky Bit | `find / -type d -perm -1000 2>/dev/null` |
+| SUID ou SGID | `find / -type f -perm /6000 2>/dev/null` |
+
+---
+
+# Resumo
+
+A opção:
+
+```bash
+-perm
+```
+
+filtra objetos pelos bits de permissão.
+
+As três formas principais são:
+
+```text
+MODO  → correspondência exata
+-MODO → todos os bits precisam existir
+/MODO → qualquer bit pode existir
+```
+
+Durante Pentest e CTF, os usos mais importantes são:
+
+```bash
+find / -type f -perm -4000 2>/dev/null
+```
+
+```bash
+find / -type f -perm -2000 2>/dev/null
+```
+
+```bash
+find / -type f -perm -002 2>/dev/null
+```
+
+Na próxima parte estudaremos:
+
+- `-user`;
+- `-group`;
+- `-uid`;
+- `-gid`;
+- `-nouser`;
+- `-nogroup`;
+- Como localizar arquivos por proprietário e grupo.
+

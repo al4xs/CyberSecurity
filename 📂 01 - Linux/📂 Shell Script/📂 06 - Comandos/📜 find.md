@@ -2233,3 +2233,634 @@ Na próxima parte aprenderemos uma das opções mais utilizadas do `find`:
 
 Essas opções são responsáveis por filtrar arquivos utilizando seus nomes.
 
+---
+
+# Wildcards (Globbing)
+
+Antes de aprender as opções:
+
+```bash
+-name
+```
+
+e
+
+```bash
+-iname
+```
+
+precisamos entender um conceito muito importante do Linux chamado **Wildcard** (ou **Globbing**).
+
+Wildcards são caracteres especiais utilizados para representar um ou mais caracteres.
+
+Eles permitem realizar buscas flexíveis sem precisar conhecer exatamente o nome de um arquivo.
+
+Imagine que você possui centenas de arquivos.
+
+```text
+documento.txt
+senhas.txt
+config.txt
+backup.zip
+imagem.png
+script.sh
+```
+
+Em vez de procurar cada arquivo individualmente, podemos utilizar wildcards.
+
+---
+
+# O caractere `*`
+
+O wildcard mais utilizado é:
+
+```text
+*
+```
+
+Ele significa:
+
+> Qualquer quantidade de caracteres (inclusive nenhum).
+
+Exemplo:
+
+```text
+*.txt
+```
+
+Tradução:
+
+> Qualquer nome terminado em `.txt`.
+
+O `*` pode representar:
+
+```text
+documento
+
+config
+
+teste
+
+123
+
+qualquercoisa
+```
+
+Portanto:
+
+```text
+*.txt
+```
+
+corresponde a:
+
+```text
+documento.txt
+
+config.txt
+
+teste.txt
+
+123.txt
+```
+
+---
+
+# Outro exemplo
+
+```text
+backup*
+```
+
+Resultado:
+
+```text
+backup
+
+backup1
+
+backup_final
+
+backup_antigo
+
+backup.tar
+```
+
+Observe que agora o nome precisa começar com:
+
+```text
+backup
+```
+
+Depois disso qualquer sequência de caracteres é aceita.
+
+---
+
+# Outro exemplo
+
+```text
+*config*
+```
+
+Resultado:
+
+```text
+config
+
+config.php
+
+meu_config
+
+config_backup
+
+teste_config_old
+```
+
+Nesse caso o nome apenas precisa conter a palavra:
+
+```text
+config
+```
+
+em qualquer posição.
+
+---
+
+# O caractere `?`
+
+O wildcard:
+
+```text
+?
+```
+
+representa **apenas um único caractere**.
+
+Exemplo:
+
+```text
+file?.txt
+```
+
+Resultado:
+
+```text
+file1.txt
+
+file2.txt
+
+fileA.txt
+
+fileX.txt
+```
+
+Não corresponde a:
+
+```text
+file10.txt
+```
+
+Porque existem dois caracteres após:
+
+```text
+file
+```
+
+---
+
+# O caractere `[]`
+
+Também podemos definir um conjunto de caracteres.
+
+Exemplo:
+
+```text
+file[123].txt
+```
+
+Resultado:
+
+```text
+file1.txt
+
+file2.txt
+
+file3.txt
+```
+
+Não corresponde a:
+
+```text
+file4.txt
+```
+
+---
+
+Outro exemplo:
+
+```text
+[a-z]
+```
+
+Representa:
+
+```text
+qualquer letra minúscula.
+```
+
+---
+
+Outro exemplo:
+
+```text
+[A-Z]
+```
+
+Representa:
+
+```text
+qualquer letra maiúscula.
+```
+
+---
+
+Outro exemplo:
+
+```text
+[0-9]
+```
+
+Representa:
+
+```text
+qualquer número.
+```
+
+---
+
+# Resumindo os Wildcards
+
+| Wildcard | Significado |
+|----------|-------------|
+| `*` | Qualquer quantidade de caracteres |
+| `?` | Apenas um caractere |
+| `[]` | Conjunto de caracteres |
+
+Esses três são utilizados em diversos comandos do Linux.
+
+Não apenas no `find`.
+
+Você encontrará esses caracteres em:
+
+- `ls`
+- `cp`
+- `mv`
+- `rm`
+- `tar`
+- `grep`
+- Shell Script
+- Bash
+
+---
+
+# A opção -name
+
+Agora que entendemos os wildcards, podemos estudar a opção mais utilizada do `find`.
+
+Sintaxe:
+
+```bash
+-name PADRÃO
+```
+
+Ela permite filtrar arquivos utilizando seu nome.
+
+---
+
+# Como funciona?
+
+Imagine que temos:
+
+```text
+documento.txt
+
+config.php
+
+backup.zip
+
+script.sh
+
+imagem.png
+```
+
+Executando:
+
+```bash
+find . -name "*.txt"
+```
+
+O `find` faz a seguinte pergunta para cada arquivo.
+
+```text
+O nome termina com ".txt"?
+
+↓
+
+Sim
+
+↓
+
+Mostrar
+
+↓
+
+Não
+
+↓
+
+Ignorar
+```
+
+Resultado:
+
+```text
+./documento.txt
+```
+
+---
+
+# Exemplo simples
+
+```bash
+find . -name "config.php"
+```
+
+Resultado:
+
+```text
+./config.php
+```
+
+Observe que agora não utilizamos wildcards.
+
+O nome precisa ser exatamente:
+
+```text
+config.php
+```
+
+---
+
+# Procurando todos os arquivos TXT
+
+```bash
+find /home -name "*.txt"
+```
+
+Resultado:
+
+```text
+/home/allan/anotacoes.txt
+
+/home/maria/senhas.txt
+
+/home/joao/lista.txt
+```
+
+---
+
+# Procurando scripts Shell
+
+```bash
+find . -name "*.sh"
+```
+
+Resultado:
+
+```text
+./backup.sh
+
+./scanner.sh
+
+./exploit.sh
+```
+
+---
+
+# Procurando arquivos PHP
+
+```bash
+find /var/www -name "*.php"
+```
+
+Resultado:
+
+```text
+/var/www/index.php
+
+/var/www/login.php
+
+/var/www/admin/config.php
+```
+
+Muito utilizado em Pentest Web.
+
+---
+
+# Procurando Backups
+
+```bash
+find / -name "*.bak" 2>/dev/null
+```
+
+Resultado:
+
+```text
+/etc/passwd.bak
+
+/var/www/config.php.bak
+```
+
+---
+
+# Procurando arquivos compactados
+
+```bash
+find /home -name "*.zip"
+```
+
+Resultado:
+
+```text
+backup.zip
+
+documentos.zip
+
+projeto.zip
+```
+
+---
+
+# Atenção
+
+A opção:
+
+```bash
+-name
+```
+
+é **case-sensitive**.
+
+Ou seja.
+
+Ela diferencia letras maiúsculas de minúsculas.
+
+Imagine:
+
+```text
+Backup.zip
+
+backup.zip
+```
+
+Agora execute:
+
+```bash
+find . -name "backup.zip"
+```
+
+Resultado:
+
+```text
+backup.zip
+```
+
+O arquivo:
+
+```text
+Backup.zip
+```
+
+não será encontrado.
+
+---
+
+# Quando utilizar?
+
+Sempre que souber total ou parcialmente o nome do arquivo.
+
+É muito utilizada para localizar:
+
+- Arquivos de configuração;
+- Backups;
+- Scripts;
+- Bancos de dados;
+- Arquivos de texto;
+- Arquivos específicos.
+
+---
+
+# Casos de uso em Shell Script
+
+Localizar todos os arquivos de log.
+
+```bash
+find /var/log -name "*.log"
+```
+
+---
+
+Localizar todos os scripts.
+
+```bash
+find . -name "*.sh"
+```
+
+---
+
+# Casos de uso em Pentest
+
+Procurar arquivos de configuração.
+
+```bash
+find /var/www -name "*.php"
+```
+
+---
+
+Procurar backups.
+
+```bash
+find / -name "*.bak" 2>/dev/null
+```
+
+---
+
+Procurar arquivos `.env`.
+
+```bash
+find / -name ".env" 2>/dev/null
+```
+
+---
+
+# Erros comuns
+
+## Esquecer as aspas
+
+Errado:
+
+```bash
+find . -name *.txt
+```
+
+Correto:
+
+```bash
+find . -name "*.txt"
+```
+
+As aspas evitam que o próprio Shell expanda o wildcard antes do `find` receber o argumento.
+
+---
+
+## Esquecer o wildcard
+
+```bash
+-name txt
+```
+
+Isso procura apenas um arquivo chamado:
+
+```text
+txt
+```
+
+O correto normalmente será:
+
+```bash
+-name "*.txt"
+```
+
+---
+
+# Resumo
+
+A opção:
+
+```bash
+-name
+```
+
+permite localizar arquivos utilizando seu nome.
+
+Ela aceita wildcards e é uma das opções mais utilizadas do comando `find`.
+
+Na próxima parte estudaremos:
+
+- `-iname`
+- Diferença entre `-name` e `-iname`
+- Quando utilizar cada uma
+- Casos práticos
+- Depois entraremos em `-path` e `-ipath`.
+

@@ -987,3 +987,630 @@ Agora que entendemos **onde** o `find` inicia a busca, aprenderemos como filtrar
 
 Esses parâmetros são a base de praticamente todos os comandos `find` utilizados em Linux, Shell Script, Pentest e CTF.
 
+---
+
+# Como o find decide o que mostrar?
+
+Até agora vimos que o `find` percorre diretórios recursivamente.
+
+Mas imagine o seguinte comando:
+
+```bash
+find /home
+```
+
+Resultado:
+
+```text
+/home
+/home/allan
+/home/allan/Desktop
+/home/allan/Desktop/foto.png
+/home/allan/Downloads
+/home/allan/script.sh
+/home/maria
+/home/maria/documento.pdf
+```
+
+Ele mostrou **tudo**.
+
+Na prática, quase nunca queremos listar todos os arquivos do sistema.
+
+Normalmente queremos encontrar algo específico.
+
+Por exemplo:
+
+- Apenas arquivos `.txt`;
+- Apenas diretórios;
+- Apenas arquivos pertencentes ao root;
+- Apenas arquivos maiores que 100 MB;
+- Apenas arquivos modificados hoje.
+
+Para isso utilizamos **filtros**.
+
+---
+
+# O que são filtros?
+
+Filtros são condições utilizadas para dizer ao `find` quais arquivos devem aparecer na saída.
+
+Imagine a seguinte pergunta.
+
+> Quero encontrar apenas arquivos PDF.
+
+O `find` fará algo parecido com isto:
+
+```text
+Arquivo encontrado
+
+↓
+
+É um PDF?
+
+↓
+
+Sim → Mostrar
+
+↓
+
+Não → Ignorar
+
+↓
+
+Próximo arquivo
+```
+
+Isso acontece para todos os arquivos encontrados.
+
+---
+
+# Como o find trabalha internamente?
+
+Imagine novamente esta estrutura.
+
+```text
+/home
+
+├── allan
+│   ├── foto.png
+│   ├── senha.txt
+│   ├── script.sh
+│   └── backup.zip
+│
+└── maria
+    ├── documento.pdf
+    └── imagem.jpg
+```
+
+Agora execute:
+
+```bash
+find /home -name "*.txt"
+```
+
+O `find` faz aproximadamente isto:
+
+```text
+Entrar em /home
+
+↓
+
+Encontrou foto.png
+
+↓
+
+Termina com .txt?
+
+↓
+
+Não
+
+↓
+
+Ignorar
+
+↓
+
+Encontrou senha.txt
+
+↓
+
+Termina com .txt?
+
+↓
+
+Sim
+
+↓
+
+Mostrar
+
+↓
+
+Encontrou script.sh
+
+↓
+
+Não
+
+↓
+
+Ignorar
+
+↓
+
+Encontrou backup.zip
+
+↓
+
+Não
+
+↓
+
+Ignorar
+
+↓
+
+Encontrou documento.pdf
+
+↓
+
+Não
+
+↓
+
+Ignorar
+```
+
+Resultado final:
+
+```text
+/home/allan/senha.txt
+```
+
+---
+
+# O que são expressões?
+
+Toda condição utilizada pelo `find` recebe o nome de **expressão** (*Expression*).
+
+Exemplo:
+
+```bash
+-name "*.txt"
+```
+
+é uma expressão.
+
+---
+
+Outro exemplo.
+
+```bash
+-type f
+```
+
+Também é uma expressão.
+
+---
+
+Outro.
+
+```bash
+-user root
+```
+
+Também é uma expressão.
+
+---
+
+Na prática, podemos pensar assim:
+
+```text
+Expressão
+
+↓
+
+Condição
+
+↓
+
+Filtro
+```
+
+São praticamente a mesma ideia.
+
+---
+
+# Podemos utilizar várias expressões?
+
+Sim.
+
+Na verdade, é aí que o `find` se torna extremamente poderoso.
+
+Exemplo:
+
+```bash
+find /home -type f -name "*.txt"
+```
+
+Agora existem duas condições.
+
+```text
+Arquivo encontrado
+
+↓
+
+É arquivo?
+
+↓
+
+Sim
+
+↓
+
+Termina com .txt?
+
+↓
+
+Sim
+
+↓
+
+Mostrar
+```
+
+Observe que agora ele precisa atender às duas condições.
+
+---
+
+# O conceito de AND
+
+Quando colocamos várias expressões lado a lado, o `find` utiliza um operador chamado **AND**.
+
+Mesmo que ele não apareça escrito.
+
+Exemplo:
+
+```bash
+find /home -type f -name "*.txt"
+```
+
+Internamente o `find` interpreta como:
+
+```text
+-type f
+
+AND
+
+-name "*.txt"
+```
+
+Ou seja.
+
+O arquivo precisa:
+
+✔ Ser um arquivo.
+
+E
+
+✔ Terminar com `.txt`.
+
+---
+
+# Exemplo prático
+
+Imagine estes arquivos.
+
+```text
+documento.txt
+
+foto.png
+
+backup.zip
+
+Downloads/
+
+script.sh
+```
+
+Comando:
+
+```bash
+find . -type f -name "*.txt"
+```
+
+Resultado:
+
+```text
+documento.txt
+```
+
+Por quê?
+
+Porque:
+
+✔ É um arquivo.
+
+✔ Termina com `.txt`.
+
+---
+
+Agora veja este.
+
+```text
+Downloads
+```
+
+Ele termina com `.txt`?
+
+Não.
+
+Além disso:
+
+Nem é um arquivo.
+
+Portanto será ignorado.
+
+---
+
+# O conceito de OR
+
+Às vezes queremos encontrar arquivos diferentes.
+
+Por exemplo.
+
+Arquivos:
+
+```text
+.zip
+
+.tar
+```
+
+Nesse caso utilizamos:
+
+```bash
+-o
+```
+
+Que significa:
+
+```text
+OR
+
+OU
+```
+
+Exemplo:
+
+```bash
+find . -name "*.zip" -o -name "*.tar"
+```
+
+Tradução:
+
+> Procure arquivos terminados em `.zip` **ou** `.tar`.
+
+---
+
+Fluxo:
+
+```text
+Arquivo encontrado
+
+↓
+
+É ZIP?
+
+↓
+
+Sim → Mostrar
+
+↓
+
+Não
+
+↓
+
+É TAR?
+
+↓
+
+Sim → Mostrar
+
+↓
+
+Não
+
+↓
+
+Ignorar
+```
+
+---
+
+# O conceito de NOT
+
+Também podemos inverter uma condição.
+
+Utilizando:
+
+```bash
+!
+```
+
+Exemplo:
+
+```bash
+find . ! -name "*.txt"
+```
+
+Tradução:
+
+> Mostre tudo, exceto arquivos terminados em `.txt`.
+
+---
+
+Outro exemplo.
+
+```bash
+find . ! -type d
+```
+
+Tradução:
+
+> Mostre tudo que **não** for diretório.
+
+---
+
+# O find pensa como um filtro
+
+É importante mudar a forma de pensar.
+
+O `find` não procura diretamente um arquivo.
+
+Ele percorre o sistema fazendo perguntas.
+
+Imagine.
+
+```bash
+find . -type f -name "*.pdf"
+```
+
+O pensamento dele será parecido com isto.
+
+```text
+Arquivo encontrado
+
+↓
+
+É um arquivo?
+
+↓
+
+Não?
+
+↓
+
+Ignorar
+
+↓
+
+Sim?
+
+↓
+
+Termina com .pdf?
+
+↓
+
+Não?
+
+↓
+
+Ignorar
+
+↓
+
+Sim?
+
+↓
+
+Mostrar
+```
+
+Sempre pense dessa forma.
+
+Isso ajuda muito quando os comandos ficam grandes.
+
+---
+
+# Por que aprender isso?
+
+Porque quase todos os comandos do `find` seguem exatamente essa lógica.
+
+Veja este exemplo.
+
+```bash
+find /var/www \
+-type f \
+-user www-data \
+-name "*.php"
+```
+
+Mesmo sem conhecer todas as flags, você já consegue interpretar.
+
+Tradução:
+
+> Procure arquivos dentro de `/var/www` que pertençam ao usuário `www-data` e cujo nome termine com `.php`.
+
+Observe como o comando deixa de parecer complicado quando entendemos sua lógica.
+
+---
+
+# Erro comum
+
+Muitos iniciantes enxergam o `find` assim:
+
+```bash
+find /alguma/coisa -alguma-flag
+```
+
+E tentam decorar cada comando.
+
+O ideal é pensar assim.
+
+```text
+find
+
+↓
+
+Onde procurar?
+
+↓
+
+O que procurar?
+
+↓
+
+Quais condições?
+
+↓
+
+O que fazer quando encontrar?
+```
+
+Essa forma de pensar facilitará o entendimento de praticamente qualquer comando do `find`.
+
+---
+
+# Resumo
+
+Até aqui aprendemos que:
+
+- O `find` percorre diretórios recursivamente.
+- Cada condição é chamada de expressão.
+- Podemos combinar várias expressões.
+- O operador padrão é o **AND**.
+- O operador `-o` representa **OR**.
+- O operador `!` inverte uma condição.
+- O `find` funciona como um grande filtro aplicado a cada arquivo encontrado.
+
+---
+
+# Próxima parte
+
+Agora começaremos a estudar as primeiras expressões do `find`.
+
+Na próxima seção veremos:
+
+- `-type`
+- Tipos de arquivos
+- Diferença entre arquivos, diretórios e links
+- Quando utilizar cada tipo
+- Exemplos em Linux
+- Exemplos em Shell Script
+- Exemplos em Pentest
+- Exemplos em CTF
+

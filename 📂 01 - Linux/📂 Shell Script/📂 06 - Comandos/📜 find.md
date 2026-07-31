@@ -3945,3 +3945,579 @@ Na próxima parte estudaremos uma das opções mais importantes para Linux, Shel
 - Casos reais de uso
 - Busca por arquivos SUID, SGID e Sticky Bit
 
+---
+
+# Permissões no Linux
+
+Antes de estudar a opção:
+
+```bash
+-perm
+```
+
+precisamos entender como as permissões funcionam no Linux.
+
+Praticamente tudo no sistema possui permissões.
+
+Por exemplo:
+
+- Arquivos;
+- Diretórios;
+- Scripts;
+- Binários;
+- Dispositivos.
+
+Essas permissões determinam quem pode:
+
+- Ler;
+- Escrever;
+- Executar.
+
+---
+
+# Como visualizar as permissões?
+
+O comando mais utilizado é:
+
+```bash
+ls -l
+```
+
+Exemplo:
+
+```text
+-rwxr-xr-- 1 root root 15240 jan 10 12:30 script.sh
+```
+
+Vamos analisar apenas esta parte.
+
+```text
+-rwxr-xr--
+```
+
+Ela representa todas as permissões do arquivo.
+
+---
+
+# Estrutura
+
+Visualmente:
+
+```text
+-rwxr-xr--
+││││││││││
+││││││││└┴── Outros
+│││└┴┴┴──── Grupo
+│└┴┴┴──────── Dono
+└──────────── Tipo
+```
+
+Cada posição possui um significado.
+
+---
+
+# O primeiro caractere
+
+O primeiro caractere representa o tipo do objeto.
+
+| Letra | Significado |
+|--------|-------------|
+| `-` | Arquivo comum |
+| `d` | Diretório |
+| `l` | Link simbólico |
+| `p` | Pipe |
+| `s` | Socket |
+| `b` | Dispositivo de bloco |
+| `c` | Dispositivo de caractere |
+
+Exemplo:
+
+```text
+-rwxr-xr--
+```
+
+O primeiro caractere é:
+
+```text
+-
+```
+
+Logo:
+
+É um arquivo comum.
+
+---
+
+Outro exemplo:
+
+```text
+drwxr-xr-x
+```
+
+Agora o primeiro caractere é:
+
+```text
+d
+```
+
+Portanto:
+
+É um diretório.
+
+---
+
+# Os próximos nove caracteres
+
+Observe novamente.
+
+```text
+-rwxr-xr--
+```
+
+Agora ignore o primeiro caractere.
+
+```text
+rwxr-xr--
+```
+
+Esses nove caracteres representam as permissões.
+
+Eles são divididos em três grupos.
+
+```text
+rwx
+
+r-x
+
+r--
+```
+
+Cada grupo possui três posições.
+
+---
+
+# Primeiro grupo
+
+```text
+rwx
+```
+
+Representa o proprietário (**Owner**).
+
+Também chamado de:
+
+```text
+User
+```
+
+---
+
+# Segundo grupo
+
+```text
+r-x
+```
+
+Representa o grupo (**Group**).
+
+---
+
+# Terceiro grupo
+
+```text
+r--
+```
+
+Representa todos os outros usuários (**Others**).
+
+---
+
+Visualmente.
+
+```text
+rwx | r-x | r--
+ │      │      │
+ │      │      └── Outros
+ │      └──────── Grupo
+ └────────────── Dono
+```
+
+---
+
+# O significado de cada letra
+
+Cada posição possui apenas quatro possibilidades.
+
+| Letra | Significado |
+|--------|-------------|
+| `r` | Read (Leitura) |
+| `w` | Write (Escrita) |
+| `x` | Execute (Execução) |
+| `-` | Permissão ausente |
+
+---
+
+# Read (`r`)
+
+Permite ler o conteúdo do arquivo.
+
+Exemplo.
+
+```text
+r--
+```
+
+Significa.
+
+Pode ler.
+
+Não pode escrever.
+
+Não pode executar.
+
+---
+
+# Write (`w`)
+
+Permite modificar o arquivo.
+
+Exemplo.
+
+```text
+rw-
+```
+
+Agora pode:
+
+✔ Ler.
+
+✔ Escrever.
+
+✘ Executar.
+
+---
+
+# Execute (`x`)
+
+Permite executar o arquivo.
+
+Exemplo.
+
+```text
+--x
+```
+
+O usuário pode executar.
+
+Mas não pode:
+
+- Ler;
+- Modificar.
+
+---
+
+# Exemplo completo
+
+```text
+-rwxr-xr--
+```
+
+Vamos dividir.
+
+```text
+rwx
+```
+
+Dono.
+
+Pode:
+
+✔ Ler
+
+✔ Escrever
+
+✔ Executar
+
+---
+
+Grupo.
+
+```text
+r-x
+```
+
+Pode:
+
+✔ Ler
+
+✘ Escrever
+
+✔ Executar
+
+---
+
+Outros.
+
+```text
+r--
+```
+
+Podem:
+
+✔ Ler
+
+✘ Escrever
+
+✘ Executar
+
+---
+
+# Permissões numéricas
+
+Além da forma simbólica, o Linux também utiliza números.
+
+Cada permissão possui um valor.
+
+| Permissão | Valor |
+|-----------|------:|
+| `r` | 4 |
+| `w` | 2 |
+| `x` | 1 |
+
+Esses valores podem ser somados.
+
+---
+
+## Exemplos
+
+```text
+rwx
+```
+
+Cálculo.
+
+```text
+4 + 2 + 1 = 7
+```
+
+Resultado.
+
+```text
+7
+```
+
+---
+
+Outro.
+
+```text
+rw-
+```
+
+```text
+4 + 2 = 6
+```
+
+Resultado.
+
+```text
+6
+```
+
+---
+
+Outro.
+
+```text
+r-x
+```
+
+```text
+4 + 1 = 5
+```
+
+---
+
+Outro.
+
+```text
+r--
+```
+
+```text
+4
+```
+
+---
+
+Outro.
+
+```text
+---
+```
+
+```text
+0
+```
+
+---
+
+# Tabela completa
+
+| Permissão | Número |
+|-----------|--------|
+| `rwx` | 7 |
+| `rw-` | 6 |
+| `r-x` | 5 |
+| `r--` | 4 |
+| `-wx` | 3 |
+| `-w-` | 2 |
+| `--x` | 1 |
+| `---` | 0 |
+
+---
+
+# Exemplo famoso
+
+```text
+755
+```
+
+Na forma simbólica.
+
+```text
+rwxr-xr-x
+```
+
+Traduzindo.
+
+Dono:
+
+```text
+rwx
+```
+
+Grupo.
+
+```text
+r-x
+```
+
+Outros.
+
+```text
+r-x
+```
+
+---
+
+Outro exemplo.
+
+```text
+644
+```
+
+Resultado.
+
+```text
+rw-r--r--
+```
+
+Muito utilizado em arquivos de configuração.
+
+---
+
+# Como isso se relaciona com o find?
+
+A opção:
+
+```bash
+-perm
+```
+
+permite pesquisar arquivos utilizando essas permissões.
+
+Por exemplo.
+
+```bash
+find / -perm 644
+```
+
+Traduzindo.
+
+> Procure arquivos cuja permissão seja exatamente:
+
+```text
+rw-r--r--
+```
+
+Outro exemplo.
+
+```bash
+find / -perm 755
+```
+
+↓
+
+```text
+rwxr-xr-x
+```
+
+---
+
+Mais adiante aprenderemos buscas como:
+
+```bash
+find / -perm -4000
+```
+
+```bash
+find / -perm -2000
+```
+
+```bash
+find / -perm -1000
+```
+
+que são extremamente importantes durante Pentests.
+
+---
+
+# Dica
+
+Antes de decorar:
+
+```bash
+find / -perm 755
+```
+
+aprenda primeiro a interpretar:
+
+```text
+rwxr-xr-x
+```
+
+Quando você entende as permissões do Linux, a opção `-perm` passa a fazer muito mais sentido.
+
+---
+
+# Resumo
+
+Até este ponto aprendemos:
+
+- Como visualizar permissões com `ls -l`;
+- O significado do primeiro caractere;
+- Dono, Grupo e Outros;
+- Permissões `r`, `w` e `x`;
+- Forma simbólica;
+- Forma numérica;
+- Como essas permissões serão utilizadas pela opção `-perm`.
+
+Na próxima parte estudaremos finalmente a opção:
+
+- `-perm`
+- Diferença entre `644`, `755` e `777`
+- Modos exato, parcial e qualquer permissão
+- Casos reais de Pentest
+- SUID, SGID e Sticky Bit utilizando `find`.
+

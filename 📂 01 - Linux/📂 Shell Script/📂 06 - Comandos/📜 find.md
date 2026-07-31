@@ -404,3 +404,586 @@ Na próxima parte começaremos a estudar cada componente do comando individualme
 - Wildcards (`*`, `?`, `[]`);
 - E como combinar esses elementos corretamente.
 
+---
+
+# Diretório Inicial da Busca
+
+Antes de procurar qualquer arquivo, o `find` precisa saber **onde a busca começará**.
+
+Esse local é chamado de **diretório inicial** (*Starting Directory*).
+
+Ele sempre é o primeiro argumento informado após o comando `find`.
+
+Sintaxe:
+
+```bash
+find DIRETORIO [EXPRESSÕES] [AÇÕES]
+```
+
+Exemplo:
+
+```bash
+find /home
+```
+
+Neste exemplo:
+
+```text
+find
+ │
+ └── /home
+```
+
+O `find` começará a busca dentro de:
+
+```text
+/home
+```
+
+e percorrerá automaticamente todos os seus subdiretórios.
+
+---
+
+# Como o find percorre os diretórios?
+
+Imagine a seguinte estrutura.
+
+```text
+/home
+
+├── allan
+│   ├── Desktop
+│   ├── Downloads
+│   └── Documentos
+│
+├── maria
+│   ├── Projetos
+│   └── Imagens
+│
+└── joao
+```
+
+Ao executar:
+
+```bash
+find /home
+```
+
+o `find` faz algo semelhante a isto:
+
+```text
+Entrar em /home
+
+↓
+
+Entrar em allan
+
+↓
+
+Entrar em Desktop
+
+↓
+
+Voltar
+
+↓
+
+Entrar em Downloads
+
+↓
+
+Voltar
+
+↓
+
+Entrar em Documentos
+
+↓
+
+Voltar
+
+↓
+
+Entrar em maria
+
+↓
+
+Entrar em Projetos
+
+↓
+
+Voltar
+
+↓
+
+Entrar em Imagens
+
+↓
+
+Voltar
+
+↓
+
+Entrar em joao
+
+↓
+
+Fim
+```
+
+Esse processo é chamado de **busca recursiva**.
+
+---
+
+# Utilizando `/`
+
+Quando utilizamos apenas:
+
+```bash
+find /
+```
+
+a busca começa na raiz do sistema.
+
+Estrutura simplificada:
+
+```text
+/
+
+├── bin
+├── boot
+├── dev
+├── etc
+├── home
+├── media
+├── opt
+├── root
+├── srv
+├── tmp
+├── usr
+├── var
+└── ...
+```
+
+Isso significa que praticamente todo o sistema será percorrido.
+
+---
+
+## Quando utilizar?
+
+Quando você não sabe onde o arquivo pode estar.
+
+Muito comum em:
+
+- Pentest;
+- CTF;
+- Administração Linux;
+- Forense.
+
+Exemplo:
+
+```bash
+find / -name "config.php"
+```
+
+Saída:
+
+```text
+/var/www/html/config.php
+```
+
+---
+
+## Vantagens
+
+- Procura em praticamente todo o sistema.
+- Ideal quando a localização é desconhecida.
+
+---
+
+## Desvantagens
+
+Pode demorar.
+
+Dependendo das permissões do usuário, aparecerão diversas mensagens como:
+
+```text
+Permission denied
+```
+
+Por isso normalmente utilizamos:
+
+```bash
+2>/dev/null
+```
+
+que já estudamos na anotação de redirecionamentos.
+
+---
+
+# Utilizando `/home`
+
+Também é muito comum iniciar a busca apenas no diretório dos usuários.
+
+Exemplo:
+
+```bash
+find /home
+```
+
+Agora somente os diretórios dentro de:
+
+```text
+/home
+```
+
+serão analisados.
+
+---
+
+## Quando utilizar?
+
+Quando deseja pesquisar apenas arquivos dos usuários.
+
+Muito utilizado para localizar:
+
+- Documentos;
+- Chaves SSH;
+- Backups;
+- Scripts;
+- Arquivos `.env`;
+- Arquivos `.txt`;
+- Credenciais.
+
+---
+
+## Exemplo
+
+```bash
+find /home -name "*.txt"
+```
+
+Saída:
+
+```text
+/home/allan/anotacoes.txt
+
+/home/maria/senhas.txt
+```
+
+---
+
+# Utilizando `.`
+
+O ponto (`.`) representa o **diretório atual**.
+
+Antes de entender isso, veja:
+
+```bash
+pwd
+```
+
+Saída:
+
+```text
+/home/allan
+```
+
+Agora execute:
+
+```bash
+find .
+```
+
+Na prática, o comando será equivalente a:
+
+```bash
+find /home/allan
+```
+
+O `find` começará exatamente no diretório atual.
+
+---
+
+## Quando utilizar?
+
+É o mais comum durante o desenvolvimento de programas e Shell Scripts.
+
+Exemplo:
+
+```bash
+find . -name "*.py"
+```
+
+Saída:
+
+```text
+./main.py
+
+./api/app.py
+
+./tests/test.py
+```
+
+Observe que apenas o projeto atual foi pesquisado.
+
+---
+
+# Utilizando `..`
+
+Os dois pontos (`..`) representam o diretório pai.
+
+Exemplo:
+
+Imagine que estamos em:
+
+```text
+/home/allan/Documentos
+```
+
+Executando:
+
+```bash
+find ..
+```
+
+a busca começará em:
+
+```text
+/home/allan
+```
+
+---
+
+# Utilizando caminhos específicos
+
+Nada impede que a busca seja iniciada em qualquer diretório.
+
+Por exemplo.
+
+```bash
+find /etc
+```
+
+Pesquisará apenas:
+
+```text
+/etc
+```
+
+---
+
+```bash
+find /var/www
+```
+
+Pesquisará apenas:
+
+```text
+/var/www
+```
+
+---
+
+```bash
+find /opt
+```
+
+Pesquisará apenas:
+
+```text
+/opt
+```
+
+---
+
+## Essa é uma boa prática
+
+Quanto menor for o diretório pesquisado, mais rápida será a execução.
+
+Em vez de utilizar:
+
+```bash
+find /
+```
+
+prefira:
+
+```bash
+find /var/www
+```
+
+quando souber que o arquivo está relacionado ao servidor Web.
+
+---
+
+# Caminhos absolutos
+
+Um caminho absoluto sempre começa com:
+
+```text
+/
+```
+
+Exemplos:
+
+```text
+/home/allan
+
+/etc
+
+/opt
+
+/usr/bin
+
+/var/www
+```
+
+Independentemente do diretório atual, o resultado será sempre o mesmo.
+
+---
+
+# Caminhos relativos
+
+Um caminho relativo depende da posição atual do usuário.
+
+Exemplo:
+
+```bash
+find .
+```
+
+ou
+
+```bash
+find ..
+```
+
+Esses comandos mudam de comportamento dependendo do diretório onde você estiver.
+
+---
+
+# Exemplo comparando
+
+Imagine:
+
+```text
+pwd
+```
+
+Saída:
+
+```text
+/home/allan
+```
+
+Agora:
+
+```bash
+find .
+```
+
+Resultado:
+
+```text
+/home/allan
+```
+
+Se mudarmos para:
+
+```bash
+cd /opt
+```
+
+e executarmos novamente:
+
+```bash
+find .
+```
+
+Agora o resultado será:
+
+```text
+/opt
+```
+
+---
+
+# Qual utilizar?
+
+## Caminho absoluto
+
+Ideal quando:
+
+- Scripts;
+- Automação;
+- Pentest;
+- CTF.
+
+Evita erros.
+
+---
+
+## Caminho relativo
+
+Ideal quando:
+
+- Desenvolvimento;
+- Projeto atual;
+- Pequenas buscas.
+
+---
+
+# Boas práticas
+
+✔ Utilize caminhos específicos sempre que possível.
+
+✔ Evite utilizar `find /` sem necessidade.
+
+✔ Quanto menor o diretório inicial, mais rápida será a busca.
+
+✔ Durante Pentests, normalmente vale mais a pena pesquisar diretamente em:
+
+```text
+/opt
+
+/home
+
+/var/www
+
+/tmp
+
+/dev/shm
+
+/usr/local/bin
+```
+
+do que pesquisar o sistema inteiro.
+
+---
+
+# Resumo
+
+| Caminho | Significado |
+|----------|------------|
+| `/` | Raiz do sistema |
+| `/home` | Diretório dos usuários |
+| `/etc` | Arquivos de configuração |
+| `/opt` | Aplicações instaladas manualmente |
+| `/var/www` | Aplicações Web |
+| `.` | Diretório atual |
+| `..` | Diretório pai |
+
+---
+
+# Próxima parte
+
+Agora que entendemos **onde** o `find` inicia a busca, aprenderemos como filtrar os resultados utilizando:
+
+- `-type`
+- `-name`
+- `-iname`
+- Wildcards (`*`, `?`, `[]`)
+
+Esses parâmetros são a base de praticamente todos os comandos `find` utilizados em Linux, Shell Script, Pentest e CTF.
+

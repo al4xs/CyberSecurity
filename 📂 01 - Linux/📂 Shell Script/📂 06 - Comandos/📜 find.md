@@ -1614,3 +1614,622 @@ Na próxima seção veremos:
 - Exemplos em Pentest
 - Exemplos em CTF
 
+---
+
+# Tipos de Objetos do Sistema de Arquivos
+
+Antes de aprender a utilizar a opção:
+
+```bash
+-type
+```
+
+precisamos entender um conceito importante.
+
+No Linux, **nem tudo é considerado um arquivo comum**.
+
+O sistema operacional trata diversos recursos como arquivos.
+
+Por exemplo:
+
+- Arquivos comuns;
+- Diretórios;
+- Links simbólicos;
+- Pipes;
+- Sockets;
+- Dispositivos.
+
+Quando utilizamos:
+
+```bash
+find /
+```
+
+o `find` pode encontrar qualquer um desses objetos.
+
+Por isso existe a opção:
+
+```bash
+-type
+```
+
+que permite filtrar exatamente qual tipo desejamos encontrar.
+
+---
+
+# Como o Linux enxerga os arquivos?
+
+Imagine um armário.
+
+Dentro dele existem vários objetos diferentes.
+
+```text
+Armário
+
+├── Camiseta
+├── Calça
+├── Sapato
+├── Mochila
+└── Livro
+```
+
+Você poderia dizer:
+
+> Quero apenas os livros.
+
+O Linux funciona da mesma forma.
+
+Dentro de um diretório podem existir diferentes tipos de objetos.
+
+O `find` permite escolher quais deles serão mostrados.
+
+---
+
+# A opção -type
+
+Sintaxe:
+
+```bash
+find DIRETORIO -type TIPO
+```
+
+Onde:
+
+```text
+TIPO
+```
+
+é representado por uma única letra.
+
+As mais utilizadas são:
+
+| Tipo | Significado |
+|------|-------------|
+| `f` | Arquivo comum |
+| `d` | Diretório |
+| `l` | Link simbólico |
+| `s` | Socket |
+| `p` | Pipe (FIFO) |
+| `b` | Dispositivo de bloco |
+| `c` | Dispositivo de caractere |
+
+Durante o dia a dia você utilizará principalmente:
+
+- `f`
+- `d`
+- `l`
+
+As demais aparecem com menor frequência.
+
+---
+
+# Arquivo comum (`f`)
+
+É o tipo mais conhecido.
+
+Representa arquivos utilizados para armazenar dados.
+
+Exemplos:
+
+```text
+script.sh
+
+foto.png
+
+senha.txt
+
+config.php
+
+backup.zip
+
+database.sql
+
+video.mp4
+```
+
+Todos esses arquivos são considerados:
+
+```text
+Arquivos comuns
+```
+
+---
+
+## Como procurar?
+
+```bash
+find /home -type f
+```
+
+Resultado:
+
+```text
+/home/allan/script.sh
+
+/home/allan/documento.txt
+
+/home/allan/foto.png
+```
+
+Observe que apenas arquivos comuns são exibidos.
+
+Os diretórios são ignorados.
+
+---
+
+## Quando utilizar?
+
+É a opção mais utilizada.
+
+Principalmente para localizar:
+
+- Scripts;
+- Backups;
+- Arquivos de configuração;
+- Arquivos de texto;
+- Bancos de dados;
+- Credenciais.
+
+---
+
+## Pentest
+
+Muito utilizada.
+
+Exemplo:
+
+```bash
+find /var/www -type f
+```
+
+Objetivo:
+
+Listar todos os arquivos da aplicação Web.
+
+---
+
+# Diretórios (`d`)
+
+Os diretórios são utilizados para organizar arquivos.
+
+Exemplo:
+
+```text
+/home
+
+/home/allan
+
+/home/maria
+
+/opt
+
+/tmp
+
+/var/www
+```
+
+Todos eles são diretórios.
+
+---
+
+## Como procurar?
+
+```bash
+find /home -type d
+```
+
+Resultado:
+
+```text
+/home
+
+/home/allan
+
+/home/allan/Desktop
+
+/home/allan/Downloads
+
+/home/maria
+```
+
+Observe que apenas diretórios aparecem.
+
+Os arquivos são ignorados.
+
+---
+
+## Quando utilizar?
+
+Muito útil quando desejamos:
+
+- Conhecer a estrutura de um sistema;
+- Descobrir diretórios escondidos;
+- Encontrar diretórios graváveis;
+- Mapear uma aplicação.
+
+---
+
+## Pentest
+
+Exemplo:
+
+```bash
+find /var/www -type d
+```
+
+Pode revelar diretórios como:
+
+```text
+uploads
+
+backup
+
+admin
+
+private
+
+config
+```
+
+Mesmo que estejam vazios.
+
+---
+
+# Links simbólicos (`l`)
+
+Os links simbólicos (*Symbolic Links* ou *Symlinks*) funcionam como atalhos.
+
+Imagine um atalho na Área de Trabalho do Windows.
+
+Ele aponta para outro arquivo.
+
+No Linux o conceito é semelhante.
+
+Exemplo:
+
+```text
+/home/allan/python
+
+↓
+
+/usr/bin/python3
+```
+
+O primeiro arquivo é apenas um link.
+
+O programa real está em outro local.
+
+---
+
+## Como procurar?
+
+```bash
+find /usr/bin -type l
+```
+
+Resultado:
+
+```text
+/usr/bin/python
+
+/usr/bin/editor
+
+/usr/bin/sh
+```
+
+---
+
+## Quando utilizar?
+
+Durante Pentests, links simbólicos podem revelar:
+
+- Caminhos importantes;
+- Arquivos compartilhados;
+- Configurações inesperadas.
+
+---
+
+# Pipes (`p`)
+
+Pipes (FIFO) são utilizados para comunicação entre processos.
+
+Eles são menos comuns para iniciantes.
+
+Exemplo:
+
+```text
+Processo A
+
+↓
+
+Pipe
+
+↓
+
+Processo B
+```
+
+---
+
+## Como procurar?
+
+```bash
+find /tmp -type p
+```
+
+---
+
+## Quando utilizar?
+
+Normalmente:
+
+- Administração Linux;
+- Desenvolvimento;
+- Análise de processos.
+
+Em Pentest aparecem com pouca frequência.
+
+---
+
+# Sockets (`s`)
+
+Sockets são utilizados para comunicação entre processos.
+
+Exemplo:
+
+```text
+Programa A
+
+↓
+
+Socket
+
+↓
+
+Programa B
+```
+
+---
+
+## Como procurar?
+
+```bash
+find /run -type s
+```
+
+---
+
+## Quando utilizar?
+
+Principalmente durante:
+
+- Troubleshooting;
+- Administração Linux;
+- Forense.
+
+---
+
+# Dispositivos de bloco (`b`)
+
+Representam dispositivos que armazenam dados em blocos.
+
+Exemplo:
+
+```text
+HD
+
+SSD
+
+Pendrive
+```
+
+Normalmente aparecem em:
+
+```text
+/dev
+```
+
+---
+
+## Como procurar?
+
+```bash
+find /dev -type b
+```
+
+---
+
+## Exemplos
+
+```text
+/dev/sda
+
+/dev/sda1
+
+/dev/nvme0n1
+```
+
+---
+
+# Dispositivos de caractere (`c`)
+
+São dispositivos que trabalham caractere por caractere.
+
+Exemplos:
+
+```text
+Terminal
+
+Mouse
+
+Teclado
+```
+
+---
+
+## Como procurar?
+
+```bash
+find /dev -type c
+```
+
+---
+
+## Exemplos
+
+```text
+/dev/null
+
+/dev/random
+
+/dev/tty
+
+/dev/zero
+```
+
+---
+
+# Como descobrir o tipo de um arquivo?
+
+Além do `find`, podemos utilizar:
+
+```bash
+ls -l
+```
+
+Exemplo:
+
+```text
+-rw-r--r-- arquivo.txt
+
+drwxr-xr-x Downloads
+
+lrwxrwxrwx python -> python3
+```
+
+Observe o primeiro caractere.
+
+| Letra | Tipo |
+|--------|------|
+| `-` | Arquivo comum |
+| `d` | Diretório |
+| `l` | Link simbólico |
+| `p` | Pipe |
+| `s` | Socket |
+| `b` | Dispositivo de bloco |
+| `c` | Dispositivo de caractere |
+
+Esse é exatamente o mesmo conceito utilizado pela opção:
+
+```bash
+-type
+```
+
+---
+
+# Qual tipo é mais utilizado?
+
+No dia a dia.
+
+⭐⭐⭐⭐⭐
+
+```bash
+-type f
+```
+
+Arquivos.
+
+---
+
+⭐⭐⭐⭐⭐
+
+```bash
+-type d
+```
+
+Diretórios.
+
+---
+
+⭐⭐⭐☆☆
+
+```bash
+-type l
+```
+
+Links simbólicos.
+
+---
+
+⭐⭐☆☆☆
+
+```bash
+-type s
+```
+
+Sockets.
+
+---
+
+⭐☆☆☆☆
+
+```bash
+-type p
+```
+
+Pipes.
+
+---
+
+# Resumo
+
+| Tipo | Uso mais comum |
+|------|----------------|
+| `f` | Arquivos |
+| `d` | Diretórios |
+| `l` | Links simbólicos |
+| `p` | Pipes |
+| `s` | Sockets |
+| `b` | Dispositivos de bloco |
+| `c` | Dispositivos de caractere |
+
+Até este ponto você já consegue entender completamente comandos como:
+
+```bash
+find /var/www -type f
+```
+
+ou
+
+```bash
+find /home -type d
+```
+
+Na próxima parte aprenderemos uma das opções mais utilizadas do `find`:
+
+- `-name`
+- `-iname`
+- Wildcards (`*`, `?`, `[]`)
+
+Essas opções são responsáveis por filtrar arquivos utilizando seus nomes.
+

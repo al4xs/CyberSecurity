@@ -3335,3 +3335,613 @@ Na próxima parte estudaremos outro conceito extremamente importante:
 - Diferença entre pesquisar pelo nome e pesquisar pelo caminho
 - Casos reais de Pentest e CTF
 
+---
+
+# A opção `-path`
+
+Até agora aprendemos a localizar arquivos utilizando seus nomes.
+
+Exemplo:
+
+```bash
+find . -name "*.php"
+```
+
+Esse comando verifica apenas o **nome do arquivo**.
+
+Mas imagine o seguinte cenário.
+
+```text
+/var/www/html/index.php
+
+/var/www/admin/index.php
+
+/opt/site/index.php
+```
+
+Todos os arquivos possuem exatamente o mesmo nome:
+
+```text
+index.php
+```
+
+Como encontrar apenas os arquivos que estão dentro de:
+
+```text
+/var/www
+```
+
+Para isso utilizamos:
+
+```bash
+-path
+```
+
+---
+
+# O que é `-path`?
+
+A opção:
+
+```bash
+-path
+```
+
+permite filtrar utilizando o **caminho completo** (*pathname*).
+
+Enquanto:
+
+```bash
+-name
+```
+
+analisa apenas o nome do arquivo,
+
+```bash
+-path
+```
+
+analisa todo o caminho.
+
+---
+
+# Comparando
+
+Imagine esta estrutura.
+
+```text
+/
+
+├── home
+│   └── allan
+│       └── config.php
+│
+├── var
+│   └── www
+│       └── config.php
+│
+└── opt
+    └── backup
+        └── config.php
+```
+
+Agora execute:
+
+```bash
+find / -name "config.php"
+```
+
+Resultado:
+
+```text
+/home/allan/config.php
+
+/var/www/config.php
+
+/opt/backup/config.php
+```
+
+Observe que o `find` olhou apenas para o nome.
+
+---
+
+Agora:
+
+```bash
+find / -path "/var/www/*"
+```
+
+Resultado:
+
+```text
+/var/www
+
+/var/www/config.php
+```
+
+Agora o caminho completo foi utilizado como filtro.
+
+---
+
+# Como funciona?
+
+Imagine este arquivo.
+
+```text
+/var/www/html/admin/login.php
+```
+
+Quando utilizamos:
+
+```bash
+-path "/var/www/*"
+```
+
+o `find` faz aproximadamente esta pergunta.
+
+```text
+O caminho começa com:
+
+/var/www/
+
+?
+
+↓
+
+Sim
+
+↓
+
+Mostrar
+
+↓
+
+Não
+
+↓
+
+Ignorar
+```
+
+---
+
+# Exemplo simples
+
+```bash
+find / -path "/etc/*"
+```
+
+Resultado:
+
+```text
+/ etc/passwd
+
+/etc/group
+
+/etc/shadow
+
+/etc/hosts
+```
+
+Observe que tudo localizado dentro de:
+
+```text
+/etc
+```
+
+será retornado.
+
+---
+
+# Outro exemplo
+
+```bash
+find / -path "*/.git"
+```
+
+Resultado:
+
+```text
+/home/allan/projeto/.git
+
+/opt/api/.git
+
+/var/www/site/.git
+```
+
+Muito utilizado por desenvolvedores.
+
+---
+
+# Procurando diretórios Upload
+
+Imagine vários projetos.
+
+```text
+/var/www/site1/uploads
+
+/var/www/site2/uploads
+
+/home/allan/uploads
+```
+
+Agora:
+
+```bash
+find / -path "*/uploads"
+```
+
+Resultado:
+
+```text
+/var/www/site1/uploads
+
+/var/www/site2/uploads
+
+/home/allan/uploads
+```
+
+---
+
+# Procurando arquivos .env
+
+```bash
+find / -path "*/.env"
+```
+
+Resultado:
+
+```text
+/var/www/site/.env
+
+/home/allan/projeto/.env
+```
+
+Muito utilizado em Pentest.
+
+---
+
+# Casos de uso em Pentest
+
+Durante uma enumeração Linux, é comum procurar:
+
+Diretórios Git.
+
+```bash
+find / -path "*/.git"
+```
+
+---
+
+Arquivos `.env`.
+
+```bash
+find / -path "*/.env"
+```
+
+---
+
+Diretórios Upload.
+
+```bash
+find / -path "*/uploads"
+```
+
+---
+
+Diretórios Backup.
+
+```bash
+find / -path "*/backup*"
+```
+
+---
+
+# Diferença entre `-name` e `-path`
+
+Essa é uma dúvida muito comum.
+
+Imagine novamente.
+
+```text
+/var/www/index.php
+
+/home/allan/index.php
+
+/opt/site/index.php
+```
+
+---
+
+Com:
+
+```bash
+find / -name "index.php"
+```
+
+Resultado:
+
+```text
+Todos os arquivos chamados index.php.
+```
+
+O diretório não importa.
+
+---
+
+Agora:
+
+```bash
+find / -path "/var/www/*"
+```
+
+Resultado:
+
+```text
+Tudo que estiver dentro de /var/www.
+```
+
+Mesmo que os arquivos tenham nomes diferentes.
+
+---
+
+# Resumindo
+
+`-name`
+
+↓
+
+Analisa apenas:
+
+```text
+Nome do arquivo
+```
+
+---
+
+`-path`
+
+↓
+
+Analisa:
+
+```text
+Caminho completo
+```
+
+---
+
+# A opção `-ipath`
+
+Assim como:
+
+```bash
+-name
+```
+
+possui:
+
+```bash
+-iname
+```
+
+A opção:
+
+```bash
+-path
+```
+
+também possui sua versão que ignora letras maiúsculas e minúsculas.
+
+```bash
+-ipath
+```
+
+---
+
+# Como funciona?
+
+Imagine.
+
+```text
+/VAR/WWW
+
+/Var/WWW
+
+/var/www
+```
+
+Agora:
+
+```bash
+find / -ipath "/var/www/*"
+```
+
+Resultado:
+
+Todos esses caminhos serão encontrados.
+
+---
+
+# Comparando
+
+| Opção | Ignora maiúsculas? |
+|---------|-------------------|
+| `-path` | ❌ Não |
+| `-ipath` | ✅ Sim |
+
+---
+
+# Quando utilizar?
+
+Utilize:
+
+```bash
+-path
+```
+
+quando souber exatamente o caminho.
+
+---
+
+Utilize:
+
+```bash
+-ipath
+```
+
+quando não tiver certeza da capitalização.
+
+---
+
+# Casos de uso em Shell Script
+
+Procurar todos os diretórios Git.
+
+```bash
+find . -path "*/.git"
+```
+
+---
+
+Encontrar ambientes virtuais Python.
+
+```bash
+find . -path "*/venv"
+```
+
+---
+
+Localizar diretórios de cache.
+
+```bash
+find . -path "*/cache"
+```
+
+---
+
+# Casos de uso em Pentest
+
+Procurar diretórios administrativos.
+
+```bash
+find /var/www -path "*/admin"
+```
+
+---
+
+Procurar diretórios Upload.
+
+```bash
+find /var/www -path "*/upload*"
+```
+
+---
+
+Procurar diretórios Backup.
+
+```bash
+find / -path "*/backup*"
+```
+
+---
+
+Procurar arquivos `.env`.
+
+```bash
+find / -path "*/.env"
+```
+
+---
+
+# Erros comuns
+
+## Confundir `-name` com `-path`
+
+Lembre-se.
+
+```bash
+-name
+```
+
+↓
+
+Analisa somente o nome.
+
+---
+
+```bash
+-path
+```
+
+↓
+
+Analisa o caminho completo.
+
+---
+
+## Esquecer os Wildcards
+
+Errado:
+
+```bash
+find / -path "/var/www"
+```
+
+Isso encontrará apenas o próprio diretório:
+
+```text
+/var/www
+```
+
+Se o objetivo for pesquisar tudo dentro dele, normalmente utilizamos:
+
+```bash
+find / -path "/var/www/*"
+```
+
+---
+
+# Boas práticas
+
+Sempre pense:
+
+> Quero filtrar pelo nome?
+
+Use:
+
+```bash
+-name
+```
+
+---
+
+Quero filtrar pela localização?
+
+Use:
+
+```bash
+-path
+```
+
+---
+
+# Resumo
+
+| Opção | Filtra por |
+|---------|------------|
+| `-name` | Nome do arquivo |
+| `-iname` | Nome (ignora maiúsculas) |
+| `-path` | Caminho completo |
+| `-ipath` | Caminho (ignora maiúsculas) |
+
+Até aqui você já domina praticamente todas as opções relacionadas à busca por nomes e caminhos no `find`.
+
+Na próxima parte estudaremos uma das opções mais importantes para Linux, Shell Script e Pentest:
+
+- `-perm`
+- Como funcionam as permissões no `find`
+- Permissões simbólicas e numéricas
+- Casos reais de uso
+- Busca por arquivos SUID, SGID e Sticky Bit
+

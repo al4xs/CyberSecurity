@@ -6333,3 +6333,1108 @@ Na próxima parte estudaremos os três tempos principais dos arquivos:
 - `-newer`;
 - Diferença entre modificação do conteúdo, alteração dos metadados e acesso.
 
+---
+
+# Procurando arquivos por data e tempo
+
+O `find` também permite localizar arquivos com base em quando eles foram:
+
+- Modificados;
+- Acessados;
+- Alterados nos metadados;
+- Criados antes ou depois de outro arquivo;
+- Modificados há determinados dias ou minutos.
+
+Esses filtros são úteis em:
+
+- Administração Linux;
+- Limpeza de arquivos antigos;
+- Shell Script;
+- Investigação forense;
+- Análise de incidentes;
+- Pentest;
+- CTF;
+- Busca por arquivos criados ou modificados recentemente.
+
+---
+
+# Os tempos principais de um arquivo
+
+No Linux, um arquivo normalmente possui três tempos importantes:
+
+| Tempo | Nome | O que representa |
+|---|---|---|
+| `mtime` | Modification Time | Última alteração no conteúdo |
+| `ctime` | Change Time | Última alteração nos metadados ou conteúdo |
+| `atime` | Access Time | Último acesso ao conteúdo |
+
+Esses tempos costumam causar confusão porque `mtime` e `ctime` parecem representar a mesma coisa.
+
+Eles não são iguais.
+
+---
+
+# Visualizando os tempos
+
+O comando:
+
+```bash
+stat arquivo.txt
+```
+
+mostra informações detalhadas sobre um arquivo.
+
+Exemplo:
+
+```text
+Access: 2026-07-31 10:20:15.000000000
+Modify: 2026-07-30 18:45:10.000000000
+Change: 2026-07-30 19:02:44.000000000
+ Birth: 2026-07-20 14:10:00.000000000
+```
+
+Separando:
+
+```text
+Access → atime
+Modify → mtime
+Change → ctime
+Birth  → data de criação, quando suportada
+```
+
+> [!note]
+> Nem todos os sistemas de arquivos armazenam ou disponibilizam a data de criação da mesma forma.
+
+---
+
+# `mtime` — Modification Time
+
+O `mtime` representa a última vez em que o **conteúdo** do arquivo foi modificado.
+
+Exemplo:
+
+```bash
+echo "Nova linha" >> arquivo.txt
+```
+
+Esse comando altera o conteúdo do arquivo.
+
+Portanto, o `mtime` será atualizado.
+
+---
+
+## Operações que normalmente alteram o `mtime`
+
+- Editar o conteúdo;
+- Acrescentar dados;
+- Remover dados;
+- Sobrescrever o arquivo;
+- Salvar o arquivo em um editor.
+
+Exemplo:
+
+```bash
+printf "teste\n" > arquivo.txt
+```
+
+O conteúdo mudou.
+
+Logo:
+
+```text
+mtime atualizado
+```
+
+---
+
+# A opção `-mtime`
+
+A opção:
+
+```bash
+-mtime
+```
+
+procura arquivos com base no tempo de modificação do conteúdo, medido em períodos de 24 horas.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -mtime VALOR
+```
+
+---
+
+# Entendendo os valores
+
+As três formas principais são:
+
+```text
+-mtime N
+-mtime -N
+-mtime +N
+```
+
+Cada uma possui um significado diferente.
+
+---
+
+# `-mtime N`
+
+```bash
+find . -mtime 2
+```
+
+Procura arquivos modificados em uma faixa correspondente a aproximadamente dois períodos completos de 24 horas atrás.
+
+O `find` trabalha com intervalos arredondados de 24 horas.
+
+Por isso, não é correto interpretar simplesmente como:
+
+> Exatamente há dois dias no relógio.
+
+---
+
+# `-mtime -N`
+
+```bash
+find . -mtime -2
+```
+
+Procura arquivos modificados há menos de dois períodos completos de 24 horas.
+
+Na prática, é utilizado para localizar arquivos recentes.
+
+Exemplo:
+
+```bash
+find /var/www -type f -mtime -1
+```
+
+Tradução aproximada:
+
+> Procure arquivos modificados nas últimas 24 horas.
+
+---
+
+# `-mtime +N`
+
+```bash
+find . -mtime +30
+```
+
+Procura arquivos modificados há mais de 30 períodos completos de 24 horas.
+
+É muito utilizado para localizar arquivos antigos.
+
+Exemplo:
+
+```bash
+find /var/log -type f -mtime +30
+```
+
+Tradução:
+
+> Procure arquivos de log modificados há mais de 30 dias.
+
+---
+
+# Comparando
+
+| Expressão | Significado aproximado |
+|---|---|
+| `-mtime 7` | Modificados na faixa correspondente a 7 dias |
+| `-mtime -7` | Modificados há menos de 7 dias |
+| `-mtime +7` | Modificados há mais de 7 dias |
+
+---
+
+# Exemplo prático
+
+Imagine:
+
+```text
+arquivo1.txt → modificado hoje
+arquivo2.txt → modificado há 3 dias
+arquivo3.txt → modificado há 15 dias
+arquivo4.txt → modificado há 60 dias
+```
+
+Comando:
+
+```bash
+find . -type f -mtime -7
+```
+
+Resultado esperado:
+
+```text
+./arquivo1.txt
+./arquivo2.txt
+```
+
+---
+
+Agora:
+
+```bash
+find . -type f -mtime +30
+```
+
+Resultado:
+
+```text
+./arquivo4.txt
+```
+
+---
+
+# `ctime` — Change Time
+
+O `ctime` representa a última alteração no **estado do inode** ou nos metadados do arquivo.
+
+Pode ser atualizado quando ocorrem alterações como:
+
+- Permissões;
+- Proprietário;
+- Grupo;
+- Quantidade de links;
+- Conteúdo;
+- Outros metadados.
+
+> [!important]
+> `ctime` não significa Creation Time.
+>
+> Ele significa Change Time.
+
+Essa é uma confusão muito comum.
+
+---
+
+# Exemplo alterando o `ctime`
+
+```bash
+chmod 600 arquivo.txt
+```
+
+O conteúdo do arquivo não foi alterado.
+
+Porém, suas permissões mudaram.
+
+Resultado:
+
+```text
+mtime → pode permanecer igual
+ctime → atualizado
+```
+
+---
+
+Outro exemplo:
+
+```bash
+chown root:root arquivo.txt
+```
+
+O proprietário e o grupo foram alterados.
+
+Logo:
+
+```text
+ctime atualizado
+```
+
+---
+
+# A opção `-ctime`
+
+A opção:
+
+```bash
+-ctime
+```
+
+procura arquivos com base na última alteração dos metadados ou conteúdo.
+
+## Exemplos
+
+Arquivos alterados recentemente:
+
+```bash
+find . -type f -ctime -1
+```
+
+Arquivos cujo estado foi alterado há mais de 30 dias:
+
+```bash
+find . -type f -ctime +30
+```
+
+---
+
+# Quando `ctime` é útil?
+
+É especialmente útil em:
+
+- Auditoria;
+- Investigação forense;
+- Análise de permissões;
+- Identificação de mudanças recentes;
+- Busca por arquivos que tiveram proprietário ou grupo alterados;
+- Investigação de incidentes.
+
+Durante um CTF, pode ajudar a encontrar arquivos cujas permissões foram modificadas recentemente.
+
+---
+
+# `atime` — Access Time
+
+O `atime` representa a última vez em que o conteúdo do arquivo foi acessado.
+
+Exemplo:
+
+```bash
+cat arquivo.txt
+```
+
+Esse comando lê o conteúdo.
+
+Dependendo das opções de montagem do sistema de arquivos, o `atime` pode ser atualizado.
+
+---
+
+# A opção `-atime`
+
+A opção:
+
+```bash
+-atime
+```
+
+procura arquivos com base no último acesso.
+
+## Exemplos
+
+Arquivos acessados recentemente:
+
+```bash
+find . -type f -atime -1
+```
+
+Arquivos não acessados há mais de 90 dias:
+
+```bash
+find . -type f -atime +90
+```
+
+---
+
+# Atenção ao `atime`
+
+Muitos sistemas Linux utilizam opções como:
+
+```text
+relatime
+```
+
+ou:
+
+```text
+noatime
+```
+
+Essas opções reduzem ou desativam atualizações frequentes do `atime`.
+
+Isso melhora o desempenho do sistema.
+
+Consequentemente, o `atime` pode não ser atualizado em toda leitura.
+
+Para verificar as opções de montagem:
+
+```bash
+mount
+```
+
+ou:
+
+```bash
+findmnt
+```
+
+> [!note]
+> Não confie no `atime` como uma prova absoluta de que um arquivo foi ou não foi acessado.
+
+---
+
+# Comparando `mtime`, `ctime` e `atime`
+
+| Ação | `mtime` | `ctime` | `atime` |
+|---|:---:|:---:|:---:|
+| Ler o arquivo | Não | Não | Pode atualizar |
+| Alterar conteúdo | Sim | Sim | Não necessariamente |
+| Alterar permissões | Não | Sim | Não |
+| Alterar proprietário | Não | Sim | Não |
+| Alterar grupo | Não | Sim | Não |
+| Renomear arquivo | Geralmente não | Sim | Não |
+
+---
+
+# Exemplo completo
+
+Arquivo inicial:
+
+```text
+arquivo.txt
+```
+
+## Ler o arquivo
+
+```bash
+cat arquivo.txt
+```
+
+Possível resultado:
+
+```text
+atime atualizado
+mtime igual
+ctime igual
+```
+
+---
+
+## Alterar o conteúdo
+
+```bash
+echo "teste" >> arquivo.txt
+```
+
+Resultado:
+
+```text
+mtime atualizado
+ctime atualizado
+```
+
+---
+
+## Alterar permissões
+
+```bash
+chmod 600 arquivo.txt
+```
+
+Resultado:
+
+```text
+ctime atualizado
+mtime igual
+```
+
+---
+
+# Filtros em minutos
+
+Além das versões medidas em dias, o `find` possui versões medidas em minutos:
+
+| Opção | Tempo analisado |
+|---|---|
+| `-mmin` | Modificação do conteúdo em minutos |
+| `-cmin` | Alteração dos metadados em minutos |
+| `-amin` | Último acesso em minutos |
+
+Essas opções são úteis para buscas mais precisas.
+
+---
+
+# A opção `-mmin`
+
+Procura arquivos de acordo com o tempo de modificação, em minutos.
+
+## Modificados nos últimos 30 minutos
+
+```bash
+find . -type f -mmin -30
+```
+
+## Modificados há mais de 60 minutos
+
+```bash
+find . -type f -mmin +60
+```
+
+## Modificados na faixa de 10 minutos
+
+```bash
+find . -type f -mmin 10
+```
+
+---
+
+# A opção `-cmin`
+
+Procura arquivos cujos metadados ou conteúdo foram alterados recentemente.
+
+## Exemplo
+
+```bash
+find /etc -type f -cmin -60 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos em `/etc` cujo estado foi alterado nos últimos 60 minutos.
+
+Isso pode ajudar a identificar:
+
+- Permissões alteradas;
+- Proprietários alterados;
+- Configurações modificadas;
+- Arquivos substituídos.
+
+---
+
+# A opção `-amin`
+
+Procura arquivos pelo último acesso, medido em minutos.
+
+## Exemplo
+
+```bash
+find /home -type f -amin -15 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos acessados nos últimos 15 minutos.
+
+Novamente, o resultado depende de como o sistema de arquivos trata o `atime`.
+
+---
+
+# Dias versus minutos
+
+| Dias | Minutos |
+|---|---|
+| `-mtime` | `-mmin` |
+| `-ctime` | `-cmin` |
+| `-atime` | `-amin` |
+
+Use as opções em dias para buscas amplas.
+
+Use as opções em minutos para análises recentes e mais específicas.
+
+---
+
+# A opção `-daystart`
+
+Por padrão, `-mtime`, `-ctime` e `-atime` calculam o tempo com base no momento atual e em períodos completos de 24 horas.
+
+A opção:
+
+```bash
+-daystart
+```
+
+faz o cálculo começar no início do dia atual.
+
+## Exemplo
+
+```bash
+find . -daystart -mtime 0
+```
+
+Isso procura arquivos modificados desde o início do dia atual, de acordo com a forma como o `find` calcula os intervalos.
+
+> [!note]
+> A posição de `-daystart` pode afetar expressões de tempo que aparecem depois dela. Coloque-a antes dos testes de tempo relacionados.
+
+---
+
+# A opção `-newer`
+
+A opção:
+
+```bash
+-newer
+```
+
+compara a data de modificação de um arquivo com outro arquivo de referência.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -newer ARQUIVO_REFERENCIA
+```
+
+---
+
+# Exemplo
+
+```bash
+touch referencia.txt
+```
+
+Depois:
+
+```bash
+find . -type f -newer referencia.txt
+```
+
+O resultado mostrará arquivos modificados depois de:
+
+```text
+referencia.txt
+```
+
+---
+
+# Quando `-newer` é útil?
+
+É útil quando queremos responder:
+
+> Quais arquivos mudaram depois de determinado momento?
+
+Por exemplo, podemos criar um marcador antes de iniciar uma instalação:
+
+```bash
+touch antes-da-instalacao
+```
+
+Executar a instalação.
+
+Depois:
+
+```bash
+find /opt -type f -newer antes-da-instalacao 2>/dev/null
+```
+
+Isso ajuda a identificar arquivos modificados ou criados depois do marcador.
+
+---
+
+# Criando um arquivo de referência com data específica
+
+O comando `touch` pode criar um arquivo com uma data escolhida.
+
+Exemplo:
+
+```bash
+touch -d "2026-07-01 00:00:00" referencia
+```
+
+Depois:
+
+```bash
+find /var/log -type f -newer referencia
+```
+
+Isso procura arquivos modificados depois de 1º de julho de 2026.
+
+---
+
+# Intervalo entre duas datas
+
+Podemos usar dois arquivos de referência.
+
+Primeiro:
+
+```bash
+touch -d "2026-07-01" inicio
+touch -d "2026-07-15" fim
+```
+
+Depois:
+
+```bash
+find . -type f -newer inicio ! -newer fim
+```
+
+Tradução:
+
+> Procure arquivos modificados depois de `inicio`, mas não depois de `fim`.
+
+Esse tipo de busca é útil em:
+
+- Análise de incidentes;
+- Forense;
+- Auditoria;
+- Investigação de alterações.
+
+---
+
+# Variações de `-newer`
+
+Em implementações GNU do `find`, também podem existir comparações mais específicas usando:
+
+```bash
+-newerXY
+```
+
+Onde `X` e `Y` determinam quais tempos serão comparados.
+
+Exemplos possíveis:
+
+```text
+a → atime
+B → birth time, quando suportado
+c → ctime
+m → mtime
+t → data literal
+```
+
+Exemplo:
+
+```bash
+find . -newermt "2026-07-01"
+```
+
+Essa forma compara o `mtime` dos arquivos com uma data textual.
+
+---
+
+# `-newermt`
+
+A expressão:
+
+```bash
+-newermt
+```
+
+é muito útil no GNU `find`.
+
+Ela permite informar uma data diretamente, sem criar um arquivo de referência.
+
+## Exemplo
+
+```bash
+find . -type f -newermt "2026-07-01"
+```
+
+Tradução:
+
+> Procure arquivos modificados depois de 1º de julho de 2026.
+
+---
+
+## Arquivos modificados hoje
+
+```bash
+find . -type f -newermt "today"
+```
+
+---
+
+## Arquivos modificados nas últimas duas horas
+
+```bash
+find . -type f -newermt "2 hours ago"
+```
+
+---
+
+## Arquivos modificados entre duas datas
+
+```bash
+find . -type f \
+-newermt "2026-07-01" \
+! -newermt "2026-07-15"
+```
+
+> [!warning]
+> `-newermt` é comum no GNU `find`, mas não é uma opção portátil para todas as implementações Unix.
+
+---
+
+# Casos de uso em Administração Linux
+
+## Logs modificados nas últimas 24 horas
+
+```bash
+find /var/log -type f -mtime -1
+```
+
+---
+
+## Arquivos antigos há mais de 90 dias
+
+```bash
+find /tmp -type f -mtime +90
+```
+
+---
+
+## Configurações alteradas na última hora
+
+```bash
+find /etc -type f -cmin -60 2>/dev/null
+```
+
+---
+
+# Casos de uso em Shell Script
+
+## Remover arquivos temporários antigos
+
+Primeiro, teste apenas listando:
+
+```bash
+find /tmp/minha-aplicacao -type f -mtime +7
+```
+
+Depois de confirmar os resultados:
+
+```bash
+find /tmp/minha-aplicacao -type f -mtime +7 -delete
+```
+
+> [!warning]
+> Nunca utilize `-delete` antes de conferir cuidadosamente quais arquivos serão afetados.
+
+---
+
+## Listar arquivos recentes
+
+```bash
+arquivos=$(find ./projeto -type f -mmin -30)
+
+printf '%s\n' "$arquivos"
+```
+
+Para nomes contendo espaços ou quebras de linha, métodos baseados em `-print0` são mais seguros e serão estudados posteriormente.
+
+---
+
+# Casos de uso em Pentest e CTF
+
+## Encontrar arquivos modificados recentemente
+
+```bash
+find / -type f -mmin -60 2>/dev/null
+```
+
+Pode revelar:
+
+- Arquivos criados pelo desafio;
+- Scripts modificados recentemente;
+- Configurações recentes;
+- Backups;
+- Logs;
+- Arquivos temporários.
+
+---
+
+## Procurar alterações recentes em `/opt`
+
+```bash
+find /opt -type f -ctime -1 2>/dev/null
+```
+
+Isso pode ajudar a identificar programas ou scripts personalizados recentemente alterados.
+
+---
+
+## Arquivos Web modificados recentemente
+
+```bash
+find /var/www -type f -mtime -7 2>/dev/null
+```
+
+Pode revelar:
+
+- Uploads;
+- Web shells em laboratório;
+- Arquivos de configuração alterados;
+- Backups criados recentemente;
+- Código atualizado.
+
+---
+
+## Arquivos criados depois de um marcador
+
+Antes de executar uma ação no laboratório:
+
+```bash
+touch /tmp/marcador
+```
+
+Depois da ação:
+
+```bash
+find /tmp /var/tmp /dev/shm -type f -newer /tmp/marcador 2>/dev/null
+```
+
+Isso ajuda a identificar arquivos novos ou modificados depois daquele momento.
+
+---
+
+# Como interpretar resultados recentes
+
+Um arquivo recente não é automaticamente importante.
+
+Pergunte:
+
+1. Quem é o proprietário?
+2. Qual processo o criou?
+3. Onde ele está?
+4. Quais permissões possui?
+5. É um script?
+6. É uma configuração?
+7. É um log?
+8. É um arquivo temporário?
+9. É utilizado por um serviço?
+10. Pode ser modificado pelo usuário atual?
+
+Comandos úteis:
+
+```bash
+ls -la arquivo
+```
+
+```bash
+stat arquivo
+```
+
+```bash
+file arquivo
+```
+
+```bash
+lsof arquivo 2>/dev/null
+```
+
+---
+
+# Erros comuns
+
+## Confundir `ctime` com data de criação
+
+Errado:
+
+```text
+ctime = creation time
+```
+
+Correto:
+
+```text
+ctime = change time
+```
+
+Ele representa alterações no estado do arquivo, incluindo metadados.
+
+---
+
+## Interpretar `-mtime 1` como “nas últimas 24 horas”
+
+Para arquivos das últimas 24 horas, normalmente use:
+
+```bash
+-mtime -1
+```
+
+O valor sem sinal trabalha com uma faixa arredondada específica.
+
+---
+
+## Ignorar o arredondamento
+
+As opções em dias trabalham com períodos completos de 24 horas.
+
+Para maior precisão, utilize:
+
+```bash
+-mmin
+```
+
+ou:
+
+```bash
+-newermt
+```
+
+quando disponível.
+
+---
+
+## Confiar completamente no `atime`
+
+O `atime` pode ser reduzido ou desativado por opções de montagem.
+
+Sempre interprete esse dado com cuidado.
+
+---
+
+## Apagar arquivos sem testar
+
+Antes de:
+
+```bash
+find /tmp -type f -mtime +30 -delete
+```
+
+execute primeiro:
+
+```bash
+find /tmp -type f -mtime +30 -print
+```
+
+Confirme os resultados antes de remover qualquer coisa.
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Comando |
+|---|---|
+| Modificados nas últimas 24 horas | `find . -type f -mtime -1` |
+| Modificados há mais de 30 dias | `find . -type f -mtime +30` |
+| Modificados nos últimos 30 minutos | `find . -type f -mmin -30` |
+| Metadados alterados na última hora | `find . -type f -cmin -60` |
+| Acessados há mais de 90 dias | `find . -type f -atime +90` |
+| Mais novos que um arquivo | `find . -type f -newer referencia` |
+| Mais novos que uma data | `find . -type f -newermt "2026-07-01"` |
+| Modificados hoje | `find . -type f -newermt "today"` |
+| Entre duas datas | `find . -newermt "2026-07-01" ! -newermt "2026-07-15"` |
+
+---
+
+# Resumo
+
+Os filtros de tempo principais são:
+
+```text
+-mtime → alteração do conteúdo em dias
+-ctime → alteração do estado ou metadados em dias
+-atime → último acesso em dias
+
+-mmin  → alteração do conteúdo em minutos
+-cmin  → alteração do estado em minutos
+-amin  → último acesso em minutos
+```
+
+A opção:
+
+```bash
+-newer
+```
+
+compara arquivos com um arquivo de referência.
+
+Em GNU `find`, opções como:
+
+```bash
+-newermt
+```
+
+permitem comparar diretamente com datas textuais.
+
+Na próxima parte estudaremos:
+
+- `-size`;
+- Unidades de tamanho;
+- Arquivos maiores e menores que determinado valor;
+- `-empty`;
+- `-links`;
+- Como procurar arquivos grandes, vazios ou com múltiplos hard links.
+

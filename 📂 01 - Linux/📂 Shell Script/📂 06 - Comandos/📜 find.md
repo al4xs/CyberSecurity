@@ -5475,3 +5475,861 @@ Na próxima parte estudaremos:
 - `-nogroup`;
 - Como localizar arquivos por proprietário e grupo.
 
+---
+
+# Procurando por proprietário e grupo
+
+Além de procurar arquivos por nome, tipo ou permissões, o `find` também pode filtrar os resultados com base em:
+
+- Proprietário;
+- Grupo;
+- UID;
+- GID;
+- Arquivos sem usuário válido;
+- Arquivos sem grupo válido.
+
+Essas buscas são úteis em:
+
+- Administração Linux;
+- Auditoria de permissões;
+- Investigação de arquivos abandonados;
+- Pentest;
+- CTF;
+- Linux Post Exploitation.
+
+---
+
+# Proprietário de um arquivo
+
+Todo arquivo no Linux possui um proprietário.
+
+Para visualizar:
+
+```bash
+ls -l arquivo.txt
+```
+
+Exemplo:
+
+```text
+-rw-r--r-- 1 allan desenvolvedores 1200 jul 31 10:30 arquivo.txt
+```
+
+Separando:
+
+```text
+allan            → proprietário
+desenvolvedores  → grupo
+```
+
+O proprietário geralmente é o usuário que criou o arquivo, embora isso possa ser alterado com comandos como:
+
+```bash
+chown
+```
+
+---
+
+# A opção `-user`
+
+A opção:
+
+```bash
+-user
+```
+
+procura arquivos pertencentes a um determinado usuário.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -user USUARIO
+```
+
+## Exemplo
+
+```bash
+find /home -user allan
+```
+
+Tradução:
+
+> Procure dentro de `/home` todos os objetos pertencentes ao usuário `allan`.
+
+Possível saída:
+
+```text
+/home/allan
+/home/allan/documento.txt
+/home/allan/script.sh
+/home/allan/.bashrc
+```
+
+---
+
+# Procurar apenas arquivos de um usuário
+
+```bash
+find /home -type f -user allan
+```
+
+Agora o `find` retorna apenas arquivos comuns pertencentes a `allan`.
+
+---
+
+# Procurar diretórios de um usuário
+
+```bash
+find /home -type d -user allan
+```
+
+---
+
+# Procurar arquivos pertencentes ao root
+
+```bash
+find / -type f -user root 2>/dev/null
+```
+
+Esse comando pode retornar milhares de arquivos.
+
+Por isso, normalmente combinamos com outros filtros.
+
+Exemplo:
+
+```bash
+find /usr/local/bin -type f -user root 2>/dev/null
+```
+
+---
+
+# Uso em Pentest
+
+Durante uma enumeração, pode ser útil procurar arquivos que:
+
+- Pertençam ao `root`;
+- Estejam em diretórios personalizados;
+- Possam ser executados;
+- Possam ser modificados pelo usuário atual.
+
+Exemplo:
+
+```bash
+find /opt -type f -user root 2>/dev/null
+```
+
+Perguntas:
+
+- O arquivo pertence ao root?
+- É um script?
+- É executado automaticamente?
+- Posso modificá-lo?
+- Ele chama outros comandos?
+
+---
+
+# Combinar `-user` com `-writable`
+
+```bash
+find / -type f -user root -writable 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns pertencentes ao root que o usuário atual consegue modificar.
+
+Esse resultado merece investigação porque pode indicar:
+
+- Script executado por root;
+- Configuração insegura;
+- Arquivo de serviço;
+- Arquivo de backup;
+- Programa personalizado.
+
+> [!important]
+> Um arquivo pertencer ao root e ser gravável não garante escalação de privilégios. É necessário descobrir como ele é utilizado.
+
+---
+
+# A opção `-group`
+
+A opção:
+
+```bash
+-group
+```
+
+procura arquivos pertencentes a um grupo específico.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -group GRUPO
+```
+
+## Exemplo
+
+```bash
+find /var/www -group www-data
+```
+
+Tradução:
+
+> Procure dentro de `/var/www` objetos cujo grupo seja `www-data`.
+
+---
+
+# Procurar arquivos de um grupo
+
+```bash
+find /var/www -type f -group www-data
+```
+
+---
+
+# Procurar diretórios de um grupo
+
+```bash
+find /var/www -type d -group www-data
+```
+
+---
+
+# Uso em Pentest
+
+Grupos podem conceder acesso a recursos específicos.
+
+Exemplos de grupos relevantes:
+
+```text
+docker
+lxd
+adm
+disk
+shadow
+www-data
+backup
+developers
+```
+
+Exemplo:
+
+```bash
+find / -group developers 2>/dev/null
+```
+
+Isso pode revelar arquivos compartilhados entre membros daquele grupo.
+
+---
+
+# Combinar proprietário e grupo
+
+```bash
+find /var/www -type f -user www-data -group www-data
+```
+
+Tradução:
+
+> Procure arquivos comuns pertencentes ao usuário `www-data` e ao grupo `www-data`.
+
+Como as expressões estão lado a lado, o `find` aplica um `AND` implícito.
+
+Internamente:
+
+```text
+-type f
+AND
+-user www-data
+AND
+-group www-data
+```
+
+---
+
+# UID e GID
+
+Além dos nomes dos usuários e grupos, o Linux utiliza identificadores numéricos.
+
+## UID
+
+```text
+User ID
+```
+
+Identifica um usuário.
+
+## GID
+
+```text
+Group ID
+```
+
+Identifica um grupo.
+
+Para visualizar:
+
+```bash
+id
+```
+
+Exemplo:
+
+```text
+uid=1000(allan) gid=1000(allan) groups=1000(allan),27(sudo)
+```
+
+---
+
+# A opção `-uid`
+
+A opção:
+
+```bash
+-uid
+```
+
+procura arquivos pelo UID numérico.
+
+## Exemplo
+
+```bash
+find /home -uid 1000
+```
+
+Isso encontra objetos pertencentes ao usuário cujo UID é `1000`.
+
+---
+
+# Quando utilizar `-uid`?
+
+É útil quando:
+
+- O nome do usuário não aparece;
+- O arquivo pertence a um UID sem conta correspondente;
+- Você está analisando sistemas de arquivos copiados;
+- Está investigando containers;
+- Está analisando um backup de outro sistema.
+
+---
+
+# A opção `-gid`
+
+A opção:
+
+```bash
+-gid
+```
+
+procura arquivos pelo GID numérico.
+
+## Exemplo
+
+```bash
+find /var/www -gid 33
+```
+
+Em algumas distribuições, o grupo `www-data` pode utilizar o GID `33`.
+
+> [!note]
+> O valor numérico depende do sistema. Sempre confirme com `id`, `getent passwd` ou `getent group`.
+
+---
+
+# Descobrir o UID de um usuário
+
+```bash
+id -u allan
+```
+
+Saída:
+
+```text
+1000
+```
+
+---
+
+# Descobrir o GID principal
+
+```bash
+id -g allan
+```
+
+Saída:
+
+```text
+1000
+```
+
+---
+
+# Consultar usuários e grupos
+
+## Usuários
+
+```bash
+getent passwd
+```
+
+Usuário específico:
+
+```bash
+getent passwd allan
+```
+
+## Grupos
+
+```bash
+getent group
+```
+
+Grupo específico:
+
+```bash
+getent group developers
+```
+
+---
+
+# A opção `-nouser`
+
+A opção:
+
+```bash
+-nouser
+```
+
+encontra arquivos cujo UID não corresponde a nenhum usuário atualmente conhecido pelo sistema.
+
+## Exemplo
+
+```bash
+find / -nouser 2>/dev/null
+```
+
+---
+
+# Por que isso acontece?
+
+Um arquivo pode ter sido criado por um usuário que depois foi removido.
+
+Exemplo:
+
+```text
+Arquivo criado pelo UID 1002
+        ↓
+Usuário removido
+        ↓
+Arquivo continua existindo
+        ↓
+UID 1002 não possui nome associado
+```
+
+Nesse caso, `ls -l` pode mostrar um número no lugar do nome:
+
+```text
+-rw-r--r-- 1 1002 1002 500 jul 31 arquivo.txt
+```
+
+---
+
+# Quando `-nouser` é útil?
+
+Em:
+
+- Auditorias;
+- Migrações;
+- Backups restaurados;
+- Containers;
+- Sistemas antigos;
+- Investigação forense;
+- Limpeza administrativa.
+
+Durante um Pentest, arquivos sem proprietário válido podem indicar:
+
+- Aplicações removidas incorretamente;
+- Dados antigos;
+- Backups esquecidos;
+- Scripts abandonados;
+- Configurações históricas.
+
+---
+
+# A opção `-nogroup`
+
+A opção:
+
+```bash
+-nogroup
+```
+
+encontra arquivos cujo GID não corresponde a nenhum grupo conhecido.
+
+## Exemplo
+
+```bash
+find / -nogroup 2>/dev/null
+```
+
+---
+
+# Procurar arquivos sem usuário ou grupo
+
+```bash
+find / \( -nouser -o -nogroup \) 2>/dev/null
+```
+
+Tradução:
+
+> Procure objetos sem usuário válido ou sem grupo válido.
+
+Os parênteses serão explicados em detalhes na parte de operadores.
+
+---
+
+# Procurar apenas arquivos comuns sem proprietário válido
+
+```bash
+find / -type f -nouser 2>/dev/null
+```
+
+---
+
+# Procurar somente em diretórios importantes
+
+Em vez de pesquisar todo o sistema:
+
+```bash
+find / -nouser 2>/dev/null
+```
+
+pode ser melhor começar por:
+
+```bash
+find /home -nouser 2>/dev/null
+```
+
+```bash
+find /opt -nouser 2>/dev/null
+```
+
+```bash
+find /var/www -nouser 2>/dev/null
+```
+
+```bash
+find /usr/local -nouser 2>/dev/null
+```
+
+Isso reduz ruído e acelera a análise.
+
+---
+
+# Arquivos pertencentes a outro usuário
+
+Durante um CTF, pode ser útil procurar arquivos pertencentes a um usuário específico.
+
+Exemplo:
+
+```bash
+find / -type f -user john 2>/dev/null
+```
+
+Possíveis descobertas:
+
+```text
+/home/john/.ssh/id_rsa
+/var/backups/john.zip
+/opt/scripts/john-backup.sh
+```
+
+Nem todos serão legíveis, mas os caminhos já podem revelar informações úteis.
+
+---
+
+# Arquivos do root em diretórios personalizados
+
+```bash
+find /opt /usr/local/bin -type f -user root 2>/dev/null
+```
+
+Esse comando inicia a busca em dois locais:
+
+```text
+/opt
+/usr/local/bin
+```
+
+e procura arquivos pertencentes ao root.
+
+Esses diretórios são interessantes porque geralmente contêm:
+
+- Aplicações personalizadas;
+- Scripts administrativos;
+- Ferramentas instaladas manualmente;
+- Binários não pertencentes ao sistema-base.
+
+---
+
+# Múltiplos diretórios iniciais
+
+O `find` aceita mais de um diretório inicial.
+
+Exemplo:
+
+```bash
+find /opt /usr/local/bin /var/backups -type f -user root 2>/dev/null
+```
+
+Ele pesquisará nos três locais.
+
+Essa forma pode ser melhor do que executar três comandos separados.
+
+---
+
+# Procurar arquivos do root graváveis pelo grupo
+
+```bash
+find / -type f -user root -perm -020 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns pertencentes ao root com escrita habilitada para o grupo.
+
+Depois, verifique se o usuário atual pertence a esse grupo:
+
+```bash
+id
+```
+
+---
+
+# Procurar arquivos do root graváveis por outros
+
+```bash
+find / -type f -user root -perm -002 2>/dev/null
+```
+
+Esses resultados merecem prioridade, especialmente quando forem:
+
+- Scripts;
+- Configurações;
+- Arquivos executados por serviços;
+- Arquivos localizados em `/opt`;
+- Arquivos localizados em `/usr/local/bin`.
+
+---
+
+# Procurar arquivos pertencentes ao grupo atual
+
+Primeiro descubra o grupo:
+
+```bash
+id -gn
+```
+
+Exemplo de saída:
+
+```text
+allan
+```
+
+Depois:
+
+```bash
+find / -group allan 2>/dev/null
+```
+
+Em Shell Script:
+
+```bash
+find / -group "$(id -gn)" 2>/dev/null
+```
+
+---
+
+# Exemplo em Shell Script
+
+```bash
+#!/usr/bin/env bash
+
+usuario_atual=$(id -un)
+grupo_atual=$(id -gn)
+
+printf 'Arquivos pertencentes ao usuário %s:\n' "$usuario_atual"
+find "$HOME" -type f -user "$usuario_atual"
+
+printf '\nArquivos pertencentes ao grupo %s:\n' "$grupo_atual"
+find "$HOME" -type f -group "$grupo_atual"
+```
+
+---
+
+# Como interpretar os resultados
+
+Ao encontrar um arquivo, não analise apenas o proprietário.
+
+Pergunte:
+
+1. Onde o arquivo está?
+2. Qual é seu grupo?
+3. Quais são suas permissões?
+4. É legível?
+5. É gravável?
+6. É executável?
+7. Quem utiliza esse arquivo?
+8. É chamado por algum serviço?
+9. É chamado por um Cron Job?
+10. É um arquivo personalizado?
+
+Use:
+
+```bash
+ls -la /caminho/do/arquivo
+```
+
+```bash
+stat /caminho/do/arquivo
+```
+
+```bash
+file /caminho/do/arquivo
+```
+
+---
+
+# Diferença entre `-user` e `-uid`
+
+| Opção | Pesquisa por |
+|---|---|
+| `-user allan` | Nome do usuário |
+| `-uid 1000` | Identificador numérico |
+
+---
+
+# Diferença entre `-group` e `-gid`
+
+| Opção | Pesquisa por |
+|---|---|
+| `-group developers` | Nome do grupo |
+| `-gid 1001` | Identificador numérico |
+
+---
+
+# Erros comuns
+
+## Presumir que o UID `1000` sempre é o mesmo usuário
+
+O UID `1000` frequentemente pertence ao primeiro usuário comum, mas isso não é uma regra universal.
+
+Confirme:
+
+```bash
+getent passwd 1000
+```
+
+---
+
+## Achar que arquivo do root é automaticamente perigoso
+
+Grande parte do sistema pertence ao root.
+
+O que merece atenção é a combinação:
+
+```text
+pertence ao root
++
+usuário consegue modificar
++
+é utilizado por processo privilegiado
+```
+
+---
+
+## Pesquisar todo o sistema sem necessidade
+
+Este comando:
+
+```bash
+find / -user root 2>/dev/null
+```
+
+gera muitos resultados.
+
+Prefira combinar critérios:
+
+```bash
+find /opt -type f -user root -writable 2>/dev/null
+```
+
+---
+
+## Ignorar grupos
+
+Às vezes o usuário não é proprietário, mas pertence ao grupo do arquivo.
+
+Verifique:
+
+```bash
+id
+```
+
+e compare com:
+
+```bash
+ls -l arquivo
+```
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Comando |
+|---|---|
+| Arquivos de um usuário | `find /home -type f -user allan` |
+| Arquivos de um grupo | `find /var/www -type f -group www-data` |
+| Buscar pelo UID | `find /home -uid 1000` |
+| Buscar pelo GID | `find /var/www -gid 33` |
+| Sem usuário válido | `find / -nouser 2>/dev/null` |
+| Sem grupo válido | `find / -nogroup 2>/dev/null` |
+| Arquivos do root graváveis | `find / -type f -user root -writable 2>/dev/null` |
+| Root e escrita para outros | `find / -type f -user root -perm -002 2>/dev/null` |
+| Root em diretórios personalizados | `find /opt /usr/local/bin -type f -user root 2>/dev/null` |
+
+---
+
+# Resumo
+
+As opções relacionadas à propriedade são:
+
+```text
+-user     → nome do proprietário
+-group    → nome do grupo
+-uid      → UID numérico
+-gid      → GID numérico
+-nouser   → UID sem usuário correspondente
+-nogroup  → GID sem grupo correspondente
+```
+
+Durante uma enumeração, não basta encontrar um arquivo pertencente ao root.
+
+O cenário realmente interessante costuma ser:
+
+```text
+arquivo privilegiado
++
+permissão inadequada
++
+uso por processo ou tarefa privilegiada
+```
+
+Na próxima parte estudaremos os três tempos principais dos arquivos:
+
+- `mtime`;
+- `ctime`;
+- `atime`;
+- `mmin`, `cmin` e `amin`;
+- `-newer`;
+- Diferença entre modificação do conteúdo, alteração dos metadados e acesso.
+

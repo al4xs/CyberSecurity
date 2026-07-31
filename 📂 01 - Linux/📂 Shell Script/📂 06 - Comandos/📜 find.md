@@ -9813,3 +9813,1613 @@ Na próxima parte estudaremos as ações executadas após um resultado ser encon
 - `-delete`;
 - `-quit`.
 
+---
+
+# Ações do comando `find`
+
+Até agora utilizamos o `find` principalmente para localizar objetos.
+
+Exemplo:
+
+```bash
+find /home -type f -name "*.txt"
+```
+
+Nesse caso, o `find`:
+
+1. Percorre `/home`;
+2. Verifica quais objetos são arquivos;
+3. Verifica quais nomes terminam em `.txt`;
+4. Mostra os resultados.
+
+Porém, o `find` não serve apenas para pesquisar.
+
+Ele também pode executar ações sobre cada resultado encontrado.
+
+Exemplos:
+
+- Mostrar o caminho;
+- Exibir informações detalhadas;
+- Executar outro comando;
+- Remover arquivos;
+- Parar após o primeiro resultado;
+- Produzir uma saída formatada;
+- Enviar nomes com segurança para outros comandos.
+
+As principais ações são:
+
+```text
+-print
+-print0
+-printf
+-ls
+-exec
+-execdir
+-ok
+-okdir
+-delete
+-quit
+```
+
+---
+
+# Ação padrão do `find`
+
+Quando nenhuma ação é informada, o `find` normalmente utiliza:
+
+```bash
+-print
+```
+
+automaticamente.
+
+Estes comandos são equivalentes:
+
+```bash
+find . -type f -name "*.txt"
+```
+
+```bash
+find . -type f -name "*.txt" -print
+```
+
+Ambos mostram o caminho de cada resultado encontrado.
+
+---
+
+# A ação `-print`
+
+A ação:
+
+```bash
+-print
+```
+
+exibe o caminho de cada objeto que corresponde às condições da busca.
+
+## Sintaxe
+
+```bash
+find DIRETORIO EXPRESSÕES -print
+```
+
+## Exemplo
+
+```bash
+find /home -type f -name "*.txt" -print
+```
+
+Possível saída:
+
+```text
+/home/allan/anotacoes.txt
+/home/allan/Documentos/lista.txt
+/home/maria/lembretes.txt
+```
+
+---
+
+# Quando usar `-print` explicitamente?
+
+Embora seja a ação padrão, escrevê-la pode deixar comandos complexos mais claros.
+
+Isso é especialmente útil quando usamos:
+
+- `-prune`;
+- `-o`;
+- Parênteses;
+- Outras ações;
+- Vários grupos de expressões.
+
+Exemplo:
+
+```bash
+find . \
+-path "*/.git" -prune \
+-o -type f -name "*.py" -print
+```
+
+Aqui, o `-print` deixa claro que apenas os arquivos Python fora de `.git` devem ser mostrados.
+
+---
+
+# O caractere de separação usado por `-print`
+
+Normalmente, cada resultado termina com uma quebra de linha.
+
+Representação:
+
+```text
+arquivo1
+arquivo2
+arquivo3
+```
+
+Isso funciona bem na maioria dos casos.
+
+Porém, nomes de arquivos podem conter:
+
+- Espaços;
+- Tabulações;
+- Aspas;
+- Quebras de linha;
+- Caracteres especiais.
+
+Por isso, `-print` nem sempre é a forma mais segura de transmitir resultados para outro programa.
+
+---
+
+# O problema dos nomes com espaços
+
+Imagine estes arquivos:
+
+```text
+relatorio final.txt
+minhas notas.txt
+arquivo.txt
+```
+
+Este comando é perigoso:
+
+```bash
+for arquivo in $(find . -type f -name "*.txt"); do
+    echo "$arquivo"
+done
+```
+
+A substituição de comandos separa a saída usando espaços e quebras de linha.
+
+O arquivo:
+
+```text
+relatorio final.txt
+```
+
+pode ser interpretado como dois itens:
+
+```text
+./relatorio
+final.txt
+```
+
+Esse comportamento produz erros.
+
+---
+
+# A ação `-print0`
+
+A ação:
+
+```bash
+-print0
+```
+
+exibe cada caminho terminado por um caractere nulo:
+
+```text
+NUL
+```
+
+em vez de uma quebra de linha.
+
+## Sintaxe
+
+```bash
+find DIRETORIO EXPRESSÕES -print0
+```
+
+O caractere nulo não pode aparecer dentro de um nome de arquivo Unix.
+
+Por isso, ele funciona como um separador seguro.
+
+---
+
+# Exemplo com `xargs`
+
+```bash
+find . -type f -name "*.txt" -print0 |
+xargs -0 ls -l
+```
+
+Separando:
+
+| Parte | Função |
+|---|---|
+| `find ... -print0` | Gera nomes separados por NUL |
+| `|` | Envia a saída para outro comando |
+| `xargs -0` | Lê itens separados por NUL |
+| `ls -l` | Exibe detalhes dos arquivos |
+
+Essa combinação trata corretamente nomes contendo espaços e quebras de linha.
+
+---
+
+# Exemplo seguro em Shell Script
+
+```bash
+find . -type f -name "*.txt" -print0 |
+while IFS= read -r -d '' arquivo; do
+    printf 'Arquivo: %s\n' "$arquivo"
+done
+```
+
+## Explicação
+
+| Elemento | Função |
+|---|---|
+| `IFS=` | Evita remover espaços no início ou no fim |
+| `read -r` | Não interpreta barras invertidas |
+| `-d ''` | Usa o caractere NUL como delimitador |
+| `"$arquivo"` | Preserva o nome exatamente como foi encontrado |
+
+---
+
+# `-print` versus `-print0`
+
+| Ação | Separador | Uso |
+|---|---|---|
+| `-print` | Quebra de linha | Visualização comum |
+| `-print0` | Caractere NUL | Integração segura com outros comandos |
+
+Use:
+
+```bash
+-print
+```
+
+para ler os resultados no terminal.
+
+Use:
+
+```bash
+-print0
+```
+
+quando os caminhos forem processados automaticamente.
+
+---
+
+# A ação `-ls`
+
+A ação:
+
+```bash
+-ls
+```
+
+mostra informações detalhadas de cada resultado.
+
+## Exemplo
+
+```bash
+find /home -type f -name "*.txt" -ls
+```
+
+Possível saída:
+
+```text
+123456 4 -rw-r--r-- 1 allan allan 842 Jul 31 10:20 /home/allan/notas.txt
+```
+
+A saída pode apresentar:
+
+- Número do inode;
+- Quantidade de blocos;
+- Permissões;
+- Quantidade de hard links;
+- Proprietário;
+- Grupo;
+- Tamanho;
+- Data;
+- Caminho.
+
+---
+
+# Quando usar `-ls`?
+
+É útil quando você deseja analisar rapidamente:
+
+- Permissões;
+- Proprietário;
+- Grupo;
+- Tamanho;
+- Inode;
+- Data de modificação.
+
+Exemplo em enumeração:
+
+```bash
+find /opt -maxdepth 3 -type f -ls 2>/dev/null
+```
+
+Isso permite analisar os arquivos de `/opt` sem executar um `ls` separado para cada caminho.
+
+---
+
+# A ação `-printf`
+
+A ação:
+
+```bash
+-printf
+```
+
+permite criar uma saída personalizada.
+
+Ela é semelhante ao comando `printf`, mas utiliza diretivas específicas do GNU `find`.
+
+> [!note]
+> `-printf` é uma extensão comum do GNU `find` e pode não existir em todas as implementações Unix.
+
+---
+
+# Sintaxe
+
+```bash
+find DIRETORIO EXPRESSÕES -printf "FORMATO"
+```
+
+## Exemplo simples
+
+```bash
+find . -type f -printf "%p\n"
+```
+
+A diretiva:
+
+```text
+%p
+```
+
+representa o caminho encontrado.
+
+O `\n` cria uma quebra de linha.
+
+---
+
+# Diretivas comuns de `-printf`
+
+| Diretiva | Informação |
+|---|---|
+| `%p` | Caminho encontrado |
+| `%f` | Nome do arquivo sem os diretórios anteriores |
+| `%h` | Diretório que contém o arquivo |
+| `%s` | Tamanho em bytes |
+| `%m` | Permissões em formato octal |
+| `%M` | Permissões em formato simbólico |
+| `%u` | Nome do proprietário |
+| `%U` | UID numérico |
+| `%g` | Nome do grupo |
+| `%G` | GID numérico |
+| `%i` | Número do inode |
+| `%n` | Quantidade de hard links |
+| `%y` | Tipo do objeto |
+| `%T+` | Data e hora da última modificação |
+| `\n` | Nova linha |
+| `\t` | Tabulação |
+| `\0` | Caractere nulo |
+
+---
+
+# Exibir nome e tamanho
+
+```bash
+find . -type f -printf "%p %s bytes\n"
+```
+
+Possível saída:
+
+```text
+./notas.txt 842 bytes
+./backup.zip 10485760 bytes
+```
+
+---
+
+# Exibir permissões e proprietário
+
+```bash
+find /opt -type f -printf "%M %u:%g %p\n"
+```
+
+Possível saída:
+
+```text
+-rwxr-xr-x root:root /opt/backup.sh
+-rw-r----- root:developers /opt/config.ini
+```
+
+---
+
+# Exibir permissões em octal
+
+```bash
+find . -type f -printf "%m %p\n"
+```
+
+Possível saída:
+
+```text
+644 ./notas.txt
+755 ./script.sh
+600 ./senha.txt
+```
+
+---
+
+# Exibir tipo do objeto
+
+```bash
+find . -printf "%y %p\n"
+```
+
+Possível saída:
+
+```text
+d .
+f ./notas.txt
+d ./scripts
+f ./scripts/backup.sh
+l ./python
+```
+
+Tipos comuns:
+
+```text
+f → arquivo comum
+d → diretório
+l → link simbólico
+s → socket
+p → pipe
+b → dispositivo de bloco
+c → dispositivo de caractere
+```
+
+---
+
+# Exibir data de modificação
+
+```bash
+find . -type f -printf "%T+ %p\n"
+```
+
+Possível saída:
+
+```text
+2026-07-31+10:30:20.1234567890 ./notas.txt
+2026-07-30+17:20:05.0000000000 ./backup.zip
+```
+
+---
+
+# Saída em formato de tabela
+
+```bash
+find /opt -type f \
+-printf "%-10m %-12u %-12g %10s %p\n"
+```
+
+Esse formato pode alinhar campos, dependendo da implementação.
+
+Exemplo conceitual:
+
+```text
+755        root         root              812 /opt/backup.sh
+640        root         developers       2048 /opt/config.ini
+```
+
+---
+
+# `-printf` não adiciona nova linha automaticamente
+
+Este comando:
+
+```bash
+find . -type f -printf "%p"
+```
+
+pode produzir:
+
+```text
+./a.txt./b.txt./c.txt
+```
+
+Por isso, normalmente adicionamos:
+
+```text
+\n
+```
+
+Exemplo correto:
+
+```bash
+find . -type f -printf "%p\n"
+```
+
+---
+
+# A ação `-exec`
+
+A ação:
+
+```bash
+-exec
+```
+
+executa um comando utilizando os resultados encontrados.
+
+## Sintaxe geral
+
+```bash
+find DIRETORIO EXPRESSÕES -exec COMANDO {} \;
+```
+
+Exemplo:
+
+```bash
+find . -type f -name "*.txt" -exec ls -l {} \;
+```
+
+---
+
+# Entendendo cada parte
+
+```text
+-exec ls -l {} \;
+  │    │   │  │
+  │    │   │  └── final da ação
+  │    │   └──── substituído pelo caminho encontrado
+  │    └──────── comando e opções
+  └───────────── inicia a execução
+```
+
+---
+
+# O marcador `{}`
+
+O texto:
+
+```text
+{}
+```
+
+é substituído pelo caminho do resultado atual.
+
+Imagine que o `find` encontre:
+
+```text
+./a.txt
+./b.txt
+```
+
+O comando:
+
+```bash
+find . -type f -name "*.txt" -exec ls -l {} \;
+```
+
+funciona aproximadamente como:
+
+```bash
+ls -l ./a.txt
+ls -l ./b.txt
+```
+
+---
+
+# Por que usamos `\;`?
+
+O ponto e vírgula encerra a ação `-exec`.
+
+Porém, o shell também interpreta:
+
+```text
+;
+```
+
+como separador de comandos.
+
+Para impedir que o shell o consuma antes de o `find` recebê-lo, escapamos:
+
+```bash
+\;
+```
+
+Também é possível usar aspas:
+
+```bash
+-exec comando {} ';'
+```
+
+A forma com barra invertida é mais comum:
+
+```bash
+-exec comando {} \;
+```
+
+---
+
+# Exemplo com `file`
+
+```bash
+find /opt -type f -exec file {} \;
+```
+
+Possível saída:
+
+```text
+/opt/backup: ELF 64-bit LSB executable
+/opt/config.ini: ASCII text
+/opt/script.sh: Bourne-Again shell script
+```
+
+---
+
+# Exemplo com `chmod`
+
+```bash
+find ./scripts -type f -name "*.sh" -exec chmod u+x {} \;
+```
+
+Tradução:
+
+> Para cada arquivo `.sh` encontrado, adicione permissão de execução ao proprietário.
+
+> [!warning]
+> Comandos que alteram arquivos devem ser testados primeiro com uma ação segura, como `-print`.
+
+---
+
+# Exemplo com `grep`
+
+```bash
+find /var/www -type f -name "*.php" \
+-exec grep -nH "password" {} \;
+```
+
+Isso pesquisa a palavra `password` dentro de cada arquivo PHP.
+
+Entretanto, o próprio `grep` suporta pesquisa recursiva, então em alguns casos seria mais simples usar:
+
+```bash
+grep -Rni "password" /var/www
+```
+
+O `-exec` é útil quando precisamos combinar critérios específicos do `find` com outro comando.
+
+---
+
+# `-exec` com `\;`
+
+Quando termina em:
+
+```bash
+\;
+```
+
+o comando é executado uma vez para cada resultado.
+
+Exemplo:
+
+```bash
+find . -type f -exec ls -l {} \;
+```
+
+Se forem encontrados 1.000 arquivos, podem ser iniciadas 1.000 execuções de `ls`.
+
+Isso pode ser lento.
+
+---
+
+# `-exec` com `+`
+
+Também é possível terminar com:
+
+```text
++
+```
+
+Exemplo:
+
+```bash
+find . -type f -exec ls -l {} +
+```
+
+Nesse formato, vários caminhos são agrupados em uma única chamada, respeitando os limites do sistema.
+
+Funcionamento aproximado:
+
+```bash
+ls -l ./a.txt ./b.txt ./c.txt ...
+```
+
+---
+
+# Comparando `\;` e `+`
+
+| Final | Funcionamento |
+|---|---|
+| `\;` | Executa uma vez por resultado |
+| `+` | Agrupa vários resultados por execução |
+
+A forma com `+` costuma ser mais eficiente.
+
+---
+
+# Exemplo de eficiência
+
+Menos eficiente:
+
+```bash
+find /var/log -type f -exec gzip {} \;
+```
+
+Mais eficiente quando o comando aceita vários arquivos:
+
+```bash
+find /var/log -type f -exec gzip {} +
+```
+
+> [!important]
+> Nem todo comando ou uso deve receber vários arquivos ao mesmo tempo. Verifique como o programa trata seus argumentos.
+
+---
+
+# Posição de `{}` com `+`
+
+Na forma:
+
+```bash
+-exec COMANDO {} +
+```
+
+o marcador `{}` normalmente precisa aparecer no final dos argumentos da ação.
+
+Este exemplo funciona:
+
+```bash
+find . -type f -exec ls -l {} +
+```
+
+Mas uma construção que precise adicionar algo depois dos caminhos pode exigir `sh -c`.
+
+---
+
+# Usando `sh -c` com `-exec`
+
+Exemplo:
+
+```bash
+find . -type f -name "*.txt" \
+-exec sh -c 'for arquivo do
+    printf "Processando: %s\n" "$arquivo"
+done' sh {} +
+```
+
+## Por que existe o segundo `sh`?
+
+Na execução:
+
+```bash
+sh -c 'script' NOME_ARGUMENTO arg1 arg2 ...
+```
+
+o primeiro argumento após o script se torna:
+
+```text
+$0
+```
+
+Por isso usamos:
+
+```text
+sh
+```
+
+como valor de `$0`.
+
+Os arquivos começam em:
+
+```text
+$1
+$2
+...
+```
+
+---
+
+# A ação `-execdir`
+
+A ação:
+
+```bash
+-execdir
+```
+
+é semelhante a `-exec`.
+
+A diferença é que o comando é executado a partir do diretório que contém o arquivo encontrado.
+
+## Exemplo
+
+```bash
+find ./projeto -type f -name "*.txt" \
+-execdir pwd \;
+```
+
+O comando `pwd` será executado nos diretórios dos arquivos correspondentes.
+
+---
+
+# Exemplo prático de `-execdir`
+
+```bash
+find ./fotos -type f -name "*.jpg" \
+-execdir chmod 644 {} \;
+```
+
+O comando será executado dentro do diretório correspondente.
+
+---
+
+# Segurança de `-execdir`
+
+`-execdir` pode reduzir certos riscos relacionados a caminhos completos e condições de corrida.
+
+Porém, ele também exige cuidado com a variável:
+
+```bash
+PATH
+```
+
+Algumas implementações recusam `-execdir` quando o `PATH` contém componentes inseguros, como:
+
+```text
+.
+```
+
+ou entradas vazias.
+
+Uma configuração mais segura pode utilizar caminhos absolutos:
+
+```bash
+PATH=/usr/bin:/bin
+```
+
+e comandos como:
+
+```bash
+/usr/bin/file
+```
+
+---
+
+# `-exec` versus `-execdir`
+
+| Ação | Diretório de execução |
+|---|---|
+| `-exec` | Diretório atual de onde o `find` foi iniciado |
+| `-execdir` | Diretório que contém o resultado |
+
+Use `-execdir` quando o contexto do diretório do arquivo for importante.
+
+---
+
+# A ação `-ok`
+
+A ação:
+
+```bash
+-ok
+```
+
+funciona de maneira semelhante a `-exec`, mas solicita confirmação antes de executar o comando.
+
+## Exemplo
+
+```bash
+find . -type f -name "*.bak" -ok rm {} \;
+```
+
+O `find` perguntará antes de remover cada arquivo.
+
+Possível prompt:
+
+```text
+< rm ... ./config.bak > ?
+```
+
+O formato exato pode variar.
+
+---
+
+# Quando usar `-ok`?
+
+É útil para operações manuais e potencialmente destrutivas.
+
+Exemplos:
+
+- Remover arquivos;
+- Alterar permissões;
+- Mover resultados;
+- Substituir arquivos.
+
+---
+
+# Limitações de `-ok`
+
+Como exige interação, normalmente não é indicado para:
+
+- Scripts automáticos;
+- Execuções sem terminal;
+- Processamento de muitos arquivos;
+- Jobs agendados.
+
+---
+
+# A ação `-okdir`
+
+A ação:
+
+```bash
+-okdir
+```
+
+combina o comportamento de:
+
+```text
+-execdir
+```
+
+com confirmação interativa.
+
+Ela executa o comando a partir do diretório do resultado, mas pergunta antes.
+
+---
+
+# A ação `-delete`
+
+A ação:
+
+```bash
+-delete
+```
+
+remove os objetos correspondentes.
+
+## Exemplo
+
+```bash
+find ./temporario -type f -name "*.tmp" -delete
+```
+
+Isso remove todos os arquivos `.tmp` encontrados.
+
+> [!danger]
+> `-delete` remove arquivos diretamente.
+>
+> Não envia os objetos para a lixeira.
+
+---
+
+# Regra de segurança para `-delete`
+
+Antes de executar:
+
+```bash
+find ./temporario -type f -name "*.tmp" -delete
+```
+
+execute:
+
+```bash
+find ./temporario -type f -name "*.tmp" -print
+```
+
+Confira cuidadosamente todos os resultados.
+
+Somente depois substitua:
+
+```bash
+-print
+```
+
+por:
+
+```bash
+-delete
+```
+
+---
+
+# A ordem das expressões importa
+
+Este comando é perigoso:
+
+```bash
+find . -delete -name "*.tmp"
+```
+
+O `find` avalia expressões da esquerda para a direita.
+
+A exclusão pode ocorrer antes de o teste de nome ser aplicado como você imaginava.
+
+Forma correta:
+
+```bash
+find . -type f -name "*.tmp" -delete
+```
+
+Primeiro filtre.
+
+Depois execute a ação.
+
+---
+
+# Remover arquivos vazios
+
+```bash
+find ./logs -type f -empty -delete
+```
+
+---
+
+# Remover diretórios vazios
+
+```bash
+find ./projeto -mindepth 1 -type d -empty -delete
+```
+
+O uso de:
+
+```bash
+-mindepth 1
+```
+
+evita considerar o próprio diretório inicial.
+
+---
+
+# Remover arquivos antigos
+
+Teste:
+
+```bash
+find /tmp/minha-app -type f -mtime +7 -print
+```
+
+Depois:
+
+```bash
+find /tmp/minha-app -type f -mtime +7 -delete
+```
+
+---
+
+# `-delete` e diretórios não vazios
+
+O `find` não remove um diretório que ainda contenha objetos não removidos.
+
+Para remover uma árvore inteira, filtros e ordem precisam ser analisados cuidadosamente.
+
+Não utilize `-delete` como substituto automático de:
+
+```bash
+rm -rf
+```
+
+sem compreender quais objetos serão correspondidos.
+
+---
+
+# `-delete` implica processamento em profundidade
+
+No GNU `find`, `-delete` ativa uma forma de processamento semelhante a:
+
+```bash
+-depth
+```
+
+O conteúdo é considerado antes do diretório.
+
+Isso é necessário para remover arquivos antes de seus diretórios.
+
+Essa interação também significa que `-delete` e `-prune` não combinam bem para excluir árvores da busca.
+
+---
+
+# A ação `-quit`
+
+A ação:
+
+```bash
+-quit
+```
+
+encerra o `find` imediatamente após ser executada.
+
+## Exemplo
+
+```bash
+find / -type f -name "config.php" -print -quit 2>/dev/null
+```
+
+Esse comando mostra o primeiro `config.php` encontrado e encerra a busca.
+
+---
+
+# Quando usar `-quit`?
+
+É útil quando:
+
+- Basta encontrar um resultado;
+- Você quer apenas confirmar que algo existe;
+- A árvore é muito grande;
+- Deseja melhorar o desempenho;
+- Está usando o `find` em uma condição de Shell Script.
+
+---
+
+# Verificar se existe um arquivo
+
+```bash
+resultado=$(find /opt -type f -name "backup.sh" -print -quit 2>/dev/null)
+
+if [[ -n "$resultado" ]]; then
+    printf 'Encontrado: %s\n' "$resultado"
+else
+    printf 'Arquivo não encontrado.\n'
+fi
+```
+
+---
+
+# Forma sem armazenar todos os resultados
+
+```bash
+if find /opt -type f -name "backup.sh" -print -quit 2>/dev/null |
+   grep -q .; then
+    echo "Encontrado."
+else
+    echo "Não encontrado."
+fi
+```
+
+---
+
+# Cuidado com o código de retorno
+
+A ausência de resultados não significa necessariamente que o comando `find` falhou.
+
+Normalmente:
+
+```bash
+find /diretorio -name "inexistente"
+```
+
+pode terminar com código `0` mesmo sem mostrar nada, desde que a execução em si não tenha encontrado um erro fatal.
+
+Por isso, para testar a existência de resultado, examine a saída.
+
+---
+
+# Ações podem ser condições
+
+No `find`, muitas ações também possuem um resultado lógico.
+
+Por exemplo:
+
+```bash
+-print
+```
+
+normalmente retorna verdadeiro depois de imprimir.
+
+Já:
+
+```bash
+-exec comando {} \;
+```
+
+pode ser considerado verdadeiro ou falso conforme o código de retorno do comando executado.
+
+Isso se torna importante quando combinamos ações com:
+
+- `-a`;
+- `-o`;
+- `!`;
+- Parênteses.
+
+Esses operadores serão estudados na próxima parte.
+
+---
+
+# Exemplo com `-exec` como teste
+
+```bash
+find . -type f -exec grep -q "senha" {} \; -print
+```
+
+Fluxo aproximado:
+
+```text
+É arquivo?
+    ↓
+Executar grep
+    ↓
+grep encontrou "senha"?
+    ↓
+Sim → -print
+Não → não imprimir
+```
+
+Assim, apenas os arquivos em que o `grep` encontrou o texto serão mostrados.
+
+Uma alternativa geralmente mais eficiente pode usar:
+
+```bash
+grep -Rl "senha" .
+```
+
+Mas o exemplo demonstra como o resultado lógico de `-exec` participa da expressão do `find`.
+
+---
+
+# Casos de uso em Administração Linux
+
+## Mostrar arquivos grandes com detalhes
+
+```bash
+find /var -type f -size +100M -ls 2>/dev/null
+```
+
+---
+
+## Compactar logs antigos
+
+Primeiro:
+
+```bash
+find /var/log/minha-app -type f -name "*.log" -mtime +7 -print
+```
+
+Depois, caso esteja correto:
+
+```bash
+find /var/log/minha-app -type f -name "*.log" -mtime +7 \
+-exec gzip {} +
+```
+
+---
+
+## Corrigir permissões de scripts
+
+```bash
+find ./scripts -type f -name "*.sh" -exec chmod 750 {} +
+```
+
+---
+
+# Casos de uso em Shell Script
+
+## Processar nomes com segurança
+
+```bash
+find "$diretorio" -type f -print0 |
+while IFS= read -r -d '' arquivo; do
+    printf 'Processando: %s\n' "$arquivo"
+done
+```
+
+---
+
+## Encontrar apenas o primeiro arquivo
+
+```bash
+primeiro=$(find "$diretorio" -type f -name "*.conf" -print -quit)
+```
+
+---
+
+## Executar um comando por lote
+
+```bash
+find "$diretorio" -type f -name "*.txt" \
+-exec wc -l {} +
+```
+
+---
+
+# Casos de uso em Pentest e CTF
+
+## Analisar tipos de arquivos em `/opt`
+
+```bash
+find /opt -type f -exec file {} \; 2>/dev/null
+```
+
+---
+
+## Exibir permissões e proprietários
+
+```bash
+find /opt /usr/local/bin -type f \
+-printf "%M %u:%g %p\n" 2>/dev/null
+```
+
+---
+
+## Procurar arquivos contendo uma palavra
+
+```bash
+find /var/www -type f \
+\( -name "*.php" -o -name "*.conf" -o -name "*.env" \) \
+-exec grep -nHi "password" {} + 2>/dev/null
+```
+
+Esse comando:
+
+1. Pesquisa arquivos específicos;
+2. Agrupa os resultados;
+3. Executa `grep`;
+4. Mostra linhas contendo `password`.
+
+---
+
+## Inspecionar scripts pertencentes ao root
+
+```bash
+find /opt /usr/local/bin \
+-type f \
+-user root \
+\( -name "*.sh" -o -name "*.py" \) \
+-exec ls -l {} \; \
+-exec file {} \; \
+2>/dev/null
+```
+
+---
+
+# Erros comuns
+
+## Usar `{}` fora de `-exec`
+
+O marcador:
+
+```text
+{}
+```
+
+possui significado especial dentro de ações como:
+
+```bash
+-exec
+-execdir
+-ok
+-okdir
+```
+
+Ele não é uma variável normal do Bash.
+
+---
+
+## Esquecer de finalizar `-exec`
+
+Errado:
+
+```bash
+find . -type f -exec ls -l {}
+```
+
+Correto:
+
+```bash
+find . -type f -exec ls -l {} \;
+```
+
+ou:
+
+```bash
+find . -type f -exec ls -l {} +
+```
+
+---
+
+## Não colocar aspas em `{}`
+
+Em uma chamada direta de `-exec`, o `find` entrega cada caminho como argumento separado, portanto isto normalmente funciona:
+
+```bash
+-exec ls -l {} \;
+```
+
+Não é necessário escrever:
+
+```bash
+-exec ls -l "{}" \;
+```
+
+As aspas podem ser usadas, mas não resolvem problemas internos de comandos construídos com `sh -c`.
+
+---
+
+## Usar `-exec sh -c` com dados dentro do código
+
+Evite construções como:
+
+```bash
+find . -type f -exec sh -c 'comando "{}"' \;
+```
+
+Inserir caminhos diretamente em código interpretado por shell pode causar erros ou injeção de comandos com nomes maliciosos.
+
+Prefira passar os caminhos como argumentos:
+
+```bash
+find . -type f \
+-exec sh -c 'for arquivo do
+    printf "%s\n" "$arquivo"
+done' sh {} +
+```
+
+---
+
+## Usar `\;` quando `+` seria melhor
+
+Isto:
+
+```bash
+find . -type f -exec ls -l {} \;
+```
+
+cria um processo por arquivo.
+
+Quando o comando aceita vários caminhos, prefira:
+
+```bash
+find . -type f -exec ls -l {} +
+```
+
+---
+
+## Usar `-delete` sem testar
+
+Sempre siga:
+
+```text
+filtros + -print
+        ↓
+conferir resultados
+        ↓
+filtros + -delete
+```
+
+---
+
+## Esquecer que a ordem importa
+
+Seguro:
+
+```bash
+find . -type f -name "*.tmp" -delete
+```
+
+Perigoso:
+
+```bash
+find . -delete -type f -name "*.tmp"
+```
+
+---
+
+## Utilizar `-print` com `xargs` sem proteção
+
+Problemático:
+
+```bash
+find . -type f -print | xargs rm
+```
+
+Mais seguro:
+
+```bash
+find . -type f -print0 | xargs -0 rm
+```
+
+Ainda melhor para simples exclusão, depois de validar:
+
+```bash
+find . -type f -delete
+```
+
+---
+
+# Boas práticas
+
+1. Use `-print` antes de ações destrutivas.
+2. Prefira `-exec ... {} +` quando o comando aceitar vários arquivos.
+3. Use `-print0` com `xargs -0`.
+4. Preserve nomes com espaços e caracteres especiais.
+5. Evite construir comandos inseguros com `sh -c`.
+6. Utilize caminhos absolutos em operações sensíveis.
+7. Use `-quit` quando só precisar do primeiro resultado.
+8. Leia o comando da esquerda para a direita.
+9. Coloque filtros antes das ações.
+10. Teste em um diretório pequeno antes de executar em `/`.
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Comando |
+|---|---|
+| Mostrar caminhos | `find . -type f -print` |
+| Separar por NUL | `find . -type f -print0` |
+| Detalhes dos resultados | `find . -type f -ls` |
+| Saída personalizada | `find . -type f -printf "%M %u:%g %p\n"` |
+| Executar uma vez por arquivo | `find . -type f -exec comando {} \;` |
+| Executar em lotes | `find . -type f -exec comando {} +` |
+| Executar no diretório do arquivo | `find . -type f -execdir comando {} \;` |
+| Pedir confirmação | `find . -type f -ok comando {} \;` |
+| Remover correspondências | `find . -type f -name "*.tmp" -delete` |
+| Parar no primeiro resultado | `find . -type f -print -quit` |
+| Usar com `xargs` com segurança | `find . -type f -print0 \| xargs -0 comando` |
+
+---
+
+# Resumo
+
+As ações determinam o que acontece com os resultados encontrados.
+
+```text
+-print    → mostra o caminho
+-print0   → mostra usando NUL como separador
+-printf   → cria saída personalizada
+-ls       → mostra informações detalhadas
+-exec     → executa outro comando
+-execdir  → executa no diretório do resultado
+-ok       → pede confirmação antes de executar
+-okdir    → executa no diretório e pede confirmação
+-delete   → remove o resultado
+-quit     → encerra a busca
+```
+
+Uma regra importante é:
+
+```text
+primeiro filtrar
+        ↓
+depois executar a ação
+```
+
+Na próxima parte estudaremos:
+
+- `-a`;
+- `-o`;
+- `!`;
+- `-not`;
+- Parênteses `\(` e `\)`;
+- Precedência;
+- Ações implícitas;
+- Por que alguns comandos aparentemente corretos produzem resultados errados.
+

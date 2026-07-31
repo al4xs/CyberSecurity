@@ -7438,3 +7438,1298 @@ Na próxima parte estudaremos:
 - `-links`;
 - Como procurar arquivos grandes, vazios ou com múltiplos hard links.
 
+---
+
+# Procurando arquivos por tamanho
+
+A opção:
+
+```bash
+-size
+```
+
+permite localizar arquivos de acordo com o espaço ocupado.
+
+Ela é útil para encontrar:
+
+- Arquivos muito grandes;
+- Arquivos pequenos;
+- Backups;
+- Bancos de dados;
+- Imagens de disco;
+- Logs que cresceram demais;
+- Arquivos suspeitos;
+- Arquivos vazios.
+
+---
+
+# Sintaxe
+
+```bash
+find DIRETORIO -size TAMANHO
+```
+
+Exemplo:
+
+```bash
+find /home -type f -size +100M
+```
+
+Tradução:
+
+> Procure dentro de `/home` arquivos comuns maiores que 100 MiB.
+
+---
+
+# Estrutura da opção
+
+```text
+-size +100M
+       │ │ │
+       │ │ └── unidade
+       │ └──── valor
+       └────── tipo de comparação
+```
+
+Neste exemplo:
+
+| Parte | Significado |
+|---|---|
+| `-size` | Filtra pelo tamanho |
+| `+` | Maior que |
+| `100` | Valor informado |
+| `M` | Unidade em MiB |
+
+---
+
+# As três formas principais
+
+Assim como algumas outras expressões do `find`, `-size` aceita três formas:
+
+```bash
+-size N
+-size +N
+-size -N
+```
+
+Elas possuem significados diferentes.
+
+---
+
+# Tamanho correspondente
+
+```bash
+-size N
+```
+
+Procura arquivos correspondentes à quantidade de unidades informada.
+
+Exemplo:
+
+```bash
+find . -type f -size 10M
+```
+
+O `find` procura arquivos que ocupem a faixa correspondente a 10 unidades de MiB segundo o arredondamento utilizado pela ferramenta.
+
+> [!note]
+> Quando a unidade não é `c` (bytes), o GNU `find` arredonda o tamanho do arquivo para cima na unidade escolhida.
+>
+> Por isso, `-size 10M` não deve ser entendido como uma comparação byte por byte absolutamente exata.
+
+Para comparações exatas em bytes, utilize:
+
+```bash
+-size 10485760c
+```
+
+Porque:
+
+```text
+10 MiB = 10 × 1024 × 1024 bytes
+       = 10485760 bytes
+```
+
+---
+
+# Maior que determinado tamanho
+
+```bash
+-size +N
+```
+
+O sinal:
+
+```text
++
+```
+
+significa:
+
+> Maior que a quantidade informada.
+
+Exemplo:
+
+```bash
+find / -type f -size +100M 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns maiores que 100 MiB.
+
+Esse é um dos usos mais comuns de `-size`.
+
+---
+
+# Menor que determinado tamanho
+
+```bash
+-size -N
+```
+
+O sinal:
+
+```text
+-
+```
+
+significa:
+
+> Menor que a quantidade informada.
+
+Exemplo:
+
+```bash
+find . -type f -size -10k
+```
+
+Tradução:
+
+> Procure arquivos com tamanho inferior a 10 KiB, considerando a unidade escolhida pelo `find`.
+
+---
+
+# Comparando as três formas
+
+| Expressão | Significado |
+|---|---|
+| `-size 10M` | Tamanho correspondente à faixa de 10 MiB |
+| `-size +10M` | Maior que 10 MiB |
+| `-size -10M` | Menor que 10 MiB |
+
+---
+
+# Unidades disponíveis
+
+O número informado pode receber uma letra que define a unidade.
+
+| Unidade | Significado |
+|---|---|
+| `c` | Bytes |
+| `w` | Palavras de 2 bytes |
+| `b` | Blocos de 512 bytes |
+| `k` | Kibibytes de 1024 bytes |
+| `M` | Mebibytes de 1024 × 1024 bytes |
+| `G` | Gibibytes de 1024 × 1024 × 1024 bytes |
+
+---
+
+# Diferença entre KB e KiB
+
+Embora seja comum dizer:
+
+```text
+KB
+MB
+GB
+```
+
+as unidades utilizadas pelo GNU `find` com:
+
+```text
+k
+M
+G
+```
+
+são baseadas em potências de 1024.
+
+Tecnicamente:
+
+```text
+1 KiB = 1024 bytes
+1 MiB = 1024 KiB
+1 GiB = 1024 MiB
+```
+
+No uso cotidiano, muitas pessoas chamam essas unidades apenas de KB, MB e GB.
+
+---
+
+# Unidade padrão
+
+Quando nenhuma unidade é informada, o `find` utiliza:
+
+```text
+b
+```
+
+Isto significa blocos de:
+
+```text
+512 bytes
+```
+
+Exemplo:
+
+```bash
+find . -size 10
+```
+
+Não significa necessariamente 10 bytes.
+
+Significa uma faixa correspondente a:
+
+```text
+10 blocos de 512 bytes
+```
+
+Por isso, é uma boa prática informar sempre a unidade:
+
+```bash
+-size 10c
+```
+
+```bash
+-size 10k
+```
+
+```bash
+-size 10M
+```
+
+---
+
+# Procurar por bytes
+
+Utilize:
+
+```text
+c
+```
+
+Exemplo:
+
+```bash
+find . -type f -size 100c
+```
+
+Procura arquivos com exatamente 100 bytes.
+
+---
+
+## Maiores que 1.000 bytes
+
+```bash
+find . -type f -size +1000c
+```
+
+---
+
+## Menores que 500 bytes
+
+```bash
+find . -type f -size -500c
+```
+
+---
+
+# Procurar por KiB
+
+Utilize:
+
+```text
+k
+```
+
+Exemplo:
+
+```bash
+find . -type f -size +500k
+```
+
+Tradução:
+
+> Procure arquivos maiores que 500 KiB.
+
+---
+
+# Procurar por MiB
+
+Utilize:
+
+```text
+M
+```
+
+Exemplo:
+
+```bash
+find /home -type f -size +100M
+```
+
+Pode encontrar:
+
+```text
+/home/allan/Downloads/video.mp4
+/home/allan/backup.tar.gz
+/home/maria/maquina-virtual.iso
+```
+
+---
+
+# Procurar por GiB
+
+Utilize:
+
+```text
+G
+```
+
+Exemplo:
+
+```bash
+find / -type f -size +1G 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos maiores que 1 GiB.
+
+Isso pode revelar:
+
+- Imagens de disco;
+- Máquinas virtuais;
+- Backups;
+- Bancos de dados;
+- Logs muito grandes;
+- Arquivos temporários.
+
+---
+
+# Exemplo prático
+
+Imagine estes arquivos:
+
+```text
+nota.txt        → 2 KiB
+script.sh       → 8 KiB
+backup.zip      → 150 MiB
+database.sql    → 600 MiB
+imagem.iso      → 4 GiB
+```
+
+## Arquivos maiores que 100 MiB
+
+```bash
+find . -type f -size +100M
+```
+
+Resultado:
+
+```text
+./backup.zip
+./database.sql
+./imagem.iso
+```
+
+---
+
+## Arquivos menores que 10 KiB
+
+```bash
+find . -type f -size -10k
+```
+
+Resultado possível:
+
+```text
+./nota.txt
+./script.sh
+```
+
+---
+
+## Arquivos maiores que 1 GiB
+
+```bash
+find . -type f -size +1G
+```
+
+Resultado:
+
+```text
+./imagem.iso
+```
+
+---
+
+# Mostrar tamanho dos arquivos encontrados
+
+O `find` mostra apenas o caminho por padrão.
+
+Exemplo:
+
+```bash
+find /home -type f -size +100M
+```
+
+Saída:
+
+```text
+/home/allan/backup.tar.gz
+```
+
+Para visualizar detalhes:
+
+```bash
+find /home -type f -size +100M -exec ls -lh {} \;
+```
+
+Possível saída:
+
+```text
+-rw-r--r-- 1 allan allan 850M jul 31 10:30 /home/allan/backup.tar.gz
+```
+
+A opção `-exec` será estudada detalhadamente em outra parte.
+
+---
+
+# Utilizando `-ls`
+
+Também podemos usar a ação:
+
+```bash
+-ls
+```
+
+Exemplo:
+
+```bash
+find /home -type f -size +100M -ls
+```
+
+Ela apresenta informações como:
+
+- inode;
+- blocos;
+- permissões;
+- links;
+- proprietário;
+- grupo;
+- tamanho;
+- data;
+- caminho.
+
+---
+
+# Procurar arquivos grandes em diretórios específicos
+
+Em vez de pesquisar todo o sistema:
+
+```bash
+find / -type f -size +100M 2>/dev/null
+```
+
+comece pelos diretórios mais prováveis.
+
+```bash
+find /home -type f -size +100M 2>/dev/null
+```
+
+```bash
+find /var -type f -size +100M 2>/dev/null
+```
+
+```bash
+find /opt -type f -size +100M 2>/dev/null
+```
+
+```bash
+find /tmp -type f -size +100M 2>/dev/null
+```
+
+Isso reduz o tempo e a quantidade de resultados.
+
+---
+
+# Casos de uso em Administração Linux
+
+## Encontrar logs muito grandes
+
+```bash
+find /var/log -type f -size +100M
+```
+
+---
+
+## Encontrar arquivos maiores que 1 GiB
+
+```bash
+find / -type f -size +1G 2>/dev/null
+```
+
+---
+
+## Encontrar arquivos pequenos
+
+```bash
+find /home -type f -size -1k
+```
+
+---
+
+## Encontrar arquivos grandes modificados recentemente
+
+```bash
+find /var -type f -size +100M -mtime -7 2>/dev/null
+```
+
+Tradução:
+
+> Procure em `/var` arquivos maiores que 100 MiB modificados nos últimos sete dias.
+
+---
+
+# Casos de uso em Pentest e CTF
+
+## Procurar bancos de dados grandes
+
+```bash
+find /var/www /opt /home \
+-type f \
+\( -iname "*.sql" -o -iname "*.db" -o -iname "*.sqlite" \) \
+-size +1M 2>/dev/null
+```
+
+---
+
+## Procurar backups grandes
+
+```bash
+find /home /opt /var/backups \
+-type f \
+\( -iname "*.zip" -o -iname "*.tar" -o -iname "*.gz" \) \
+-size +10M 2>/dev/null
+```
+
+---
+
+## Procurar arquivos grandes em diretórios temporários
+
+```bash
+find /tmp /var/tmp /dev/shm -type f -size +10M 2>/dev/null
+```
+
+Pode revelar:
+
+- Arquivos transferidos;
+- Arquivos temporários;
+- Backups;
+- Binários;
+- Dados deixados por aplicações.
+
+---
+
+# A opção `-empty`
+
+A opção:
+
+```bash
+-empty
+```
+
+localiza:
+
+- Arquivos comuns vazios;
+- Diretórios vazios.
+
+---
+
+# Arquivo vazio
+
+Um arquivo vazio possui:
+
+```text
+0 bytes
+```
+
+Exemplo:
+
+```bash
+touch vazio.txt
+```
+
+Depois:
+
+```bash
+ls -l vazio.txt
+```
+
+Saída:
+
+```text
+-rw-r--r-- 1 allan allan 0 jul 31 11:00 vazio.txt
+```
+
+---
+
+# Procurar arquivos vazios
+
+```bash
+find . -type f -empty
+```
+
+Resultado:
+
+```text
+./vazio.txt
+./logs/erro.log
+./config/placeholder
+```
+
+---
+
+# Procurar diretórios vazios
+
+```bash
+find . -type d -empty
+```
+
+Resultado:
+
+```text
+./cache
+./uploads
+./temporario
+```
+
+---
+
+# Diferença entre `-empty` e `-size 0c`
+
+Para arquivos comuns, estas buscas podem produzir resultados semelhantes:
+
+```bash
+find . -type f -empty
+```
+
+```bash
+find . -type f -size 0c
+```
+
+Entretanto, `-empty` também pode verificar diretórios vazios:
+
+```bash
+find . -type d -empty
+```
+
+Já `-size 0c` não expressa diretamente a ideia de um diretório sem entradas.
+
+---
+
+# Quando `-empty` é útil?
+
+Em:
+
+- Limpeza de arquivos;
+- Identificação de logs vazios;
+- Busca por arquivos marcadores;
+- Diretórios de upload vazios;
+- Verificação de estruturas incompletas;
+- Shell Scripts;
+- Auditorias.
+
+---
+
+# Remover arquivos vazios
+
+Primeiro, liste:
+
+```bash
+find ./logs -type f -empty -print
+```
+
+Depois de confirmar:
+
+```bash
+find ./logs -type f -empty -delete
+```
+
+> [!warning]
+> Sempre teste com `-print` antes de utilizar `-delete`.
+
+---
+
+# Remover diretórios vazios
+
+Primeiro:
+
+```bash
+find ./projeto -type d -empty -print
+```
+
+Depois:
+
+```bash
+find ./projeto -type d -empty -delete
+```
+
+O `find` normalmente processa a árvore de forma adequada para essa ação, mas é necessário analisar cuidadosamente o diretório inicial e os filtros utilizados.
+
+---
+
+# Arquivos vazios em Pentest
+
+Arquivos vazios podem funcionar como:
+
+- Marcadores;
+- Flags de estado;
+- Arquivos de bloqueio;
+- Indicação de funcionalidades;
+- Arquivos criados por scripts;
+- Placeholders.
+
+Exemplos:
+
+```text
+/opt/app/maintenance
+/var/run/programa.lock
+/var/www/uploads/.keep
+```
+
+O fato de estarem vazios não significa que sejam inúteis.
+
+O nome e a localização podem revelar como uma aplicação funciona.
+
+---
+
+# O que são links físicos?
+
+Antes de estudar:
+
+```bash
+-links
+```
+
+precisamos entender os **hard links**.
+
+No Linux, um nome de arquivo aponta para um inode.
+
+O inode armazena metadados e referencia os blocos de dados do arquivo.
+
+Representação simplificada:
+
+```text
+arquivo.txt
+     │
+     ▼
+   inode
+     │
+     ▼
+   dados
+```
+
+---
+
+# Hard link
+
+Um hard link é outro nome apontando para o mesmo inode.
+
+Exemplo:
+
+```text
+arquivo.txt ───┐
+               ├── inode 12345 ─── dados
+copia.txt   ───┘
+```
+
+Os dois nomes representam o mesmo conteúdo no sistema de arquivos.
+
+---
+
+# Criando um hard link
+
+```bash
+ln arquivo.txt copia.txt
+```
+
+Agora:
+
+```bash
+ls -li arquivo.txt copia.txt
+```
+
+Possível saída:
+
+```text
+12345 -rw-r--r-- 2 allan allan 100 arquivo.txt
+12345 -rw-r--r-- 2 allan allan 100 copia.txt
+```
+
+Observe:
+
+- O inode é igual;
+- A quantidade de links é `2`.
+
+---
+
+# Quantidade de links
+
+Na saída de:
+
+```bash
+ls -l
+```
+
+existe uma coluna com a quantidade de hard links.
+
+Exemplo:
+
+```text
+-rw-r--r-- 2 allan allan 100 arquivo.txt
+           │
+           └── quantidade de links
+```
+
+---
+
+# A opção `-links`
+
+A opção:
+
+```bash
+-links
+```
+
+procura objetos de acordo com a quantidade de hard links.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -links N
+```
+
+---
+
+# Exemplo
+
+```bash
+find . -type f -links 2
+```
+
+Tradução:
+
+> Procure arquivos comuns com exatamente dois hard links.
+
+---
+
+# Maior ou menor quantidade
+
+Assim como outras expressões numéricas, podemos utilizar:
+
+```text
+-links N
+-links +N
+-links -N
+```
+
+---
+
+## Exatamente dois links
+
+```bash
+find . -type f -links 2
+```
+
+---
+
+## Mais de dois links
+
+```bash
+find . -type f -links +2
+```
+
+---
+
+## Menos de dois links
+
+```bash
+find . -type f -links -2
+```
+
+Para arquivos comuns, isso geralmente significa arquivos com apenas um nome associado.
+
+---
+
+# Procurar arquivos com múltiplos hard links
+
+```bash
+find /home -type f -links +1 2>/dev/null
+```
+
+Tradução:
+
+> Procure arquivos comuns que possuam mais de um hard link.
+
+---
+
+# Por que isso é útil?
+
+Em:
+
+- Auditoria;
+- Investigação forense;
+- Análise de arquivos duplicados;
+- Identificação de nomes diferentes para os mesmos dados;
+- Verificação de comportamento suspeito;
+- Administração de armazenamento.
+
+Durante um CTF ou análise forense, um arquivo sensível pode possuir outro nome apontando para o mesmo inode.
+
+---
+
+# Encontrar todos os nomes de um inode
+
+Primeiro descubra o inode:
+
+```bash
+ls -li arquivo.txt
+```
+
+Exemplo:
+
+```text
+12345 -rw-r--r-- 2 allan allan 100 arquivo.txt
+```
+
+Depois:
+
+```bash
+find / -inum 12345 2>/dev/null
+```
+
+Possível resultado:
+
+```text
+/home/allan/arquivo.txt
+/opt/backup/copia.txt
+```
+
+A opção:
+
+```bash
+-inum
+```
+
+procura pelo número do inode.
+
+Ela será mencionada novamente na seção de exemplos avançados.
+
+---
+
+# Hard link versus link simbólico
+
+| Característica | Hard link | Link simbólico |
+|---|---|---|
+| Aponta para | Mesmo inode | Caminho de outro arquivo |
+| Inode | Igual ao arquivo original | Inode próprio |
+| Pode ficar quebrado | Normalmente não | Sim |
+| Criação | `ln origem destino` | `ln -s origem destino` |
+| Busca no `find` | `-links`, `-inum` | `-type l` |
+
+---
+
+# Casos de uso em Shell Script
+
+## Verificar arquivos vazios
+
+```bash
+if find ./dados -type f -empty -print -quit | grep -q .; then
+    echo "Existem arquivos vazios."
+fi
+```
+
+A ação:
+
+```bash
+-quit
+```
+
+encerra a busca após o primeiro resultado e será abordada depois.
+
+---
+
+## Listar arquivos grandes
+
+```bash
+find "$HOME" -type f -size +500M -print
+```
+
+---
+
+## Listar arquivos com múltiplos links
+
+```bash
+find "$HOME" -type f -links +1 -print
+```
+
+---
+
+# Combinando tamanho e tempo
+
+## Arquivos grandes e antigos
+
+```bash
+find /var/log -type f -size +100M -mtime +30
+```
+
+Tradução:
+
+> Procure logs maiores que 100 MiB e modificados há mais de 30 dias.
+
+---
+
+## Backups recentes e grandes
+
+```bash
+find /var/backups \
+-type f \
+-size +10M \
+-mtime -7
+```
+
+---
+
+# Combinando tamanho e nome
+
+```bash
+find /home \
+-type f \
+-iname "*.zip" \
+-size +100M
+```
+
+Tradução:
+
+> Procure arquivos ZIP maiores que 100 MiB.
+
+---
+
+# Como interpretar arquivos grandes
+
+Ao encontrar um arquivo grande, pergunte:
+
+1. Qual é o tipo?
+2. Quem é o proprietário?
+3. Quando foi modificado?
+4. Está sendo utilizado?
+5. É um banco de dados?
+6. É um backup?
+7. É um log?
+8. É uma imagem de disco?
+9. Contém informações sensíveis?
+10. Pode ser removido com segurança?
+
+Comandos úteis:
+
+```bash
+file arquivo
+```
+
+```bash
+stat arquivo
+```
+
+```bash
+du -h arquivo
+```
+
+```bash
+ls -lh arquivo
+```
+
+```bash
+lsof arquivo 2>/dev/null
+```
+
+---
+
+# Diferença entre tamanho aparente e espaço em disco
+
+O tamanho apresentado por:
+
+```bash
+ls -lh
+```
+
+pode ser diferente do espaço realmente ocupado, especialmente em arquivos esparsos.
+
+Compare:
+
+```bash
+ls -lh arquivo
+```
+
+com:
+
+```bash
+du -h arquivo
+```
+
+Um arquivo esparso pode apresentar um tamanho lógico grande, mas ocupar menos blocos físicos no disco.
+
+A opção `-size` trabalha com o tamanho do arquivo conforme os dados de `stat`, seguindo as unidades e o arredondamento definidos pelo `find`.
+
+---
+
+# Erros comuns
+
+## Esquecer a unidade
+
+```bash
+find . -size 100
+```
+
+Isso utiliza blocos de 512 bytes, não 100 bytes.
+
+Prefira:
+
+```bash
+find . -size 100c
+```
+
+ou:
+
+```bash
+find . -size 100k
+```
+
+---
+
+## Confundir `+` e `-`
+
+```bash
+-size +100M
+```
+
+Significa:
+
+```text
+maior que 100 MiB
+```
+
+Enquanto:
+
+```bash
+-size -100M
+```
+
+significa:
+
+```text
+menor que 100 MiB
+```
+
+---
+
+## Interpretar `-size 10M` como igualdade byte por byte
+
+As unidades são arredondadas pelo `find`.
+
+Para precisão em bytes, use:
+
+```bash
+-size Nc
+```
+
+---
+
+## Excluir arquivos sem verificar
+
+Antes de usar:
+
+```bash
+-delete
+```
+
+sempre execute a mesma busca com:
+
+```bash
+-print
+```
+
+---
+
+## Considerar todo arquivo grande suspeito
+
+Arquivos grandes podem ser completamente legítimos:
+
+- Bancos de dados;
+- Logs;
+- Backups;
+- Imagens de sistema;
+- Máquinas virtuais.
+
+O tamanho é apenas uma pista.
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Comando |
+|---|---|
+| Maiores que 100 MiB | `find . -type f -size +100M` |
+| Menores que 10 KiB | `find . -type f -size -10k` |
+| Exatamente 100 bytes | `find . -type f -size 100c` |
+| Maiores que 1 GiB | `find / -type f -size +1G 2>/dev/null` |
+| Arquivos vazios | `find . -type f -empty` |
+| Diretórios vazios | `find . -type d -empty` |
+| Mais de um hard link | `find . -type f -links +1` |
+| Exatamente dois links | `find . -type f -links 2` |
+| Buscar pelo inode | `find / -inum 12345 2>/dev/null` |
+| ZIP maior que 100 MiB | `find /home -type f -iname "*.zip" -size +100M` |
+| Logs grandes e antigos | `find /var/log -type f -size +100M -mtime +30` |
+
+---
+
+# Resumo
+
+As principais expressões estudadas foram:
+
+```text
+-size  → filtra pelo tamanho
+-empty → encontra arquivos ou diretórios vazios
+-links → filtra pela quantidade de hard links
+-inum  → procura por número de inode
+```
+
+As formas de comparação numérica são:
+
+```text
+N  → valor correspondente
++N → maior que N
+-N → menor que N
+```
+
+Na próxima parte estudaremos como controlar a profundidade e o percurso da busca utilizando:
+
+- `-maxdepth`;
+- `-mindepth`;
+- `-depth`;
+- `-prune`;
+- `-xdev`;
+- `-mount`;
+- Como impedir que o `find` atravesse diretórios ou sistemas de arquivos desnecessários.

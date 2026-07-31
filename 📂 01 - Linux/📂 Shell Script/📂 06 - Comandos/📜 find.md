@@ -8733,3 +8733,1083 @@ Na próxima parte estudaremos como controlar a profundidade e o percurso da busc
 - `-xdev`;
 - `-mount`;
 - Como impedir que o `find` atravesse diretórios ou sistemas de arquivos desnecessários.
+
+
+---
+
+# Controlando a profundidade e o percurso da busca
+
+Por padrão, o `find` percorre recursivamente todos os subdiretórios encontrados a partir do caminho inicial.
+
+Exemplo:
+
+```bash
+find /home
+```
+
+Estrutura:
+
+```text
+/home
+├── allan
+│   ├── Documentos
+│   │   └── projetos
+│   │       └── bash
+│   └── Downloads
+└── maria
+    └── backups
+```
+
+O `find` pode entrar em todos esses níveis.
+
+Em algumas situações, isso é desnecessário.
+
+Podemos querer:
+
+- Analisar apenas o diretório atual;
+- Limitar a quantidade de níveis;
+- Ignorar determinado diretório;
+- Processar primeiro os arquivos mais profundos;
+- Evitar sistemas de arquivos montados;
+- Impedir que a busca entre em `/proc`, `/sys` ou diretórios muito grandes.
+
+Para isso, existem opções como:
+
+```text
+-maxdepth
+-mindepth
+-depth
+-prune
+-xdev
+-mount
+```
+
+---
+
+# O que é profundidade?
+
+A profundidade representa quantos níveis abaixo do diretório inicial o objeto está localizado.
+
+Imagine:
+
+```text
+/projeto
+├── README.md
+├── src
+│   ├── main.c
+│   └── libs
+│       └── helper.c
+└── tests
+    └── teste.c
+```
+
+Considerando `/projeto` como o ponto inicial:
+
+| Caminho | Profundidade |
+|---|---:|
+| `/projeto` | 0 |
+| `/projeto/README.md` | 1 |
+| `/projeto/src` | 1 |
+| `/projeto/src/main.c` | 2 |
+| `/projeto/src/libs` | 2 |
+| `/projeto/src/libs/helper.c` | 3 |
+
+O próprio diretório inicial está na profundidade:
+
+```text
+0
+```
+
+---
+
+# A opção `-maxdepth`
+
+A opção:
+
+```bash
+-maxdepth
+```
+
+define a profundidade máxima que o `find` poderá alcançar.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -maxdepth N
+```
+
+Onde:
+
+```text
+N
+```
+
+representa a quantidade máxima de níveis.
+
+---
+
+# `-maxdepth 0`
+
+```bash
+find /projeto -maxdepth 0
+```
+
+Resultado:
+
+```text
+/projeto
+```
+
+O `find` mostra apenas o próprio diretório inicial.
+
+Ele não entra em nenhum subdiretório.
+
+---
+
+# `-maxdepth 1`
+
+```bash
+find /projeto -maxdepth 1
+```
+
+Resultado:
+
+```text
+/projeto
+/projeto/README.md
+/projeto/src
+/projeto/tests
+```
+
+O `find` mostra:
+
+- O diretório inicial;
+- Seus filhos imediatos.
+
+Ele não entra mais profundamente em `src` ou `tests`.
+
+---
+
+# `-maxdepth 2`
+
+```bash
+find /projeto -maxdepth 2
+```
+
+Resultado:
+
+```text
+/projeto
+/projeto/README.md
+/projeto/src
+/projeto/src/main.c
+/projeto/src/libs
+/projeto/tests
+/projeto/tests/teste.c
+```
+
+O arquivo:
+
+```text
+/projeto/src/libs/helper.c
+```
+
+não aparece porque está na profundidade `3`.
+
+---
+
+# Exemplo filtrando arquivos
+
+```bash
+find /projeto -maxdepth 1 -type f
+```
+
+Tradução:
+
+> Procure arquivos comuns no próprio diretório `/projeto` e no primeiro nível abaixo dele.
+
+Resultado possível:
+
+```text
+/projeto/README.md
+```
+
+Arquivos dentro de `/projeto/src` não serão retornados.
+
+---
+
+# Quando utilizar `-maxdepth`?
+
+É útil quando você deseja:
+
+- Evitar buscas muito profundas;
+- Analisar somente a raiz de um projeto;
+- Listar apenas filhos diretos;
+- Melhorar o desempenho;
+- Reduzir resultados desnecessários;
+- Evitar entrar em estruturas muito grandes.
+
+---
+
+# Exemplo em `/home`
+
+```bash
+find /home -maxdepth 2 -type f
+```
+
+Isso pode mostrar arquivos diretamente dentro dos diretórios pessoais dos usuários sem percorrer todos os projetos, caches e downloads internos.
+
+---
+
+# Exemplo em Pentest
+
+```bash
+find /home -maxdepth 3 -type f \
+\( -iname "*.txt" -o -iname "*.bak" -o -iname "*.old" \) \
+2>/dev/null
+```
+
+O limite de profundidade ajuda a reduzir o volume de resultados.
+
+---
+
+# A opção `-mindepth`
+
+A opção:
+
+```bash
+-mindepth
+```
+
+define a profundidade mínima necessária para que um resultado seja considerado.
+
+## Sintaxe
+
+```bash
+find DIRETORIO -mindepth N
+```
+
+---
+
+# `-mindepth 1`
+
+```bash
+find /projeto -mindepth 1
+```
+
+O próprio diretório inicial:
+
+```text
+/projeto
+```
+
+não será exibido.
+
+A busca começará a mostrar resultados a partir do primeiro nível.
+
+Resultado:
+
+```text
+/projeto/README.md
+/projeto/src
+/projeto/src/main.c
+/projeto/src/libs
+/projeto/src/libs/helper.c
+/projeto/tests
+/projeto/tests/teste.c
+```
+
+---
+
+# Por que isso é útil?
+
+Imagine que você queira remover diretórios vazios dentro de um projeto, mas não queira que o próprio diretório inicial seja considerado.
+
+```bash
+find /projeto -mindepth 1 -type d -empty
+```
+
+Assim, `/projeto` não será retornado, mesmo que esteja vazio.
+
+---
+
+# `-mindepth 2`
+
+```bash
+find /projeto -mindepth 2
+```
+
+O `find` ignora:
+
+```text
+/projeto
+/projeto/README.md
+/projeto/src
+/projeto/tests
+```
+
+e começa a mostrar objetos a partir do segundo nível.
+
+Resultado possível:
+
+```text
+/projeto/src/main.c
+/projeto/src/libs
+/projeto/src/libs/helper.c
+/projeto/tests/teste.c
+```
+
+---
+
+# Combinando `-mindepth` e `-maxdepth`
+
+Podemos criar uma faixa de profundidade.
+
+```bash
+find /projeto -mindepth 1 -maxdepth 2
+```
+
+Tradução:
+
+> Mostre apenas os objetos localizados entre os níveis 1 e 2.
+
+O diretório inicial não aparece.
+
+Objetos abaixo do nível 2 também não aparecem.
+
+---
+
+# Exemplo prático
+
+```bash
+find /home -mindepth 2 -maxdepth 3 -type f
+```
+
+Esse comando procura arquivos entre os níveis 2 e 3 abaixo de `/home`.
+
+---
+
+# Comparação
+
+| Opção | Função |
+|---|---|
+| `-maxdepth N` | Não descer além do nível `N` |
+| `-mindepth N` | Não considerar resultados antes do nível `N` |
+
+---
+
+# A opção `-depth`
+
+Por padrão, o `find` normalmente analisa um diretório antes de analisar seu conteúdo.
+
+Exemplo simplificado:
+
+```text
+/projeto
+/projeto/src
+/projeto/src/main.c
+```
+
+Com:
+
+```bash
+-depth
+```
+
+o conteúdo é processado antes do diretório que o contém.
+
+Resultado simplificado:
+
+```text
+/projeto/src/main.c
+/projeto/src
+/projeto
+```
+
+---
+
+# Sintaxe
+
+```bash
+find DIRETORIO -depth
+```
+
+---
+
+# Para que serve?
+
+É especialmente útil quando uma ação depende de processar primeiro os objetos mais profundos.
+
+Exemplo clássico:
+
+- Remover arquivos;
+- Depois remover os diretórios vazios que os continham.
+
+Se o diretório fosse processado primeiro, ele ainda conteria arquivos e não poderia ser removido.
+
+---
+
+# Exemplo
+
+```bash
+find ./temporario -depth -print
+```
+
+Estrutura:
+
+```text
+temporario/
+└── pasta/
+    └── arquivo.txt
+```
+
+Ordem aproximada:
+
+```text
+./temporario/pasta/arquivo.txt
+./temporario/pasta
+./temporario
+```
+
+---
+
+# Relação entre `-depth` e `-delete`
+
+A ação:
+
+```bash
+-delete
+```
+
+faz com que o `find` utilize uma lógica de processamento em profundidade.
+
+Isso é necessário para remover primeiro o conteúdo e depois os diretórios.
+
+Exemplo:
+
+```bash
+find ./temporario -depth -type f -delete
+```
+
+Entretanto, normalmente não é necessário escrever `-depth` explicitamente quando `-delete` já está sendo utilizado no GNU `find`.
+
+> [!warning]
+> O uso de `-delete` exige muito cuidado. Sempre confira os resultados com `-print` antes.
+
+---
+
+# A opção `-prune`
+
+A opção:
+
+```bash
+-prune
+```
+
+impede que o `find` entre em determinado diretório.
+
+Ela significa, de forma aproximada:
+
+> Não percorra o conteúdo desta árvore.
+
+---
+
+# Quando utilizar?
+
+É útil para ignorar diretórios como:
+
+```text
+.git
+node_modules
+venv
+cache
+backup
+proc
+sys
+```
+
+---
+
+# Exemplo simples
+
+Imagine:
+
+```text
+/projeto
+├── src
+│   └── main.py
+├── .git
+│   ├── config
+│   └── objects
+└── README.md
+```
+
+Queremos pesquisar o projeto sem entrar em `.git`.
+
+Comando:
+
+```bash
+find /projeto -path "/projeto/.git" -prune -o -print
+```
+
+---
+
+# Explicando o comando
+
+```bash
+find /projeto \
+-path "/projeto/.git" \
+-prune \
+-o \
+-print
+```
+
+| Parte | Função |
+|---|---|
+| `find /projeto` | Inicia a busca |
+| `-path "/projeto/.git"` | Identifica o diretório `.git` |
+| `-prune` | Impede a entrada nesse diretório |
+| `-o` | OU |
+| `-print` | Mostra os outros resultados |
+
+Fluxo simplificado:
+
+```text
+O caminho é /projeto/.git?
+        │
+       Sim
+        │
+      -prune
+        │
+Não entrar no diretório
+```
+
+Caso não seja `.git`:
+
+```text
+-path não corresponde
+        │
+       -o
+        │
+      -print
+```
+
+---
+
+# Ignorando qualquer diretório `.git`
+
+```bash
+find . -path "*/.git" -prune -o -print
+```
+
+Esse comando evita entrar em qualquer diretório chamado `.git`.
+
+---
+
+# Procurar arquivos Python ignorando `.git`
+
+```bash
+find . \
+-path "*/.git" -prune \
+-o -type f -name "*.py" -print
+```
+
+Tradução:
+
+> Ignore árvores `.git`; nos demais locais, mostre arquivos terminados em `.py`.
+
+---
+
+# Ignorando `node_modules`
+
+```bash
+find . \
+-path "*/node_modules" -prune \
+-o -type f -name "*.js" -print
+```
+
+Isso evita percorrer milhares de arquivos de dependências.
+
+---
+
+# Ignorando vários diretórios
+
+```bash
+find . \
+\( -path "*/.git" -o -path "*/node_modules" -o -path "*/venv" \) \
+-prune \
+-o -type f -print
+```
+
+Tradução:
+
+> Ignore `.git`, `node_modules` e `venv`; mostre os outros arquivos.
+
+---
+
+# Por que `-prune` parece complicado?
+
+Porque ele normalmente precisa ser combinado com:
+
+```text
+-o
+-print
+```
+
+Isso acontece devido ao modo como o `find` avalia expressões.
+
+O padrão mental é:
+
+```text
+diretório a ignorar
+        ↓
+-prune
+        ↓
+OU
+        ↓
+condição dos resultados desejados
+        ↓
+-print
+```
+
+---
+
+# `-prune` e `-depth`
+
+Existe uma interação importante.
+
+Quando:
+
+```bash
+-depth
+```
+
+está ativo, o `find` precisa entrar no diretório antes de processá-lo.
+
+Nesse cenário, `-prune` não consegue impedir corretamente a descida, porque o conteúdo já foi visitado.
+
+Portanto, evite combinar `-prune` com:
+
+```bash
+-depth
+```
+
+quando seu objetivo for impedir que o diretório seja percorrido.
+
+Como `-delete` implica processamento em profundidade no GNU `find`, combinar exclusão e `-prune` também exige muito cuidado.
+
+---
+
+# A opção `-xdev`
+
+A opção:
+
+```bash
+-xdev
+```
+
+impede que o `find` atravesse para outro sistema de arquivos.
+
+## Sintaxe
+
+```bash
+find / -xdev
+```
+
+---
+
+# O que é outro sistema de arquivos?
+
+O diretório raiz pode conter diferentes sistemas de arquivos montados.
+
+Exemplo:
+
+```text
+/
+├── home
+├── proc
+├── sys
+├── dev
+├── media
+│   └── disco-externo
+└── mnt
+    └── compartilhamento
+```
+
+Alguns desses caminhos podem pertencer a:
+
+- Outra partição;
+- Disco externo;
+- NFS;
+- Sistema de arquivos virtual;
+- Container;
+- Compartilhamento de rede.
+
+---
+
+# Exemplo sem `-xdev`
+
+```bash
+find / -type f
+```
+
+A busca pode atravessar:
+
+```text
+/proc
+/sys
+/dev
+/mnt
+/media
+```
+
+dependendo das montagens e permissões.
+
+---
+
+# Exemplo com `-xdev`
+
+```bash
+find / -xdev -type f
+```
+
+O `find` permanece no mesmo sistema de arquivos do diretório inicial.
+
+---
+
+# Uso em enumeração SUID
+
+```bash
+find / -xdev -type f -perm -4000 2>/dev/null
+```
+
+Isso procura arquivos SUID somente no sistema de arquivos onde `/` está localizado.
+
+Vantagens:
+
+- Menos ruído;
+- Busca mais rápida;
+- Evita compartilhamentos de rede;
+- Evita discos externos;
+- Evita algumas montagens desnecessárias.
+
+Desvantagem:
+
+- Pode ignorar resultados interessantes em outros sistemas de arquivos montados.
+
+---
+
+# A opção `-mount`
+
+No GNU `find`, a opção:
+
+```bash
+-mount
+```
+
+possui finalidade equivalente a:
+
+```bash
+-xdev
+```
+
+Exemplo:
+
+```bash
+find / -mount -type f
+```
+
+Ela impede que a busca atravesse para outros sistemas de arquivos.
+
+---
+
+# Comparando `-xdev` e `-mount`
+
+| Opção | Função |
+|---|---|
+| `-xdev` | Permanecer no mesmo sistema de arquivos |
+| `-mount` | Equivalente a `-xdev` no GNU `find` |
+
+`-xdev` costuma ser mais claro e bastante utilizado em scripts.
+
+---
+
+# Como visualizar os sistemas de arquivos montados
+
+```bash
+findmnt
+```
+
+ou:
+
+```bash
+mount
+```
+
+ou:
+
+```bash
+df -T
+```
+
+Esses comandos ajudam a compreender quais caminhos pertencem a sistemas de arquivos diferentes.
+
+---
+
+# Casos de uso em Administração Linux
+
+## Procurar logs sem sair da partição
+
+```bash
+find /var -xdev -type f -name "*.log"
+```
+
+---
+
+## Encontrar arquivos grandes sem entrar em montagens externas
+
+```bash
+find / -xdev -type f -size +1G 2>/dev/null
+```
+
+---
+
+## Ignorar diretórios de dependências
+
+```bash
+find ./projeto \
+\( -path "*/node_modules" -o -path "*/venv" \) \
+-prune \
+-o -type f -print
+```
+
+---
+
+# Casos de uso em Shell Script
+
+## Processar apenas arquivos do primeiro nível
+
+```bash
+find "$HOME/Downloads" -maxdepth 1 -type f -print
+```
+
+---
+
+## Evitar o próprio diretório inicial
+
+```bash
+find "$diretorio" -mindepth 1 -maxdepth 1 -print
+```
+
+---
+
+## Ignorar o diretório de backup
+
+```bash
+find "$diretorio" \
+-path "$diretorio/backup" -prune \
+-o -type f -print
+```
+
+---
+
+# Casos de uso em Pentest e CTF
+
+## Analisar arquivos nos diretórios pessoais sem descer excessivamente
+
+```bash
+find /home -maxdepth 3 -type f 2>/dev/null
+```
+
+---
+
+## Procurar backups ignorando caches
+
+```bash
+find /home \
+\( -path "*/.cache" -o -path "*/node_modules" \) \
+-prune \
+-o -type f \
+\( -iname "*.bak" -o -iname "*.old" -o -iname "*.zip" \) \
+-print 2>/dev/null
+```
+
+---
+
+## Enumerar SUID apenas no sistema de arquivos principal
+
+```bash
+find / -xdev -type f -perm -4000 2>/dev/null
+```
+
+---
+
+## Procurar arquivos em `/opt` até dois níveis
+
+```bash
+find /opt -maxdepth 2 -type f -ls 2>/dev/null
+```
+
+Isso pode revelar rapidamente:
+
+- Scripts;
+- Binários personalizados;
+- Configurações;
+- Backups.
+
+---
+
+# Como escolher a profundidade?
+
+Pergunte:
+
+1. Preciso analisar toda a árvore?
+2. Sei aproximadamente onde o arquivo está?
+3. O diretório possui milhares de subdiretórios?
+4. Existem caches ou dependências?
+5. Quero apenas filhos diretos?
+6. Preciso evitar sistemas de arquivos montados?
+
+Uma busca menor normalmente é:
+
+- Mais rápida;
+- Mais fácil de analisar;
+- Menos ruidosa;
+- Menos propensa a erros.
+
+---
+
+# Erros comuns
+
+## Acreditar que `-maxdepth 1` mostra apenas arquivos
+
+```bash
+find . -maxdepth 1
+```
+
+mostra qualquer tipo de objeto no primeiro nível.
+
+Para mostrar somente arquivos:
+
+```bash
+find . -maxdepth 1 -type f
+```
+
+---
+
+## Esquecer que o diretório inicial está no nível 0
+
+```bash
+find . -maxdepth 0
+```
+
+mostra apenas:
+
+```text
+.
+```
+
+---
+
+## Usar `-prune` sem `-o -print`
+
+Exemplo incompleto:
+
+```bash
+find . -path "*/.git" -prune
+```
+
+Isso apenas identifica e poda o diretório `.git`.
+
+Não define claramente o que deve ser mostrado nos outros caminhos.
+
+Forma comum:
+
+```bash
+find . -path "*/.git" -prune -o -print
+```
+
+---
+
+## Colocar `-print` no local errado
+
+O comando:
+
+```bash
+find . -print -path "*/.git" -prune
+```
+
+pode imprimir o caminho antes de decidir podá-lo.
+
+A ordem das expressões importa.
+
+---
+
+## Combinar `-prune` com `-depth`
+
+Com processamento em profundidade, o conteúdo pode já ter sido visitado antes de o diretório ser podado.
+
+---
+
+## Usar `-xdev` e esquecer outras partições
+
+`-xdev` reduz a busca, mas também pode deixar de encontrar arquivos em:
+
+- `/home`, caso seja partição separada;
+- `/var`, caso seja partição separada;
+- Montagens NFS;
+- Volumes adicionais.
+
+Use apenas quando essa limitação fizer sentido.
+
+---
+
+# Mini cheatsheet
+
+| Objetivo | Comando |
+|---|---|
+| Apenas o diretório inicial | `find . -maxdepth 0` |
+| Primeiro nível | `find . -maxdepth 1` |
+| Ignorar o diretório inicial | `find . -mindepth 1` |
+| Entre níveis 1 e 2 | `find . -mindepth 1 -maxdepth 2` |
+| Processar conteúdo primeiro | `find . -depth` |
+| Ignorar `.git` | `find . -path "*/.git" -prune -o -print` |
+| Ignorar `node_modules` | `find . -path "*/node_modules" -prune -o -print` |
+| Não atravessar montagens | `find / -xdev` |
+| Mesmo efeito no GNU | `find / -mount` |
+| SUID no sistema principal | `find / -xdev -type f -perm -4000 2>/dev/null` |
+
+---
+
+# Resumo
+
+As principais opções de controle do percurso são:
+
+```text
+-maxdepth N → profundidade máxima
+-mindepth N → profundidade mínima
+-depth      → processar conteúdo antes do diretório
+-prune      → impedir a entrada em determinada árvore
+-xdev       → não atravessar outros sistemas de arquivos
+-mount      → equivalente a -xdev no GNU find
+```
+
+Essas opções ajudam a criar buscas:
+
+- Mais rápidas;
+- Mais específicas;
+- Menos ruidosas;
+- Mais seguras.
+
+Na próxima parte estudaremos as ações executadas após um resultado ser encontrado:
+
+- `-print`;
+- `-print0`;
+- `-printf`;
+- `-ls`;
+- `-exec`;
+- `-execdir`;
+- `-ok`;
+- `-delete`;
+- `-quit`.
+

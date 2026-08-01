@@ -97,13 +97,13 @@
 
 ## HackerSploit ⭐⭐⭐⭐⭐
 
-| Item | Informação |
-|---|---|
-| **Foco** | Pentest, Linux, segurança Web e ferramentas ofensivas |
-| **Idioma** | Inglês |
-| **Nível** | Iniciante / Intermediário |
-| **Uso recomendado** | Tutoriais práticos e demonstrações de ferramentas |
-| **Link** | [Acessar o canal](https://www.youtube.com/@HackerSploit) |
+| Item                | Informação                                               |
+| ------------------- | -------------------------------------------------------- |
+| **Foco**            | Pentest, Linux, segurança Web e ferramentas ofensivas    |
+| **Idioma**          | Inglês                                                   |
+| **Nível**           | Iniciante / Intermediário                                |
+| **Uso recomendado** | Tutoriais práticos e demonstrações de ferramentas        |
+| **Link**            | [Acessar o canal](https://www.youtube.com/@HackerSploit) |
 
 ---
 

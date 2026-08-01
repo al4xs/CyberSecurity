@@ -301,3 +301,29 @@ Ao concluir este roadmap, o objetivo é ser capaz de:
 - Desenvolver ferramentas próprias em Bash e Python.
 - Compreender metodologias de Pentest Linux, Windows e Web.
 - Evoluir para máquinas Medium com uma boa base técnica.
+
+---
+
+# 📂 Inglês
+
+Durante os estudos, procure consumir conteúdos em inglês sempre que possível.
+
+No início, utilize ferramentas de tradução apenas como apoio.
+
+## Ferramentas
+
+### YouTube Dubbing
+
+Objetivo
+
+- Traduzir vídeos do YouTube.
+- Facilitar o acompanhamento de conteúdos técnicos.
+- Auxiliar na aprendizagem do inglês técnico.
+
+---
+
+## Objetivo
+
+- [ ] Diminuir gradualmente o uso da tradução.
+- [ ] Aprender termos técnicos da área.
+- [ ] Conseguir assistir vídeos em inglês sem depender de tradução.

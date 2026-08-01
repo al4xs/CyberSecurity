@@ -1863,3 +1863,613 @@ Na próxima parte estudaremos os parâmetros mais utilizados em ferramentas prof
 
 ---
 
+# nargs=
+
+## O que é?
+
+O parâmetro:
+
+```python
+nargs=
+```
+
+define **quantos valores um argumento pode receber**.
+
+Por padrão, todo argumento recebe apenas **um único valor**.
+
+Exemplo:
+
+```python
+parser.add_argument("--host")
+```
+
+Execução:
+
+```bash
+python scanner.py --host 10.10.10.10
+```
+
+Resultado:
+
+```python
+args.host
+```
+
+```text
+10.10.10.10
+```
+
+Mas existem situações onde desejamos receber:
+
+- vários IPs;
+- várias portas;
+- vários arquivos;
+- vários usuários.
+
+Para isso existe o `nargs`.
+
+---
+
+# Funcionamento
+
+Visualmente:
+
+```text
+Sem nargs
+
+--host 10.10.10.10
+         │
+         ▼
+     Um valor
+```
+
+Com:
+
+```python
+nargs="+"
+```
+
+```text
+--host 10.10.10.10 10.10.10.20 10.10.10.30
+          │
+          ▼
+      Vários valores
+```
+
+---
+
+# nargs=1
+
+Recebe exatamente um valor.
+
+```python
+parser.add_argument(
+    "--host",
+    nargs=1
+)
+```
+
+Execução:
+
+```bash
+python scanner.py --host 10.10.10.10
+```
+
+Resultado:
+
+```python
+args.host
+```
+
+```python
+['10.10.10.10']
+```
+
+Observe.
+
+Mesmo sendo apenas um valor.
+
+O resultado é uma lista.
+
+---
+
+# nargs=2
+
+Recebe exatamente dois valores.
+
+Código.
+
+```python
+parser.add_argument(
+    "--hosts",
+    nargs=2
+)
+```
+
+Execução.
+
+```bash
+python scanner.py \
+--hosts 10.10.10.10 10.10.10.20
+```
+
+Resultado.
+
+```python
+args.hosts
+```
+
+```python
+[
+    '10.10.10.10',
+    '10.10.10.20'
+]
+```
+
+---
+
+Se informar apenas um.
+
+```bash
+python scanner.py \
+--hosts 10.10.10.10
+```
+
+Resultado.
+
+```text
+error
+
+expected 2 arguments
+```
+
+---
+
+# nargs="+"
+
+Um dos mais utilizados.
+
+Significa:
+
+> Receba um ou mais valores.
+
+Código.
+
+```python
+parser.add_argument(
+    "--hosts",
+    nargs="+"
+)
+```
+
+Execução.
+
+```bash
+python scanner.py \
+--hosts \
+10.10.10.10 \
+10.10.10.20 \
+10.10.10.30
+```
+
+Resultado.
+
+```python
+args.hosts
+```
+
+```python
+[
+    '10.10.10.10',
+    '10.10.10.20',
+    '10.10.10.30'
+]
+```
+
+---
+
+## O que acontece se não informar nenhum?
+
+```bash
+python scanner.py --hosts
+```
+
+Resultado.
+
+```text
+error
+
+expected at least one argument
+```
+
+---
+
+## Quando utilizar?
+
+Muito comum em:
+
+Scanner de portas
+
+```bash
+python scanner.py \
+--hosts \
+10.10.10.10 \
+10.10.10.20 \
+10.10.10.30
+```
+
+---
+
+Ferramentas de enumeração.
+
+```bash
+python enum.py \
+host1 \
+host2 \
+host3
+```
+
+---
+
+# nargs="*"
+
+Recebe zero ou mais valores.
+
+Código.
+
+```python
+parser.add_argument(
+    "--hosts",
+    nargs="*"
+)
+```
+
+Sem informar nada.
+
+```bash
+python scanner.py
+```
+
+Resultado.
+
+```python
+[]
+```
+
+Uma lista vazia.
+
+---
+
+Informando valores.
+
+```bash
+python scanner.py \
+--hosts \
+10.10.10.10 \
+10.10.10.20
+```
+
+Resultado.
+
+```python
+[
+    '10.10.10.10',
+    '10.10.10.20'
+]
+```
+
+---
+
+# Diferença entre * e +
+
+```text
++
+```
+
+Obrigatoriamente.
+
+Pelo menos um valor.
+
+```text
+*
+```
+
+Pode não receber nenhum.
+
+---
+
+Visualmente.
+
+```text
+nargs="+"
+
+1
+2
+3
+4
+...
+```
+
+Já.
+
+```text
+nargs="*"
+
+0
+1
+2
+3
+...
+```
+
+---
+
+# nargs="?"
+
+Recebe zero ou um valor.
+
+Código.
+
+```python
+parser.add_argument(
+    "--host",
+    nargs="?"
+)
+```
+
+Executando.
+
+```bash
+python scanner.py
+```
+
+Resultado.
+
+```python
+None
+```
+
+Agora.
+
+```bash
+python scanner.py \
+--host 10.10.10.10
+```
+
+Resultado.
+
+```python
+'10.10.10.10'
+```
+
+---
+
+Muito utilizado junto com.
+
+```python
+const=
+```
+
+que veremos posteriormente.
+
+---
+
+# Exemplo prático
+
+Imagine um scanner.
+
+Queremos aceitar várias portas.
+
+Código.
+
+```python
+parser.add_argument(
+    "-p",
+    "--ports",
+    nargs="+",
+    type=int
+)
+```
+
+Execução.
+
+```bash
+python scanner.py \
+-p \
+22 \
+80 \
+443 \
+3306
+```
+
+Resultado.
+
+```python
+args.ports
+```
+
+```python
+[
+    22,
+    80,
+    443,
+    3306
+]
+```
+
+Observe.
+
+Como utilizamos.
+
+```python
+type=int
+```
+
+Todos os valores foram convertidos automaticamente.
+
+---
+
+# Combinando nargs e type
+
+Essa combinação é extremamente comum.
+
+Código.
+
+```python
+parser.add_argument(
+    "--threads",
+    nargs="+",
+    type=int
+)
+```
+
+Execução.
+
+```bash
+python exemplo.py \
+--threads \
+1 \
+2 \
+4 \
+8
+```
+
+Resultado.
+
+```python
+[
+    1,
+    2,
+    4,
+    8
+]
+```
+
+---
+
+# metavar=
+
+## O que é?
+
+O parâmetro:
+
+```python
+metavar=
+```
+
+não altera o funcionamento do programa.
+
+Ele altera apenas a forma como o argumento aparece na ajuda (`-h`).
+
+---
+
+Sem:
+
+```python
+parser.add_argument("--target")
+```
+
+Saída.
+
+```text
+--target TARGET
+```
+
+---
+
+Com:
+
+```python
+parser.add_argument(
+    "--target",
+    metavar="IP"
+)
+```
+
+Agora.
+
+```bash
+python scanner.py -h
+```
+
+Resultado.
+
+```text
+--target IP
+```
+
+Observe.
+
+Mudou apenas a aparência.
+
+---
+
+Outro exemplo.
+
+```python
+parser.add_argument(
+    "--porta",
+    metavar="PORTA"
+)
+```
+
+Resultado.
+
+```text
+--porta PORTA
+```
+
+---
+
+# Quando utilizar?
+
+Quando desejar deixar a ajuda mais clara.
+
+Em vez de:
+
+```text
+TARGET
+```
+
+Pode escrever.
+
+```text
+IP
+```
+
+Ou.
+
+```text
+HOST
+```
+
+Ou.
+
+```text
+ARQUIVO
+```
+
+Ou.
+
+```text
+WORDLIST
+```
+
+Melhorando bastante a legibilidade.
+
+---
+
+# Resumo da Parte 4
+
+Nesta parte aprendemos:
+
+- `nargs=1`
+- `nargs=2`
+- `nargs="+"`
+- `nargs="*"`
+- `nargs="?"`
+- combinação entre `nargs` e `type`
+- `metavar=`
+
+Na próxima parte veremos os últimos parâmetros importantes (`dest` e `const`), aprenderemos a personalizar a ajuda (`description`, `epilog`, grupos de argumentos) e finalizaremos com exemplos completos de ferramentas reais de Pentest utilizando `argparse`.
+

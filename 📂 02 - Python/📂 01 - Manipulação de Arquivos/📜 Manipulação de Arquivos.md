@@ -1,7 +1,3 @@
-
-
----
-
 A biblioteca nativa do Python permite criar, ler, modificar e apagar arquivos através da função `open()`.
 
 ---

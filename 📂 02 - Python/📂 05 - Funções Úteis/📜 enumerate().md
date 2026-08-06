@@ -1,5 +1,3 @@
-# 📜 enumerate()
-
 `enumerate()` é uma função nativa do Python utilizada para percorrer objetos iteráveis adicionando automaticamente um índice para cada elemento.
 
 Ela elimina a necessidade de controlar manualmente um contador.
@@ -522,3 +520,4 @@ Agora cada elemento é uma tupla.
 | Retorno |
 |---------|
 | enumerate object |
+

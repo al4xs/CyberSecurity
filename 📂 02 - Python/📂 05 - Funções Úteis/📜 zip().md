@@ -1251,3 +1251,812 @@ for host, porta in zip(...):
 ```
 
 O código fica muito mais legível.
+
+---
+
+# Desfazendo um zip() (Unpacking)
+
+Até agora aprendemos a unir várias listas.
+
+Mas também podemos fazer o processo inverso.
+
+Ou seja.
+
+Separar novamente os dados.
+
+Para isso utilizamos.
+
+```python
+*
+```
+
+Este recurso recebe o nome de.
+
+```text
+Unpacking
+```
+
+ou.
+
+```text
+Desempacotamento
+```
+
+---
+
+# Exemplo
+
+Temos.
+
+```python
+dados = [
+
+    ("Ana",20),
+
+    ("Carlos",30),
+
+    ("Pedro",25)
+
+]
+```
+
+Queremos.
+
+```python
+nomes
+
+↓
+
+["Ana","Carlos","Pedro"]
+
+---------------------
+
+idades
+
+↓
+
+[20,30,25]
+```
+
+Podemos fazer.
+
+```python
+nomes, idades = zip(*dados)
+
+print(nomes)
+
+print(idades)
+```
+
+Resultado.
+
+```python
+('Ana', 'Carlos', 'Pedro')
+
+(20, 30, 25)
+```
+
+Observe.
+
+O `zip()` retorna tuplas.
+
+Caso queira listas.
+
+```python
+nomes = list(nomes)
+
+idades = list(idades)
+```
+
+Resultado.
+
+```python
+['Ana', 'Carlos', 'Pedro']
+
+[20,30,25]
+```
+
+---
+
+# Como funciona?
+
+Visualmente.
+
+Antes.
+
+```text
+("Ana",20)
+
+("Carlos",30)
+
+("Pedro",25)
+```
+
+Depois.
+
+```text
+zip(*dados)
+
+↓
+
+Ana
+Carlos
+Pedro
+
+----------------
+
+20
+30
+25
+```
+
+---
+
+# O que significa o *?
+
+Esse símbolo.
+
+```python
+*
+```
+
+Desempacota um iterável.
+
+Exemplo.
+
+Lista.
+
+```python
+lista = [1,2,3]
+```
+
+Sem.
+
+```python
+print(lista)
+```
+
+Resultado.
+
+```python
+[1,2,3]
+```
+
+Com.
+
+```python
+print(*lista)
+```
+
+Resultado.
+
+```text
+1 2 3
+```
+
+O Python "abre" a lista.
+
+No `zip()` acontece a mesma ideia.
+
+---
+
+# Casos avançados
+
+## Criando um dicionário
+
+Imagine.
+
+```python
+nomes = [
+
+    "Ana",
+
+    "Carlos",
+
+    "Pedro"
+
+]
+
+idades = [
+
+    20,
+
+    30,
+
+    25
+
+]
+```
+
+Podemos fazer.
+
+```python
+usuarios = dict(
+
+    zip(
+
+        nomes,
+
+        idades
+
+    )
+
+)
+
+print(usuarios)
+```
+
+Resultado.
+
+```python
+{
+
+    'Ana':20,
+
+    'Carlos':30,
+
+    'Pedro':25
+
+}
+```
+
+Muito utilizado.
+
+---
+
+# Criando uma lista de tuplas
+
+```python
+nomes = [
+
+    "Ana",
+
+    "Carlos"
+
+]
+
+idades = [
+
+    20,
+
+    30
+
+]
+
+resultado = list(
+
+    zip(
+
+        nomes,
+
+        idades
+
+    )
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+    ('Ana',20),
+
+    ('Carlos',30)
+]
+```
+
+---
+
+# Utilizando com enumerate()
+
+As funções podem ser combinadas.
+
+```python
+nomes = [
+
+    "Ana",
+
+    "Carlos",
+
+    "Pedro"
+
+]
+
+idades = [
+
+    20,
+
+    30,
+
+    25
+
+]
+
+for indice, (nome, idade) in enumerate(
+
+    zip(
+
+        nomes,
+
+        idades
+
+    ),
+
+    start=1
+
+):
+
+    print(
+
+        indice,
+
+        nome,
+
+        idade
+
+    )
+```
+
+Resultado.
+
+```text
+1 Ana 20
+
+2 Carlos 30
+
+3 Pedro 25
+```
+
+Observe.
+
+O Python realizou dois desempacotamentos.
+
+Primeiro.
+
+```text
+(Ana,20)
+```
+
+Depois.
+
+```text
+indice
+
+↓
+
+1
+```
+
+---
+
+# Comparação com enumerate()
+
+`enumerate()`
+
+Serve para.
+
+```text
+Índice
+
++
+
+Elemento
+```
+
+---
+
+`zip()`
+
+Serve para.
+
+```text
+Elemento
+
++
+
+Outro elemento
+```
+
+---
+
+Resumo.
+
+```text
+enumerate()
+
+↓
+
+Posição
+
++
+
+Valor
+
+------------------------
+
+zip()
+
+↓
+
+Valor
+
++
+
+Outro valor
+```
+
+---
+
+# Comparação com map()
+
+`zip()`
+
+Une informações.
+
+```text
+Nome
+
+↓
+
+Idade
+```
+
+---
+
+`map()`
+
+Transforma informações.
+
+```text
+"22"
+
+↓
+
+22
+```
+
+São funções completamente diferentes.
+
+---
+
+# Performance
+
+Assim como.
+
+```python
+enumerate()
+```
+
+`zip()` não cria uma lista automaticamente.
+
+Ele retorna um.
+
+```python
+zip object
+```
+
+Isso economiza memória.
+
+Somente quando fazemos.
+
+```python
+list(zip(...))
+```
+
+é que todos os elementos são armazenados em memória.
+
+Por isso.
+
+```python
+for item in zip(...):
+```
+
+é mais eficiente do que.
+
+```python
+lista = list(
+
+    zip(...)
+
+)
+```
+
+quando apenas queremos percorrer os dados.
+
+---
+
+# Erros comuns
+
+## Erro 1
+
+Esperar uma lista.
+
+```python
+resultado = zip(lista1, lista2)
+
+print(resultado)
+```
+
+Resultado.
+
+```text
+<zip object at ...>
+```
+
+Utilize.
+
+```python
+list(resultado)
+```
+
+caso queira visualizar.
+
+---
+
+## Erro 2
+
+Esquecer que zip() para no menor iterável.
+
+```python
+nomes
+
+↓
+
+3 elementos
+
+----------------
+
+idades
+
+↓
+
+2 elementos
+```
+
+Resultado.
+
+O último nome será ignorado.
+
+---
+
+## Erro 3
+
+Não utilizar strict=True quando necessário.
+
+Imagine.
+
+Lista de usuários.
+
+↓
+
+100 elementos.
+
+Lista de senhas.
+
+↓
+
+99 elementos.
+
+O último usuário ficará sem senha.
+
+Se isso for um erro para o seu programa.
+
+Utilize.
+
+```python
+strict=True
+```
+
+---
+
+## Erro 4
+
+Utilizar nomes genéricos.
+
+Evite.
+
+```python
+for x, y in zip(...):
+```
+
+Prefira.
+
+```python
+for host, porta in zip(...):
+```
+
+ou.
+
+```python
+for usuario, senha in zip(...):
+```
+
+---
+
+# Como aparece em ferramentas reais
+
+É extremamente comum encontrar.
+
+```python
+zip(...)
+```
+
+Em projetos como.
+
+- Impacket
+- pwntools
+- Scapy
+- Scrapy
+- Requests
+- Netmiko
+- Nornir
+- Ansible
+
+Principalmente para.
+
+- associar hosts e portas;
+- relacionar usuários e senhas;
+- montar tabelas;
+- criar dicionários;
+- gerar relatórios.
+
+---
+
+# Exemplo em Pentest
+
+Imagine.
+
+```python
+hosts = [
+
+    "10.10.10.5",
+
+    "10.10.10.20"
+
+]
+
+servicos = [
+
+    "SSH",
+
+    "HTTP"
+
+]
+
+portas = [
+
+    22,
+
+    80
+
+]
+```
+
+Criando um relatório.
+
+```python
+for host, servico, porta in zip(
+
+    hosts,
+
+    servicos,
+
+    portas
+
+):
+
+    print(
+
+        f"{host} -> {servico} ({porta})"
+
+    )
+```
+
+Saída.
+
+```text
+10.10.10.5 -> SSH (22)
+
+10.10.10.20 -> HTTP (80)
+```
+
+---
+
+# Curiosidades
+
+- `zip()` é uma função nativa do Python.
+- Funciona com qualquer objeto iterável.
+- Retorna um objeto `zip`.
+- Não cria listas automaticamente.
+- Pode trabalhar com dezenas de iteráveis ao mesmo tempo.
+- Pode ser combinado com praticamente qualquer estrutura de repetição.
+
+---
+
+# Resumo
+
+| Recurso | zip() |
+|----------|:-----:|
+| Função nativa | ✅ |
+| Funciona com iteráveis | ✅ |
+| Une vários iteráveis | ✅ |
+| Retorna objeto zip | ✅ |
+| Aceita `strict` | ✅ |
+| Permite desempacotamento | ✅ |
+
+---
+
+# Formas mais utilizadas
+
+Percorrer duas listas.
+
+```python
+for nome, idade in zip(
+
+    nomes,
+
+    idades
+
+):
+
+    ...
+```
+
+---
+
+Criar dicionário.
+
+```python
+usuarios = dict(
+
+    zip(
+
+        nomes,
+
+        idades
+
+    )
+
+)
+```
+
+---
+
+Separar novamente os dados.
+
+```python
+nomes, idades = zip(*dados)
+```
+
+---
+
+Validar tamanhos.
+
+```python
+zip(
+
+    lista1,
+
+    lista2,
+
+    strict=True
+
+)
+```
+
+---
+
+# Boas práticas
+
+✅ Utilize `zip()` quando houver relação entre duas ou mais coleções.
+
+✅ Utilize `strict=True` quando os iteráveis obrigatoriamente precisarem ter o mesmo tamanho.
+
+✅ Evite transformar em lista (`list(zip(...))`) se você apenas for percorrer os dados.
+
+✅ Utilize nomes descritivos para as variáveis.
+
+✅ Aproveite o desempacotamento (`zip(*dados)`) para reorganizar estruturas de dados de forma simples e legível.

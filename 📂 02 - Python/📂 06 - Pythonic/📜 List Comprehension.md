@@ -1193,3 +1193,592 @@ Isso facilita muito a leitura da saída de scanners, enumeradores e ferramentas 
 
 Na próxima parte veremos como utilizar `key` para criar critérios personalizados de ordenação.
 
+---
+
+# Utilizando o parâmetro key
+
+Até agora utilizamos apenas a ordenação padrão do Python.
+
+Porém, nem sempre queremos ordenar um objeto pelo seu valor.
+
+Às vezes queremos ordenar por:
+
+- Tamanho de uma palavra.
+- Idade de uma pessoa.
+- Severidade de uma vulnerabilidade.
+- Quantidade de portas abertas.
+- Data.
+- Nome.
+- Prioridade.
+
+Para isso utilizamos o parâmetro:
+
+```python
+key=
+```
+
+---
+
+# Como o key funciona?
+
+Imagine esta lista.
+
+```python
+nomes = [
+
+    "Carlos",
+
+    "Ana",
+
+    "Fernanda",
+
+    "João"
+
+]
+```
+
+Se utilizarmos.
+
+```python
+sorted(nomes)
+```
+
+Resultado.
+
+```python
+[
+'Ana',
+'Carlos',
+'Fernanda',
+'João'
+]
+```
+
+O Python ordenou alfabeticamente.
+
+Agora imagine que queremos ordenar pelo tamanho do nome.
+
+Para isso.
+
+```python
+sorted(
+
+    nomes,
+
+    key=len
+
+)
+```
+
+Resultado.
+
+```python
+[
+'Ana',
+'João',
+'Carlos',
+'Fernanda'
+]
+```
+
+Observe.
+
+O Python não comparou mais as palavras.
+
+Ele comparou.
+
+```text
+Ana
+
+↓
+
+3
+
+------------------
+
+João
+
+↓
+
+4
+
+------------------
+
+Carlos
+
+↓
+
+6
+
+------------------
+
+Fernanda
+
+↓
+
+9
+```
+
+---
+
+# Como o Python faz isso?
+
+Fluxo.
+
+```text
+Lista
+
+↓
+
+key()
+
+↓
+
+Novo valor
+
+↓
+
+Ordenação
+
+↓
+
+Resultado
+```
+
+Ou seja.
+
+O Python chama a função informada em `key` para cada elemento.
+
+Depois utiliza o retorno dessa função para ordenar.
+
+---
+
+# key=len
+
+É provavelmente o uso mais comum.
+
+```python
+nomes = [
+
+    "Carlos",
+
+    "Ana",
+
+    "Fernanda",
+
+    "João"
+
+]
+
+resultado = sorted(
+
+    nomes,
+
+    key=len
+
+)
+
+print(resultado)
+```
+
+Saída.
+
+```python
+[
+'Ana',
+'João',
+'Carlos',
+'Fernanda'
+]
+```
+
+---
+
+# O que o len recebe?
+
+```python
+len(objeto)
+```
+
+Recebe qualquer objeto que possua tamanho.
+
+Pode receber.
+
+- list
+- tuple
+- dict
+- set
+- str
+
+Não recebe.
+
+```python
+len(100)
+```
+
+Erro.
+
+```text
+TypeError
+```
+
+---
+
+# Outro exemplo
+
+```python
+palavras = [
+
+    "python",
+
+    "c",
+
+    "assembly",
+
+    "bash"
+
+]
+
+print(
+
+    sorted(
+
+        palavras,
+
+        key=len
+
+    )
+
+)
+```
+
+Resultado.
+
+```python
+[
+'c',
+'bash',
+'python',
+'assembly'
+]
+```
+
+---
+
+# key=str.lower
+
+Outro uso extremamente comum.
+
+Problema.
+
+```python
+nomes = [
+
+    "Carlos",
+
+    "ana",
+
+    "Bruno",
+
+    "joao"
+
+]
+
+print(sorted(nomes))
+```
+
+Resultado.
+
+```python
+[
+'Bruno',
+'Carlos',
+'ana',
+'joao'
+]
+```
+
+Isso acontece porque.
+
+```text
+A
+
+↓
+
+Unicode menor
+
+↓
+
+vem primeiro
+
+------------------
+
+a
+
+↓
+
+Unicode maior
+
+↓
+
+vem depois
+```
+
+---
+
+Podemos resolver.
+
+```python
+sorted(
+
+    nomes,
+
+    key=str.lower
+
+)
+```
+
+Resultado.
+
+```python
+[
+'ana',
+'Bruno',
+'Carlos',
+'joao'
+]
+```
+
+Agora todas as comparações são feitas utilizando letras minúsculas.
+
+---
+
+# key com função própria
+
+Também podemos criar nossa própria função.
+
+```python
+def tamanho(texto):
+
+    return len(texto)
+```
+
+Depois.
+
+```python
+sorted(
+
+    nomes,
+
+    key=tamanho
+
+)
+```
+
+Resultado.
+
+O mesmo obtido com.
+
+```python
+key=len
+```
+
+---
+
+# Posso passar qualquer função?
+
+Não.
+
+A função deve receber exatamente um elemento da lista.
+
+Exemplo.
+
+Lista.
+
+```python
+nomes = [
+
+    "Ana",
+
+    "Carlos",
+
+    "João"
+]
+```
+
+Python faz.
+
+```text
+tamanho("Ana")
+
+↓
+
+3
+
+-------------------
+
+tamanho("Carlos")
+
+↓
+
+6
+
+-------------------
+
+tamanho("João")
+
+↓
+
+4
+```
+
+Se sua função não aceitar apenas um parâmetro.
+
+Ocorrerá erro.
+
+---
+
+# Forma mais utilizada
+
+Na prática.
+
+Estas são as mais comuns.
+
+```python
+key=len
+```
+
+---
+
+```python
+key=str.lower
+```
+
+---
+
+```python
+key=lambda ...
+```
+
+A última veremos na próxima parte.
+
+Ela aparece em praticamente todos os projetos Python.
+
+---
+
+# Exemplo em automação
+
+Imagine uma lista de arquivos encontrados.
+
+```python
+arquivos = [
+
+    "config.php",
+
+    "passwd",
+
+    "backup.zip",
+
+    "id_rsa"
+
+]
+```
+
+Queremos visualizar primeiro os menores nomes.
+
+```python
+print(
+
+    sorted(
+
+        arquivos,
+
+        key=len
+
+    )
+
+)
+```
+
+Resultado.
+
+```python
+[
+'id_rsa',
+'passwd',
+'config.php',
+'backup.zip'
+]
+```
+
+---
+
+# Exemplo em Pentest
+
+Imagine que um scanner encontrou estas portas.
+
+```python
+portas = [
+
+    "8080",
+
+    "22",
+
+    "443",
+
+    "80"
+
+]
+```
+
+Ordenando normalmente.
+
+```python
+sorted(portas)
+```
+
+Resultado.
+
+```python
+[
+'22',
+'443',
+'80',
+'8080'
+]
+```
+
+Observe.
+
+Está ordenando como texto.
+
+Na próxima parte veremos como resolver isso utilizando `lambda`.
+
+---
+
+# Boas práticas
+
+✅ Utilize.
+
+```python
+key=len
+```
+
+Quando quiser ordenar pelo tamanho.
+
+---
+
+✅ Utilize.
+
+```python
+key=str.lower
+```
+
+Quando trabalhar com nomes.
+
+---
+
+✅ Evite criar funções enormes para utilizar em `key`.
+
+O ideal é que retornem apenas o valor utilizado na comparação.
+

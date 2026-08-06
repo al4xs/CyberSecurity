@@ -1782,3 +1782,680 @@ Quando trabalhar com nomes.
 
 O ideal é que retornem apenas o valor utilizado na comparação.
 
+---
+
+# Utilizando lambda com key
+
+Até agora utilizamos.
+
+```python
+key=len
+```
+
+e
+
+```python
+key=str.lower
+```
+
+Porém, essas funções já existem.
+
+Mas e quando queremos criar nosso próprio critério de ordenação?
+
+Para isso normalmente utilizamos:
+
+```python
+lambda
+```
+
+---
+
+# O que é lambda?
+
+`lambda` é uma função anônima.
+
+Ou seja.
+
+Uma função sem nome.
+
+Exemplo.
+
+Função comum.
+
+```python
+def dobro(numero):
+
+    return numero * 2
+```
+
+Utilizando.
+
+```python
+print(dobro(10))
+```
+
+Resultado.
+
+```python
+20
+```
+
+Agora utilizando lambda.
+
+```python
+dobro = lambda numero: numero * 2
+
+print(dobro(10))
+```
+
+Resultado.
+
+```python
+20
+```
+
+Produz exatamente o mesmo resultado.
+
+---
+
+# Sintaxe
+
+```python
+lambda argumentos: retorno
+```
+
+---
+
+# Como ler essa sintaxe?
+
+```python
+lambda
+
+↓
+
+Cria uma função
+
+-------------------
+
+argumentos
+
+↓
+
+Parâmetros da função
+
+-------------------
+
+:
+
+↓
+
+Início da expressão
+
+-------------------
+
+retorno
+
+↓
+
+Valor retornado
+```
+
+---
+
+# Parâmetros
+
+## argumentos
+
+### O que é?
+
+São os parâmetros recebidos pela função.
+
+---
+
+### É obrigatório?
+
+Depende.
+
+Pode existir.
+
+```python
+lambda x:
+```
+
+Ou vários.
+
+```python
+lambda x, y:
+```
+
+Ou nenhum.
+
+```python
+lambda:
+```
+
+---
+
+### O que recebe?
+
+Qualquer valor.
+
+Exemplo.
+
+```python
+lambda nome:
+```
+
+Recebe.
+
+```python
+str
+```
+
+---
+
+```python
+lambda idade:
+```
+
+Recebe.
+
+```python
+int
+```
+
+---
+
+```python
+lambda usuario:
+```
+
+Recebe.
+
+```python
+dict
+```
+
+---
+
+### Pode receber vários parâmetros?
+
+Sim.
+
+```python
+lambda nome, idade:
+```
+
+---
+
+# O retorno
+
+Após os dois pontos.
+
+```python
+lambda x: x * 2
+```
+
+Tudo que estiver depois de.
+
+```python
+:
+```
+
+é retornado automaticamente.
+
+Ou seja.
+
+```python
+lambda x: x * 2
+```
+
+equivale a.
+
+```python
+def dobro(x):
+
+    return x * 2
+```
+
+---
+
+# Utilizando lambda no sorted()
+
+É aqui que `lambda` aparece com mais frequência.
+
+Exemplo.
+
+```python
+usuarios = [
+
+    {
+        "nome": "Carlos",
+        "idade": 30
+    },
+
+    {
+        "nome": "Ana",
+        "idade": 20
+    },
+
+    {
+        "nome": "Pedro",
+        "idade": 25
+    }
+
+]
+```
+
+Queremos ordenar pela idade.
+
+```python
+usuarios_ordenados = sorted(
+
+    usuarios,
+
+    key=lambda usuario: usuario["idade"]
+
+)
+
+print(usuarios_ordenados)
+```
+
+Resultado.
+
+```python
+[
+    {'nome': 'Ana', 'idade': 20},
+    {'nome': 'Pedro', 'idade': 25},
+    {'nome': 'Carlos', 'idade': 30}
+]
+```
+
+---
+
+# Como o Python executa?
+
+O Python percorre cada elemento.
+
+```text
+Primeiro usuário
+
+↓
+
+lambda(usuario)
+
+↓
+
+30
+
+--------------------
+
+Segundo usuário
+
+↓
+
+lambda(usuario)
+
+↓
+
+20
+
+--------------------
+
+Terceiro usuário
+
+↓
+
+lambda(usuario)
+
+↓
+
+25
+```
+
+Depois utiliza esses valores para ordenar.
+
+---
+
+# Outro exemplo
+
+Lista.
+
+```python
+palavras = [
+
+    "python",
+
+    "c",
+
+    "assembly",
+
+    "bash"
+
+]
+```
+
+Ordenando pelo tamanho.
+
+```python
+sorted(
+
+    palavras,
+
+    key=lambda palavra: len(palavra)
+
+)
+```
+
+Resultado.
+
+```python
+[
+    'c',
+    'bash',
+    'python',
+    'assembly'
+]
+```
+
+Observe.
+
+Poderíamos utilizar.
+
+```python
+key=len
+```
+
+Esse exemplo serve apenas para mostrar como o `lambda` funciona.
+
+---
+
+# Ordenando dicionários
+
+Muito comum.
+
+```python
+vulnerabilidades = [
+
+    {
+        "nome": "SQL Injection",
+        "cvss": 9.8
+    },
+
+    {
+        "nome": "XSS",
+        "cvss": 6.5
+    },
+
+    {
+        "nome": "RCE",
+        "cvss": 10.0
+    }
+
+]
+```
+
+Ordenando.
+
+```python
+resultado = sorted(
+
+    vulnerabilidades,
+
+    key=lambda vulnerabilidade: vulnerabilidade["cvss"]
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+    {'nome': 'XSS', 'cvss': 6.5},
+    {'nome': 'SQL Injection', 'cvss': 9.8},
+    {'nome': 'RCE', 'cvss': 10.0}
+]
+```
+
+---
+
+# Ordenando em ordem decrescente
+
+Basta combinar.
+
+```python
+sorted(
+
+    vulnerabilidades,
+
+    key=lambda vulnerabilidade: vulnerabilidade["cvss"],
+
+    reverse=True
+
+)
+```
+
+Resultado.
+
+```python
+[
+    {'nome': 'RCE', 'cvss': 10.0},
+    {'nome': 'SQL Injection', 'cvss': 9.8},
+    {'nome': 'XSS', 'cvss': 6.5}
+]
+```
+
+---
+
+# Posso utilizar key sem lambda?
+
+Sim.
+
+Sempre que existir uma função pronta.
+
+```python
+key=len
+```
+
+é melhor do que.
+
+```python
+key=lambda texto: len(texto)
+```
+
+Porque fica mais simples e legível.
+
+---
+
+# Quando utilizar lambda?
+
+Utilize quando não existir uma função pronta.
+
+Exemplos.
+
+Ordenar por.
+
+- idade
+- preço
+- severidade
+- data
+- prioridade
+- quantidade de portas
+- qualquer campo de um dicionário
+
+---
+
+# Quando NÃO utilizar?
+
+Evite criar expressões muito grandes.
+
+Exemplo ruim.
+
+```python
+lambda usuario:
+(
+    usuario["idade"] * 2
+    +
+    len(usuario["nome"])
+    -
+    usuario["pontos"]
+)
+```
+
+Quando a lógica começa a ficar complexa.
+
+Prefira criar uma função.
+
+```python
+def criterio(usuario):
+
+    return ...
+```
+
+Depois.
+
+```python
+sorted(
+
+    usuarios,
+
+    key=criterio
+)
+```
+
+O código fica muito mais legível.
+
+---
+
+# Forma mais utilizada
+
+Na prática, estas são as três formas que você mais verá.
+
+```python
+key=len
+```
+
+---
+
+```python
+key=str.lower
+```
+
+---
+
+```python
+key=lambda x: x["campo"]
+```
+
+Essa última aparece constantemente em projetos Python.
+
+---
+
+# Exemplo em automação
+
+Ordenar arquivos pelo tamanho do nome.
+
+```python
+arquivos = [
+
+    "passwd",
+
+    "shadow",
+
+    "backup.zip",
+
+    "config.php"
+
+]
+
+print(
+
+    sorted(
+
+        arquivos,
+
+        key=lambda arquivo: len(arquivo)
+
+    )
+
+)
+```
+
+---
+
+# Exemplo em Pentest
+
+Imagine que um scanner retornou.
+
+```python
+hosts = [
+
+    {
+        "ip": "10.10.10.1",
+        "portas": 3
+    },
+
+    {
+        "ip": "10.10.10.5",
+        "portas": 10
+    },
+
+    {
+        "ip": "10.10.10.8",
+        "portas": 1
+    }
+
+]
+```
+
+Ordenando pela quantidade de portas abertas.
+
+```python
+resultado = sorted(
+
+    hosts,
+
+    key=lambda host: host["portas"],
+
+    reverse=True
+
+)
+
+print(resultado)
+```
+
+Assim, os hosts mais interessantes aparecem primeiro para análise.
+
+---
+
+# Boas práticas
+
+✅ Utilize `lambda` apenas para expressões pequenas.
+
+✅ Utilize funções normais quando a lógica ficar complexa.
+
+✅ Sempre prefira funções prontas (`len`, `str.lower`, etc.) quando elas atenderem ao problema.
+
+✅ Utilize nomes descritivos para o parâmetro do `lambda`.
+
+Evite.
+
+```python
+lambda x:
+```
+
+Prefira.
+
+```python
+lambda usuario:
+```
+
+ou.
+
+```python
+lambda vulnerabilidade:
+```
+
+O código fica mais fácil de entender.

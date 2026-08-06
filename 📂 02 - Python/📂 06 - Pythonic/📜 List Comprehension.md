@@ -2459,3 +2459,1369 @@ lambda vulnerabilidade:
 ```
 
 O código fica mais fácil de entender.
+
+---
+
+# Ordenando objetos (Classes)
+
+Até agora utilizamos listas contendo:
+
+- números
+- strings
+- dicionários
+
+Mas também podemos ordenar objetos criados por nós.
+
+Exemplo.
+
+```python
+class Usuario:
+
+    def __init__(self, nome, idade):
+
+        self.nome = nome
+        self.idade = idade
+
+
+usuarios = [
+
+    Usuario("Carlos", 30),
+    Usuario("Ana", 20),
+    Usuario("Pedro", 25)
+
+]
+```
+
+Queremos ordenar pela idade.
+
+```python
+usuarios = sorted(
+
+    usuarios,
+
+    key=lambda usuario: usuario.idade
+
+)
+
+for usuario in usuarios:
+
+    print(usuario.nome, usuario.idade)
+```
+
+Saída.
+
+```text
+Ana 20
+Pedro 25
+Carlos 30
+```
+
+Observe.
+
+Para acessar atributos de objetos utilizamos.
+
+```python
+usuario.idade
+```
+
+Enquanto em dicionários utilizamos.
+
+```python
+usuario["idade"]
+```
+
+---
+
+# operator.itemgetter()
+
+Existe outra forma de ordenar dicionários.
+
+Utilizando.
+
+```python
+from operator import itemgetter
+```
+
+---
+
+## O que é?
+
+`itemgetter()` é uma função da biblioteca `operator`.
+
+Ela cria uma função automaticamente para acessar posições de listas, tuplas ou chaves de dicionários.
+
+Na prática.
+
+```python
+key=lambda usuario: usuario["idade"]
+```
+
+é equivalente a.
+
+```python
+key=itemgetter("idade")
+```
+
+---
+
+# Sintaxe
+
+```python
+itemgetter(item)
+```
+
+---
+
+# Parâmetros
+
+## item
+
+### O que é?
+
+Elemento que será utilizado para comparação.
+
+---
+
+### O que recebe?
+
+Pode receber.
+
+```python
+str
+```
+
+Para dicionários.
+
+```python
+itemgetter("idade")
+```
+
+---
+
+```python
+int
+```
+
+Para listas ou tuplas.
+
+```python
+itemgetter(0)
+```
+
+---
+
+Também pode receber vários valores.
+
+```python
+itemgetter("idade", "nome")
+```
+
+---
+
+# Exemplo
+
+```python
+from operator import itemgetter
+
+usuarios = [
+
+    {"nome": "Carlos", "idade": 30},
+
+    {"nome": "Ana", "idade": 20},
+
+    {"nome": "Pedro", "idade": 25}
+
+]
+
+resultado = sorted(
+
+    usuarios,
+
+    key=itemgetter("idade")
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+    {'nome':'Ana','idade':20},
+    {'nome':'Pedro','idade':25},
+    {'nome':'Carlos','idade':30}
+]
+```
+
+---
+
+# itemgetter() ou lambda?
+
+As duas formas são corretas.
+
+```python
+key=lambda usuario: usuario["idade"]
+```
+
+ou.
+
+```python
+key=itemgetter("idade")
+```
+
+Na prática.
+
+A maioria dos desenvolvedores utiliza.
+
+```python
+lambda
+```
+
+porque é mais conhecida.
+
+Mas em projetos grandes você verá bastante.
+
+```python
+itemgetter()
+```
+
+Principalmente quando há muitas ordenações.
+
+---
+
+# operator.attrgetter()
+
+Semelhante ao itemgetter.
+
+Mas trabalha com atributos de objetos.
+
+---
+
+## Sintaxe
+
+```python
+attrgetter(atributo)
+```
+
+---
+
+## Exemplo
+
+```python
+from operator import attrgetter
+
+usuarios = sorted(
+
+    usuarios,
+
+    key=attrgetter("idade")
+
+)
+```
+
+Resultado.
+
+Mesmo comportamento.
+
+```python
+key=lambda usuario: usuario.idade
+```
+
+---
+
+# Quando utilizar?
+
+### itemgetter()
+
+Para.
+
+- listas
+- tuplas
+- dicionários
+
+---
+
+### attrgetter()
+
+Para.
+
+- objetos
+- classes
+
+---
+
+# Ordenando datas
+
+Datas normalmente estão em formato texto.
+
+Exemplo.
+
+```python
+datas = [
+
+    "2025-01-10",
+
+    "2023-08-01",
+
+    "2024-12-15"
+
+]
+```
+
+Como esse formato segue.
+
+```text
+AAAA-MM-DD
+```
+
+O Python consegue ordenar corretamente.
+
+```python
+print(sorted(datas))
+```
+
+Resultado.
+
+```python
+[
+'2023-08-01',
+'2024-12-15',
+'2025-01-10'
+]
+```
+
+---
+
+Já datas neste formato.
+
+```text
+DD/MM/AAAA
+```
+
+Não ficam corretas.
+
+```python
+datas = [
+
+    "20/05/2025",
+
+    "10/01/2024",
+
+    "05/12/2023"
+
+]
+
+print(sorted(datas))
+```
+
+O resultado será incorreto.
+
+Nesses casos utilizamos.
+
+```python
+datetime.strptime()
+```
+
+como chave de ordenação.
+
+```python
+from datetime import datetime
+
+datas = sorted(
+
+    datas,
+
+    key=lambda data:
+
+        datetime.strptime(
+
+            data,
+
+            "%d/%m/%Y"
+
+        )
+
+)
+```
+
+---
+
+# Ordenando IPs
+
+Erro muito comum.
+
+```python
+ips = [
+
+    "192.168.0.100",
+
+    "192.168.0.20",
+
+    "192.168.0.5"
+
+]
+
+print(sorted(ips))
+```
+
+Resultado.
+
+```python
+[
+'192.168.0.100',
+'192.168.0.20',
+'192.168.0.5'
+]
+```
+
+Está errado.
+
+Porque o Python comparou texto.
+
+---
+
+A forma correta.
+
+```python
+import ipaddress
+
+ips = sorted(
+
+    ips,
+
+    key=ipaddress.ip_address
+
+)
+```
+
+Resultado.
+
+```python
+[
+'192.168.0.5',
+'192.168.0.20',
+'192.168.0.100'
+]
+```
+
+Muito utilizado em ferramentas de enumeração.
+
+---
+
+# Exemplo em automação
+
+Imagine que um script encontrou.
+
+```python
+usuarios = [
+
+    {
+
+        "nome":"Carlos",
+
+        "prioridade":3
+
+    },
+
+    {
+
+        "nome":"Ana",
+
+        "prioridade":1
+
+    },
+
+    {
+
+        "nome":"Pedro",
+
+        "prioridade":2
+
+    }
+
+]
+```
+
+Ordenando.
+
+```python
+usuarios = sorted(
+
+    usuarios,
+
+    key=lambda usuario:
+
+        usuario["prioridade"]
+
+)
+```
+
+Agora os usuários aparecem na ordem correta.
+
+---
+
+# Exemplo em Pentest
+
+Scanner.
+
+```python
+hosts = [
+
+    {
+
+        "ip":"10.10.10.5",
+
+        "portas":8
+
+    },
+
+    {
+
+        "ip":"10.10.10.8",
+
+        "portas":2
+
+    },
+
+    {
+
+        "ip":"10.10.10.20",
+
+        "portas":15
+
+    }
+
+]
+```
+
+Ordenando pelos hosts mais interessantes.
+
+```python
+hosts = sorted(
+
+    hosts,
+
+    key=lambda host:
+
+        host["portas"],
+
+    reverse=True
+
+)
+```
+
+Resultado.
+
+```text
+10.10.10.20 -> 15 portas
+
+10.10.10.5 -> 8 portas
+
+10.10.10.8 -> 2 portas
+```
+
+Essa é uma situação muito comum em scanners e scripts de enumeração.
+
+---
+
+# Como aparece em projetos Open Source
+
+É muito comum encontrar.
+
+```python
+sorted(...)
+
+sort()
+
+key=lambda ...
+
+key=itemgetter(...)
+
+reverse=True
+```
+
+Em projetos como.
+
+- pwntools
+- Impacket
+- Scapy
+- Requests
+- Scrapy
+- Ansible
+- Django
+- Flask
+- Netmiko
+- Nornir
+
+Sempre que existe uma coleção de objetos, normalmente ela é ordenada antes de ser exibida ao usuário ou processada.
+
+---
+
+# Boas práticas
+
+✅ Utilize.
+
+```python
+lambda
+```
+
+quando precisar criar um critério personalizado.
+
+---
+
+✅ Utilize.
+
+```python
+itemgetter()
+```
+
+quando trabalhar bastante com dicionários.
+
+---
+
+✅ Utilize.
+
+```python
+attrgetter()
+```
+
+quando trabalhar com classes.
+
+---
+
+✅ Para IPs.
+
+Prefira.
+
+```python
+ipaddress.ip_address
+```
+
+ao invés da ordenação padrão.
+
+---
+
+✅ Para datas.
+
+Converta para objetos `datetime` antes de ordenar.
+
+Assim a ordenação será correta.
+
+---
+
+# Performance
+
+As duas formas de ordenação utilizam o mesmo algoritmo interno do Python.
+
+A diferença está na forma como trabalham.
+
+---
+
+## sort()
+
+Modifica a própria lista.
+
+```python
+lista.sort()
+```
+
+Não cria uma nova lista.
+
+Por isso normalmente utiliza menos memória.
+
+É a melhor escolha quando você não precisa manter a lista original.
+
+---
+
+## sorted()
+
+Cria uma nova lista.
+
+```python
+nova_lista = sorted(lista)
+```
+
+A lista original permanece intacta.
+
+Como cria uma nova lista, normalmente utiliza mais memória.
+
+---
+
+# Qual é mais rápido?
+
+Na maioria dos casos.
+
+```python
+sort()
+```
+
+é ligeiramente mais rápido.
+
+Motivos.
+
+- Não cria outra lista.
+- Trabalha diretamente na lista existente.
+- Utiliza menos memória.
+
+---
+
+# Quando utilizar sort()
+
+Quando.
+
+- A lista original pode ser modificada.
+- O desempenho é importante.
+- A lista será utilizada já ordenada.
+
+Exemplo.
+
+```python
+hosts.sort()
+```
+
+---
+
+# Quando utilizar sorted()
+
+Quando.
+
+- Não deseja modificar os dados originais.
+- Precisa criar outra lista.
+- Está trabalhando com tuplas.
+- Está trabalhando com sets.
+- Está trabalhando com generators.
+
+Exemplo.
+
+```python
+hosts_ordenados = sorted(hosts)
+```
+
+---
+
+# Algoritmo utilizado pelo Python
+
+O Python utiliza um algoritmo chamado.
+
+```text
+Timsort
+```
+
+Ele foi criado especificamente para o Python.
+
+---
+
+# Características do Timsort
+
+- Muito eficiente.
+- Estável.
+- Excelente para listas parcialmente ordenadas.
+- Utilizado desde o Python 2.3.
+
+---
+
+# O que significa ordenação estável?
+
+Imagine.
+
+```python
+usuarios = [
+
+    {
+
+        "nome":"Ana",
+
+        "idade":20
+
+    },
+
+    {
+
+        "nome":"Carlos",
+
+        "idade":20
+
+    },
+
+    {
+
+        "nome":"Pedro",
+
+        "idade":25
+
+    }
+
+]
+```
+
+Ordenando pela idade.
+
+```python
+usuarios = sorted(
+
+    usuarios,
+
+    key=lambda usuario:
+
+        usuario["idade"]
+
+)
+```
+
+Resultado.
+
+```python
+[
+    {"nome":"Ana","idade":20},
+    {"nome":"Carlos","idade":20},
+    {"nome":"Pedro","idade":25}
+]
+```
+
+Observe.
+
+Ana e Carlos possuem a mesma idade.
+
+Mesmo assim.
+
+A ordem original foi preservada.
+
+Isso é chamado de.
+
+```text
+Ordenação estável
+```
+
+---
+
+# Complexidade
+
+Melhor caso.
+
+```text
+O(n)
+```
+
+Quando a lista já está praticamente ordenada.
+
+---
+
+Caso médio.
+
+```text
+O(n log n)
+```
+
+---
+
+Pior caso.
+
+```text
+O(n log n)
+```
+
+Isso torna o Timsort extremamente eficiente.
+
+---
+
+# Erros comuns
+
+## Erro 1
+
+Esperar retorno do sort().
+
+```python
+lista = [5,2,1]
+
+nova = lista.sort()
+```
+
+Resultado.
+
+```python
+None
+```
+
+Correto.
+
+```python
+lista.sort()
+
+print(lista)
+```
+
+Ou.
+
+```python
+nova = sorted(lista)
+```
+
+---
+
+## Erro 2
+
+Misturar tipos.
+
+```python
+lista = [
+
+    10,
+
+    "20",
+
+    30
+
+]
+
+sorted(lista)
+```
+
+Resultado.
+
+```text
+TypeError
+```
+
+O Python não sabe comparar.
+
+```text
+int
+
+↓
+
+str
+```
+
+---
+
+## Erro 3
+
+Esquecer reverse.
+
+Muitos fazem.
+
+```python
+sorted(
+
+    numeros
+
+)
+```
+
+Esperando ordem decrescente.
+
+O correto.
+
+```python
+sorted(
+
+    numeros,
+
+    reverse=True
+
+)
+```
+
+---
+
+## Erro 4
+
+Ordenar IP como texto.
+
+Errado.
+
+```python
+sorted(
+
+    ips
+
+)
+```
+
+Correto.
+
+```python
+sorted(
+
+    ips,
+
+    key=ipaddress.ip_address
+
+)
+```
+
+---
+
+## Erro 5
+
+Ordenar datas como texto.
+
+Errado.
+
+```python
+sorted(datas)
+```
+
+Quando as datas estão no formato.
+
+```text
+DD/MM/AAAA
+```
+
+Correto.
+
+```python
+key=datetime.strptime(...)
+```
+
+---
+
+# Quando NÃO utilizar sort()
+
+Evite.
+
+Quando você ainda precisa da lista original.
+
+Exemplo.
+
+```python
+usuarios = [...]
+
+usuarios.sort()
+```
+
+Depois.
+
+```python
+print(usuarios_original)
+```
+
+Não existe mais.
+
+Ela foi modificada.
+
+Nesse caso.
+
+Utilize.
+
+```python
+sorted()
+```
+
+---
+
+# Quando NÃO utilizar lambda
+
+Evite.
+
+```python
+key=lambda usuario:
+
+(
+
+    usuario["idade"]
+
+    +
+
+    usuario["pontos"]
+
+    *
+
+    usuario["nivel"]
+
+    -
+
+    len(usuario["nome"])
+
+)
+```
+
+Muito difícil de ler.
+
+Prefira.
+
+```python
+def criterio(usuario):
+
+    ...
+```
+
+Depois.
+
+```python
+sorted(
+
+    usuarios,
+
+    key=criterio
+
+)
+```
+
+---
+
+# Como isso aparece em ferramentas reais
+
+Você encontrará esse padrão constantemente.
+
+```python
+resultado = sorted(
+
+    resultado,
+
+    key=lambda item:
+
+        item["score"],
+
+    reverse=True
+
+)
+```
+
+Muito comum em.
+
+- scanners
+- crawlers
+- fuzzers
+- enumeradores
+- ferramentas de análise
+- scripts de automação
+
+---
+
+# Exemplo em Pentest
+
+Imagine um scanner.
+
+```python
+vulnerabilidades = [
+
+    {
+
+        "host":"10.10.10.10",
+
+        "cvss":7.5
+
+    },
+
+    {
+
+        "host":"10.10.10.20",
+
+        "cvss":9.8
+
+    },
+
+    {
+
+        "host":"10.10.10.30",
+
+        "cvss":5.4
+
+    }
+
+]
+```
+
+Ordenando.
+
+```python
+vulnerabilidades = sorted(
+
+    vulnerabilidades,
+
+    key=lambda vulnerabilidade:
+
+        vulnerabilidade["cvss"],
+
+    reverse=True
+
+)
+```
+
+Saída.
+
+```text
+10.10.10.20 -> CVSS 9.8
+
+10.10.10.10 -> CVSS 7.5
+
+10.10.10.30 -> CVSS 5.4
+```
+
+Assim, as vulnerabilidades mais críticas aparecem primeiro.
+
+---
+
+# Exemplo em automação
+
+Ordenando arquivos encontrados.
+
+```python
+arquivos = [
+
+    "backup.zip",
+
+    "config.php",
+
+    "passwd",
+
+    "id_rsa"
+
+]
+
+for arquivo in sorted(arquivos):
+
+    print(arquivo)
+```
+
+Saída.
+
+```text
+backup.zip
+
+config.php
+
+id_rsa
+
+passwd
+```
+
+Muito comum antes de gerar relatórios.
+
+---
+
+# Curiosidades
+
+- `sort()` existe apenas para listas.
+- `sorted()` funciona com qualquer objeto iterável.
+- Ambos utilizam o algoritmo Timsort.
+- O Python preserva a estabilidade da ordenação.
+- `key` é aplicado antes da ordenação.
+- `reverse` é aplicado após a ordenação.
+- `sort()` retorna sempre `None`.
+
+---
+
+# Resumo
+
+| Recurso | sort() | sorted() |
+|----------|:------:|:--------:|
+| Modifica a lista | ✅ | ❌ |
+| Retorna nova lista | ❌ | ✅ |
+| Retorna `None` | ✅ | ❌ |
+| Funciona apenas com listas | ✅ | ❌ |
+| Funciona com iteráveis | ❌ | ✅ |
+| Aceita `key` | ✅ | ✅ |
+| Aceita `reverse` | ✅ | ✅ |
+| Utiliza Timsort | ✅ | ✅ |
+| Mantém estabilidade | ✅ | ✅ |
+
+---
+
+# Formas mais utilizadas
+
+Na maioria dos projetos você verá principalmente estas formas.
+
+Ordenação simples.
+
+```python
+sorted(lista)
+```
+
+---
+
+Ordem decrescente.
+
+```python
+sorted(
+
+    lista,
+
+    reverse=True
+
+)
+```
+
+---
+
+Ordenação por tamanho.
+
+```python
+sorted(
+
+    lista,
+
+    key=len
+
+)
+```
+
+---
+
+Ignorando maiúsculas e minúsculas.
+
+```python
+sorted(
+
+    nomes,
+
+    key=str.lower
+
+)
+```
+
+---
+
+Ordenando dicionários.
+
+```python
+sorted(
+
+    usuarios,
+
+    key=lambda usuario:
+
+        usuario["idade"]
+
+)
+```
+
+---
+
+Ordenando objetos.
+
+```python
+sorted(
+
+    usuarios,
+
+    key=lambda usuario:
+
+        usuario.idade
+
+)
+```
+
+---
+
+# Boas práticas
+
+✅ Prefira `sorted()` quando precisar preservar os dados originais.
+
+✅ Utilize `sort()` quando quiser modificar a lista existente e economizar memória.
+
+✅ Utilize funções prontas (`len`, `str.lower`) sempre que possível.
+
+✅ Utilize `lambda` apenas para expressões simples.
+
+✅ Para lógicas complexas, crie uma função com `def`.
+
+✅ Para IPs, utilize `ipaddress.ip_address`.
+
+✅ Para datas, utilize `datetime.strptime`.
+
+✅ Nunca espere que `sort()` retorne uma nova lista.
+
+✅ Sempre escolha um critério de ordenação que deixe o código claro para quem for lê-lo no futuro.

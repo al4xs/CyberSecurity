@@ -1192,3 +1192,4 @@ Saída.
 Isso facilita muito a leitura da saída de scanners, enumeradores e ferramentas de automação.
 
 Na próxima parte veremos como utilizar `key` para criar critérios personalizados de ordenação.
+

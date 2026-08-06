@@ -1214,3 +1214,794 @@ filter(
 ✅ Utilize `lambda` apenas para filtros simples.
 
 ✅ Converta para `list()` somente quando precisar armazenar todos os resultados.
+
+---
+
+# Comparação com for
+
+O `filter()` e o `for` resolvem o mesmo problema.
+
+A diferença está na forma de escrever.
+
+---
+
+## Utilizando for
+
+```python
+numeros = [
+
+    1,
+
+    2,
+
+    3,
+
+    4,
+
+    5,
+
+    6
+
+]
+
+resultado = []
+
+for numero in numeros:
+
+    if numero % 2 == 0:
+
+        resultado.append(numero)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+2,
+4,
+6
+]
+```
+
+---
+
+## Utilizando filter()
+
+```python
+resultado = list(
+
+    filter(
+
+        lambda numero:
+
+            numero % 2 == 0,
+
+        numeros
+
+    )
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+2,
+4,
+6
+]
+```
+
+O resultado é exatamente o mesmo.
+
+---
+
+# filter() x List Comprehension
+
+Essa é a comparação mais comum.
+
+---
+
+## filter()
+
+```python
+resultado = list(
+
+    filter(
+
+        lambda numero:
+
+            numero % 2 == 0,
+
+        numeros
+
+    )
+
+)
+```
+
+---
+
+## List Comprehension
+
+```python
+resultado = [
+
+    numero
+
+    for numero in numeros
+
+    if numero % 2 == 0
+
+]
+```
+
+Mesmo resultado.
+
+---
+
+# Qual utilizar?
+
+Na comunidade Python.
+
+A List Comprehension costuma ser preferida quando o filtro é simples.
+
+Ela normalmente é considerada mais legível.
+
+---
+
+## Exemplo
+
+```python
+usuarios = [
+
+    "Ana",
+
+    "",
+
+    "Carlos"
+
+]
+```
+
+Utilizando.
+
+```python
+filter(
+
+    None,
+
+    usuarios
+
+)
+```
+
+Funciona.
+
+Mas muitos preferem.
+
+```python
+[
+
+    usuario
+
+    for usuario in usuarios
+
+    if usuario
+
+]
+```
+
+As duas formas são válidas.
+
+---
+
+# filter() x map()
+
+As funções possuem objetivos diferentes.
+
+---
+
+## map()
+
+Transforma os elementos.
+
+```text
+10
+
+↓
+
+20
+```
+
+---
+
+## filter()
+
+Decide se o elemento permanece.
+
+```text
+10
+
+↓
+
+Mantém
+
+----------------
+
+5
+
+↓
+
+Remove
+```
+
+---
+
+Resumo.
+
+```text
+map()
+
+↓
+
+Transformar
+
+--------------------
+
+filter()
+
+↓
+
+Filtrar
+```
+
+---
+
+# Performance
+
+Assim como.
+
+```python
+map()
+```
+
+e.
+
+```python
+zip()
+```
+
+O `filter()` retorna um objeto.
+
+```python
+filter object
+```
+
+Isso significa que os elementos são produzidos conforme necessário.
+
+Somente quando fazemos.
+
+```python
+list(
+
+    filter(...)
+
+)
+```
+
+todos os resultados são carregados na memória.
+
+---
+
+# Como funciona internamente?
+
+Imagine.
+
+```python
+filter(
+
+    lambda numero:
+
+        numero % 2 == 0,
+
+    numeros
+
+)
+```
+
+O Python faz algo semelhante.
+
+```python
+for numero in numeros:
+
+    if numero % 2 == 0:
+
+        yield numero
+```
+
+Ou seja.
+
+Os elementos são produzidos sob demanda.
+
+---
+
+# Erros comuns
+
+## Erro 1
+
+Esperar uma lista.
+
+```python
+resultado = filter(
+
+    lambda numero:
+
+        numero > 2,
+
+    numeros
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```text
+<filter object at ...>
+```
+
+Correto.
+
+```python
+print(
+
+    list(resultado)
+
+)
+```
+
+---
+
+## Erro 2
+
+Esquecer que a função deve retornar um valor verdadeiro ou falso.
+
+Errado.
+
+```python
+filter(
+
+    lambda numero:
+
+        numero * 2,
+
+    numeros
+
+)
+```
+
+Embora funcione por causa do conceito de "truthy" e "falsy", ela não deixa claro que a intenção é filtrar.
+
+Prefira.
+
+```python
+filter(
+
+    lambda numero:
+
+        numero % 2 == 0,
+
+    numeros
+
+)
+```
+
+---
+
+## Erro 3
+
+Utilizar `filter()` para transformar dados.
+
+Errado.
+
+```python
+filter(
+
+    lambda numero:
+
+        numero * 2,
+
+    numeros
+
+)
+```
+
+Quem transforma é.
+
+```python
+map()
+```
+
+ou.
+
+```python
+List Comprehension
+```
+
+---
+
+## Erro 4
+
+Utilizar `filter()` quando uma List Comprehension fica mais clara.
+
+Exemplo.
+
+```python
+[
+
+    numero
+
+    for numero in numeros
+
+    if numero > 10
+
+]
+```
+
+Na maioria dos projetos modernos essa forma é mais comum.
+
+---
+
+# Quando NÃO utilizar
+
+Evite utilizar quando.
+
+- Precisar modificar os elementos.
+- Precisar executar várias operações.
+- O filtro ficou complexo.
+
+Nesses casos.
+
+Prefira.
+
+```python
+for
+```
+
+ou.
+
+```python
+List Comprehension
+```
+
+---
+
+# Como aparece em projetos Open Source
+
+Você encontrará muito.
+
+Removendo elementos vazios.
+
+```python
+filter(
+
+    None,
+
+    linhas
+
+)
+```
+
+---
+
+Selecionando arquivos.
+
+```python
+filter(
+
+    lambda arquivo:
+
+        arquivo.endswith(".php"),
+
+    arquivos
+
+)
+```
+
+---
+
+Selecionando objetos.
+
+```python
+filter(
+
+    lambda usuario:
+
+        usuario.ativo,
+
+    usuarios
+
+)
+```
+
+---
+
+Selecionando hosts.
+
+```python
+filter(
+
+    lambda host:
+
+        host["ativo"],
+
+    hosts
+
+)
+```
+
+---
+
+Muito comum em projetos como.
+
+- Django
+- Flask
+- Scrapy
+- Scapy
+- pwntools
+- Impacket
+- Requests
+
+---
+
+# Exemplos em Cyber Security
+
+Filtrando portas abertas.
+
+```python
+portas = [
+
+    22,
+
+    23,
+
+    80,
+
+    443,
+
+    8080
+
+]
+
+resultado = list(
+
+    filter(
+
+        lambda porta:
+
+            porta != 23,
+
+        portas
+
+    )
+
+)
+```
+
+Resultado.
+
+```python
+[
+22,
+
+80,
+
+443,
+
+8080
+]
+```
+
+---
+
+Filtrando IPs válidos.
+
+```python
+ips = [
+
+    "10.10.10.5",
+
+    "",
+
+    "10.10.10.20"
+
+]
+
+ips = list(
+
+    filter(
+
+        None,
+
+        ips
+
+    )
+
+)
+```
+
+Resultado.
+
+```python
+[
+'10.10.10.5',
+
+'10.10.10.20'
+]
+```
+
+---
+
+Selecionando vulnerabilidades críticas.
+
+```python
+vulnerabilidades = [
+
+    {
+
+        "cvss":9.8
+
+    },
+
+    {
+
+        "cvss":4.2
+
+    },
+
+    {
+
+        "cvss":8.5
+
+    }
+
+]
+
+criticas = list(
+
+    filter(
+
+        lambda vulnerabilidade:
+
+            vulnerabilidade["cvss"] >= 7,
+
+        vulnerabilidades
+
+    )
+
+)
+```
+
+---
+
+# Curiosidades
+
+- `filter()` é uma função nativa do Python.
+- Funciona com qualquer objeto iterável.
+- Retorna um objeto `filter`.
+- Trabalha com avaliação preguiçosa (*lazy evaluation*).
+- Pode ser combinado com `map()`, `zip()` e `enumerate()`.
+
+---
+
+# Resumo
+
+| Recurso | filter() |
+|----------|:--------:|
+| Função nativa | ✅ |
+| Filtra elementos | ✅ |
+| Transforma elementos | ❌ |
+| Retorna filter object | ✅ |
+| Funciona com iteráveis | ✅ |
+| Aceita lambda | ✅ |
+| Aceita funções próprias | ✅ |
+| Aceita `None` | ✅ |
+
+---
+
+# Formas mais utilizadas
+
+Filtrar números.
+
+```python
+filter(
+
+    lambda numero:
+
+        numero > 10,
+
+    numeros
+
+)
+```
+
+---
+
+Remover valores vazios.
+
+```python
+filter(
+
+    None,
+
+    lista
+
+)
+```
+
+---
+
+Filtrar objetos.
+
+```python
+filter(
+
+    lambda usuario:
+
+        usuario.ativo,
+
+    usuarios
+
+)
+```
+
+---
+
+Filtrar dicionários.
+
+```python
+filter(
+
+    lambda host:
+
+        host["ativo"],
+
+    hosts
+
+)
+```
+
+---
+
+# Boas práticas
+
+✅ Utilize `filter()` apenas quando o objetivo for selecionar elementos.
+
+✅ Utilize `None` para remover valores considerados falsos.
+
+✅ Prefira funções próprias quando a condição de filtro for grande ou reutilizável.
+
+✅ Para filtros simples, a List Comprehension costuma ser mais legível.
+
+✅ Lembre-se da diferença:
+
+- `map()` → transforma.
+- `filter()` → filtra.
+- List Comprehension → pode transformar e filtrar ao mesmo tempo.
+
+---
+
+# Conclusão
+
+`filter()` é uma ferramenta simples e eficiente para selecionar elementos de um iterável.
+
+Apesar de ainda ser muito utilizada, em muitos projetos modernos você verá filtros escritos com **List Comprehension**, por serem considerados mais claros e idiomáticos em Python.
+
+Conhecer ambas as abordagens permite entender e manter praticamente qualquer código Python encontrado em projetos reais.

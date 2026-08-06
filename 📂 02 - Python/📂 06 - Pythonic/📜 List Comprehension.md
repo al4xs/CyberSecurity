@@ -1854,3 +1854,645 @@ Resultado.
 Se a compreensão começar a ficar difícil de entender, utilize um `for` tradicional.
 
 O objetivo da List Comprehension é deixar o código mais legível, não mais complicado.
+
+---
+
+# Performance
+
+Uma das dúvidas mais comuns é.
+
+```text
+List Comprehension é mais rápida que um for?
+```
+
+Na maioria dos casos.
+
+✅ Sim.
+
+---
+
+# Por quê?
+
+A List Comprehension é otimizada pelo próprio Python.
+
+Enquanto.
+
+```python
+resultado = []
+
+for numero in range(1000):
+
+    resultado.append(numero)
+```
+
+executa diversas operações.
+
+A List Comprehension.
+
+```python
+resultado = [
+
+    numero
+
+    for numero in range(1000)
+
+]
+```
+
+é implementada de forma mais eficiente.
+
+---
+
+# Comparação
+
+## for
+
+```python
+resultado = []
+
+for numero in numeros:
+
+    resultado.append(
+
+        numero * 2
+
+    )
+```
+
+---
+
+## List Comprehension
+
+```python
+resultado = [
+
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+Mesmo resultado.
+
+Menos código.
+
+Normalmente mais rápida.
+
+---
+
+# Sempre devo utilizar?
+
+❌ Não.
+
+Essa é uma das maiores armadilhas.
+
+O objetivo da List Comprehension não é deixar o código menor.
+
+O objetivo é deixar o código mais legível.
+
+---
+
+# Quando NÃO utilizar
+
+Evite quando.
+
+- Existem vários `if`.
+- Existem vários `for`.
+- Existem muitos cálculos.
+- A expressão ficou difícil de entender.
+
+Exemplo ruim.
+
+```python
+resultado = [
+
+    numero ** 2
+
+    if numero % 2 == 0
+
+    else
+
+    numero ** 3
+
+    for numero in numeros
+
+    if numero > 10
+
+]
+```
+
+Funciona.
+
+Mas demora para entender.
+
+Nesse caso.
+
+Um `for` tradicional costuma ser melhor.
+
+---
+
+# Quando utilizar um for
+
+Sempre que existir muita lógica.
+
+Exemplo.
+
+```python
+resultado = []
+
+for usuario in usuarios:
+
+    if usuario["ativo"]:
+
+        idade = usuario["idade"]
+
+        if idade >= 18:
+
+            resultado.append(
+
+                usuario["nome"]
+
+            )
+```
+
+Muito mais fácil de ler.
+
+---
+
+# Quando utilizar List Comprehension
+
+Quando a transformação é simples.
+
+Exemplo.
+
+```python
+resultado = [
+
+    usuario["nome"]
+
+    for usuario in usuarios
+
+]
+```
+
+Ou.
+
+```python
+resultado = [
+
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+---
+
+# Erros comuns
+
+## Erro 1
+
+Esquecer os colchetes.
+
+Errado.
+
+```python
+numero
+
+for numero in lista
+```
+
+Correto.
+
+```python
+[
+
+    numero
+
+    for numero in lista
+
+]
+```
+
+---
+
+## Erro 2
+
+Confundir a posição do if.
+
+Filtro.
+
+```python
+[
+
+    numero
+
+    for numero in lista
+
+    if numero > 10
+
+]
+```
+
+---
+
+Transformação.
+
+```python
+[
+
+    "PAR"
+
+    if numero % 2 == 0
+
+    else
+
+    "ÍMPAR"
+
+    for numero in lista
+
+]
+```
+
+Essa diferença é muito importante.
+
+---
+
+## Erro 3
+
+Criar comprehensions gigantes.
+
+Evite.
+
+```python
+[
+...
+...
+...
+...
+...
+]
+```
+
+Se você precisar parar para descobrir como ela funciona.
+
+Ela provavelmente está grande demais.
+
+---
+
+## Erro 4
+
+Utilizar apenas porque "fica bonito".
+
+Nem sempre.
+
+Às vezes.
+
+```python
+for
+```
+
+é muito melhor.
+
+Python valoriza.
+
+```text
+Legibilidade.
+```
+
+---
+
+# Como aparece em projetos Open Source
+
+Você encontrará List Comprehension praticamente em qualquer projeto Python.
+
+Exemplos.
+
+```python
+arquivos = [
+
+    arquivo
+
+    for arquivo in arquivos
+
+    if arquivo.endswith(".txt")
+
+]
+```
+
+---
+
+```python
+hosts = [
+
+    host["ip"]
+
+    for host in resultado
+]
+```
+
+---
+
+```python
+portas = [
+
+    porta
+
+    for porta in scanner
+
+]
+```
+
+---
+
+É comum em projetos como.
+
+- pwntools
+- Impacket
+- Scapy
+- Scrapy
+- Django
+- Flask
+- FastAPI
+- Requests
+- Nornir
+- Netmiko
+
+---
+
+# Como aparece em ferramentas de Pentest
+
+Selecionando hosts.
+
+```python
+hosts = [
+
+    host
+
+    for host in resultado
+
+    if host["ativo"]
+
+]
+```
+
+---
+
+Obtendo IPs.
+
+```python
+ips = [
+
+    host["ip"]
+
+    for host in resultado
+
+]
+```
+
+---
+
+Obtendo portas abertas.
+
+```python
+portas = [
+
+    porta["numero"]
+
+    for porta in resultado
+]
+```
+
+---
+
+Criando URLs.
+
+```python
+urls = [
+
+    f"http://{ip}"
+
+    for ip in ips
+
+]
+```
+
+---
+
+Criando comandos.
+
+```python
+comandos = [
+
+    f"ping -c 1 {ip}"
+
+    for ip in ips
+
+]
+```
+
+---
+
+Filtrando arquivos.
+
+```python
+php = [
+
+    arquivo
+
+    for arquivo in arquivos
+
+    if arquivo.endswith(".php")
+
+]
+```
+
+Esses padrões aparecem constantemente em scripts de automação.
+
+---
+
+# Comparação
+
+## for
+
+Ideal quando.
+
+- Existem muitas condições.
+- Existem vários passos.
+- Existe muita lógica.
+- O código ficou grande.
+
+---
+
+## List Comprehension
+
+Ideal quando.
+
+- Criar listas.
+- Filtrar listas.
+- Transformar elementos.
+- Código pequeno.
+- Código simples.
+
+---
+
+# Curiosidades
+
+- Foi adicionada ao Python na versão 2.0.
+- É considerada uma das características mais marcantes da linguagem.
+- É muito utilizada por desenvolvedores Python experientes.
+- Pode ser combinada com praticamente qualquer iterável.
+- Pode utilizar funções, métodos, operadores e chamadas de função.
+
+---
+
+# Resumo
+
+| Recurso | List Comprehension |
+|----------|:------------------:|
+| Cria listas | ✅ |
+| Pode filtrar elementos | ✅ |
+| Pode transformar elementos | ✅ |
+| Pode utilizar `if` | ✅ |
+| Pode utilizar `if/else` | ✅ |
+| Pode utilizar vários `for` | ✅ |
+| Pode utilizar funções | ✅ |
+| Pode utilizar `zip()` | ✅ |
+| Pode utilizar `enumerate()` | ✅ |
+| Geralmente mais rápida que `for` | ✅ |
+
+---
+
+# Formas mais utilizadas
+
+Criar lista.
+
+```python
+[
+
+    numero
+
+    for numero in numeros
+
+]
+```
+
+---
+
+Transformar valores.
+
+```python
+[
+
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+---
+
+Filtrar.
+
+```python
+[
+
+    numero
+
+    for numero in numeros
+
+    if numero % 2 == 0
+
+]
+```
+
+---
+
+Transformar com condição.
+
+```python
+[
+
+    "PAR"
+
+    if numero % 2 == 0
+
+    else
+
+    "ÍMPAR"
+
+    for numero in numeros
+
+]
+```
+
+---
+
+Utilizando `zip()`.
+
+```python
+[
+
+    f"{nome} ({idade})"
+
+    for nome, idade in zip(
+
+        nomes,
+
+        idades
+
+    )
+
+]
+```
+
+---
+
+Utilizando `enumerate()`.
+
+```python
+[
+
+    f"{indice} - {nome}"
+
+    for indice, nome in enumerate(
+
+        nomes,
+
+        start=1
+
+    )
+
+]
+```
+
+---
+
+# Boas práticas
+
+✅ Utilize List Comprehension para criar novas listas de forma simples.
+
+✅ Prefira um `for` tradicional quando houver muita lógica.
+
+✅ Utilize nomes descritivos para as variáveis.
+
+✅ Evite expressões muito longas.
+
+✅ Combine com `zip()` e `enumerate()` quando fizer sentido.
+
+✅ Escreva código pensando em quem vai lê-lo depois (inclusive você mesmo).
+
+---
+
+# Conclusão
+
+List Comprehension é uma das ferramentas mais importantes do Python moderno.
+
+Ela permite escrever código mais limpo, expressivo e geralmente mais eficiente.
+
+Entretanto, deve ser utilizada com equilíbrio. Quando a expressão ficar difícil de entender, um `for` tradicional é a melhor escolha.
+
+Lembre-se: em Python, **legibilidade sempre vem antes de escrever menos linhas de código**.

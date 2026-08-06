@@ -1298,3 +1298,686 @@ map(
 ✅ Utilize mais de um iterável quando houver relação entre eles.
 
 ✅ Converta para `list()` apenas se precisar armazenar todos os resultados.
+
+---
+
+# Comparação com for
+
+O `map()` e o `for` conseguem resolver praticamente os mesmos problemas.
+
+A diferença está na forma de escrever.
+
+---
+
+## Utilizando for
+
+```python
+nomes = [
+
+    "ana",
+
+    "carlos",
+
+    "pedro"
+
+]
+
+resultado = []
+
+for nome in nomes:
+
+    resultado.append(
+
+        nome.upper()
+
+    )
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+'ANA',
+
+'CARLOS',
+
+'PEDRO'
+]
+```
+
+---
+
+## Utilizando map()
+
+```python
+nomes = [
+
+    "ana",
+
+    "carlos",
+
+    "pedro"
+
+]
+
+resultado = list(
+
+    map(
+
+        str.upper,
+
+        nomes
+
+    )
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```python
+[
+'ANA',
+
+'CARLOS',
+
+'PEDRO'
+]
+```
+
+Os dois produzem exatamente o mesmo resultado.
+
+---
+
+# map() x List Comprehension
+
+Essa é uma comparação muito comum.
+
+---
+
+## map()
+
+```python
+resultado = list(
+
+    map(
+
+        lambda numero:
+
+            numero * 2,
+
+        numeros
+
+    )
+
+)
+```
+
+---
+
+## List Comprehension
+
+```python
+resultado = [
+
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+Mesmo resultado.
+
+---
+
+# Qual utilizar?
+
+Depende.
+
+## Prefira map()
+
+Quando já existir uma função pronta.
+
+Exemplo.
+
+```python
+map(
+
+    int,
+
+    numeros
+
+)
+```
+
+---
+
+```python
+map(
+
+    str.upper,
+
+    nomes
+
+)
+```
+
+---
+
+```python
+map(
+
+    str.strip,
+
+    linhas
+
+)
+```
+
+Esses casos ficam muito limpos.
+
+---
+
+## Prefira List Comprehension
+
+Quando utilizar.
+
+```python
+lambda
+```
+
+Exemplo.
+
+```python
+list(
+
+    map(
+
+        lambda numero:
+
+            numero * 2,
+
+        numeros
+
+    )
+
+)
+```
+
+Pode ser escrito de forma mais simples.
+
+```python
+[
+
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+Na comunidade Python, essa segunda forma costuma ser preferida por ser mais legível.
+
+---
+
+# Performance
+
+O `map()` não cria uma lista imediatamente.
+
+Ele retorna um objeto.
+
+```python
+map object
+```
+
+Isso economiza memória.
+
+Somente quando fazemos.
+
+```python
+list(
+
+    map(...)
+
+)
+```
+
+é que todos os elementos são carregados.
+
+---
+
+# Como funciona internamente?
+
+Imagine.
+
+```python
+map(
+
+    str.upper,
+
+    nomes
+
+)
+```
+
+O Python faz algo semelhante.
+
+```python
+for nome in nomes:
+
+    yield nome.upper()
+```
+
+Por isso ele retorna um objeto iterável.
+
+Esse comportamento também torna o `map()` eficiente para trabalhar com grandes volumes de dados.
+
+---
+
+# Erros comuns
+
+## Erro 1
+
+Esquecer de converter para lista.
+
+```python
+resultado = map(
+
+    int,
+
+    numeros
+
+)
+
+print(resultado)
+```
+
+Resultado.
+
+```text
+<map object at 0x...>
+```
+
+Correto.
+
+```python
+print(
+
+    list(resultado)
+
+)
+```
+
+---
+
+## Erro 2
+
+Utilizar lambda sem necessidade.
+
+Evite.
+
+```python
+map(
+
+    lambda numero:
+
+        int(numero),
+
+    numeros
+
+)
+```
+
+Prefira.
+
+```python
+map(
+
+    int,
+
+    numeros
+
+)
+```
+
+Fica menor e mais legível.
+
+---
+
+## Erro 3
+
+Utilizar map() apenas porque ele existe.
+
+Às vezes.
+
+```python
+[
+    numero * 2
+
+    for numero in numeros
+
+]
+```
+
+fica muito mais claro do que.
+
+```python
+list(
+
+    map(
+
+        lambda numero:
+
+            numero * 2,
+
+        numeros
+
+    )
+
+)
+```
+
+---
+
+## Erro 4
+
+Esperar que map() filtre elementos.
+
+Errado.
+
+```python
+map(...)
+```
+
+serve para.
+
+```text
+Transformar
+```
+
+Quem filtra é.
+
+```python
+filter(...)
+```
+
+---
+
+# Quando NÃO utilizar
+
+Evite utilizar quando.
+
+- A transformação é muito complexa.
+- Existem vários `if`.
+- O código ficou difícil de entender.
+
+Nesses casos.
+
+Um `for` tradicional costuma ser melhor.
+
+---
+
+# Como aparece em projetos Open Source
+
+É muito comum encontrar.
+
+Conversão de tipos.
+
+```python
+map(
+
+    int,
+
+    portas
+
+)
+```
+
+---
+
+Removendo espaços.
+
+```python
+map(
+
+    str.strip,
+
+    linhas
+
+)
+```
+
+---
+
+Convertendo para maiúsculas.
+
+```python
+map(
+
+    str.upper,
+
+    nomes
+
+)
+```
+
+---
+
+Criando objetos.
+
+```python
+map(
+
+    Path,
+
+    arquivos
+
+)
+```
+
+Esses padrões aparecem frequentemente em projetos como.
+
+- Requests
+- Django
+- Flask
+- Scrapy
+- Scapy
+- pwntools
+- Impacket
+
+---
+
+# Exemplos em Cyber Security
+
+Convertendo portas.
+
+```python
+portas = [
+
+    "22",
+
+    "80",
+
+    "443"
+
+]
+
+portas = list(
+
+    map(
+
+        int,
+
+        portas
+
+    )
+
+)
+```
+
+Resultado.
+
+```python
+[
+22,
+
+80,
+
+443
+]
+```
+
+---
+
+Removendo espaços de um wordlist.
+
+```python
+with open("usuarios.txt") as arquivo:
+
+    usuarios = list(
+
+        map(
+
+            str.strip,
+
+            arquivo
+
+        )
+
+    )
+```
+
+Muito utilizado em scripts de brute force.
+
+---
+
+Criando URLs.
+
+```python
+ips = [
+
+    "10.10.10.5",
+
+    "10.10.10.20"
+
+]
+
+urls = list(
+
+    map(
+
+        lambda ip:
+
+            f"http://{ip}",
+
+        ips
+
+    )
+
+)
+```
+
+---
+
+# Curiosidades
+
+- `map()` é uma função nativa do Python.
+- Funciona com qualquer iterável.
+- Pode receber vários iteráveis.
+- Retorna um objeto `map`.
+- É avaliado sob demanda (lazy evaluation).
+- Pode ser combinado com `zip()`, `filter()` e `enumerate()`.
+
+---
+
+# Resumo
+
+| Recurso | map() |
+|----------|:-----:|
+| Função nativa | ✅ |
+| Transforma elementos | ✅ |
+| Filtra elementos | ❌ |
+| Retorna map object | ✅ |
+| Funciona com iteráveis | ✅ |
+| Aceita lambda | ✅ |
+| Aceita funções prontas | ✅ |
+| Aceita vários iteráveis | ✅ |
+
+---
+
+# Formas mais utilizadas
+
+Converter para inteiro.
+
+```python
+map(
+
+    int,
+
+    numeros
+
+)
+```
+
+---
+
+Remover espaços.
+
+```python
+map(
+
+    str.strip,
+
+    linhas
+
+)
+```
+
+---
+
+Maiúsculas.
+
+```python
+map(
+
+    str.upper,
+
+    nomes
+
+)
+```
+
+---
+
+Transformação personalizada.
+
+```python
+map(
+
+    lambda numero:
+
+        numero * 2,
+
+    numeros
+
+)
+```
+
+---
+
+# Boas práticas
+
+✅ Utilize funções prontas (`int`, `str`, `float`, `str.upper`, `str.strip`) sempre que possível.
+
+✅ Prefira List Comprehension quando a transformação for simples e envolver `lambda`.
+
+✅ Utilize `map()` quando a intenção do código for claramente "aplicar esta função em todos os elementos".
+
+✅ Converta para `list()` apenas quando precisar armazenar todos os resultados.
+
+✅ Lembre-se: `map()` transforma dados. Se o objetivo é selecionar apenas alguns elementos, utilize `filter()`.

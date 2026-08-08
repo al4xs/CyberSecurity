@@ -1,6 +1,7 @@
 Um dicionário (`dict`) é uma estrutura de dados do Python utilizada para armazenar informações no formato:
 
-0
+---
+
 ```text
 chave → valor
 ```

@@ -1,6 +1,6 @@
-# 📜 Listas (list)
-
 Uma lista (`list`) é uma estrutura de dados do Python utilizada para armazenar vários valores dentro de uma única variável.
+
+---
 
 Exemplo.
 

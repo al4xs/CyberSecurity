@@ -1090,3 +1090,569 @@ dados.get("chave", padrao)
 for chave in dados:
     ...
 ```
+
+---
+
+# keys()
+
+O método:
+
+```python
+.keys()
+```
+
+retorna uma visão com todas as chaves do dicionário.
+
+Exemplo:
+
+```python
+host = {
+    "ip": "192.168.1.10",
+    "porta": 22,
+    "servico": "SSH"
+}
+
+print(
+    host.keys()
+)
+```
+
+Resultado:
+
+```python
+dict_keys([
+    'ip',
+    'porta',
+    'servico'
+])
+```
+
+---
+
+# O que keys() recebe?
+
+Nada.
+
+Sintaxe:
+
+```python
+dicionario.keys()
+```
+
+Não recebe parâmetros.
+
+---
+
+# O que retorna?
+
+Retorna um objeto do tipo:
+
+```python
+dict_keys
+```
+
+Não é uma lista.
+
+Mas pode ser percorrido normalmente.
+
+```python
+for chave in host.keys():
+
+    print(chave)
+```
+
+Resultado:
+
+```text
+ip
+porta
+servico
+```
+
+---
+
+# Preciso usar keys() no for?
+
+Não.
+
+Isso:
+
+```python
+for chave in host:
+
+    print(chave)
+```
+
+é equivalente a:
+
+```python
+for chave in host.keys():
+
+    print(chave)
+```
+
+Na prática, a primeira forma costuma ser mais usada.
+
+---
+
+# Convertendo para lista
+
+Se realmente precisar de uma lista:
+
+```python
+chaves = list(
+    host.keys()
+)
+```
+
+Resultado:
+
+```python
+[
+    "ip",
+    "porta",
+    "servico"
+]
+```
+
+---
+
+# Quando utilizar keys()?
+
+Quando você quer trabalhar explicitamente com as chaves.
+
+Exemplo:
+
+```python
+if "porta" in host.keys():
+
+    print("A chave existe")
+```
+
+Porém, normalmente é ainda melhor escrever:
+
+```python
+if "porta" in host:
+
+    print("A chave existe")
+```
+
+---
+
+# values()
+
+O método:
+
+```python
+.values()
+```
+
+retorna todos os valores do dicionário.
+
+Exemplo:
+
+```python
+host = {
+    "ip": "192.168.1.10",
+    "porta": 22,
+    "servico": "SSH"
+}
+
+print(
+    host.values()
+)
+```
+
+Resultado:
+
+```python
+dict_values([
+    '192.168.1.10',
+    22,
+    'SSH'
+])
+```
+
+---
+
+# O que values() recebe?
+
+Nada.
+
+Sintaxe:
+
+```python
+dicionario.values()
+```
+
+Não recebe parâmetros.
+
+---
+
+# O que retorna?
+
+Retorna:
+
+```python
+dict_values
+```
+
+---
+
+# Percorrendo os valores
+
+```python
+for valor in host.values():
+
+    print(valor)
+```
+
+Resultado:
+
+```text
+192.168.1.10
+22
+SSH
+```
+
+---
+
+# Convertendo para lista
+
+```python
+valores = list(
+    host.values()
+)
+```
+
+Resultado:
+
+```python
+[
+    "192.168.1.10",
+    22,
+    "SSH"
+]
+```
+
+---
+
+# Quando utilizar values()?
+
+Quando as chaves não importam e você quer apenas os valores.
+
+Exemplo:
+
+```python
+servicos = {
+    22: "SSH",
+    80: "HTTP",
+    443: "HTTPS"
+}
+
+for servico in servicos.values():
+
+    print(servico)
+```
+
+Resultado:
+
+```text
+SSH
+HTTP
+HTTPS
+```
+
+---
+
+# items()
+
+Esse é provavelmente o método mais importante para percorrer dicionários.
+
+O método:
+
+```python
+.items()
+```
+
+retorna pares no formato:
+
+```text
+(chave, valor)
+```
+
+Exemplo:
+
+```python
+host = {
+    "ip": "192.168.1.10",
+    "porta": 22,
+    "servico": "SSH"
+}
+
+print(
+    host.items()
+)
+```
+
+Resultado:
+
+```python
+dict_items([
+    ('ip', '192.168.1.10'),
+    ('porta', 22),
+    ('servico', 'SSH')
+])
+```
+
+---
+
+# O que items() recebe?
+
+Nada.
+
+Sintaxe:
+
+```python
+dicionario.items()
+```
+
+Não recebe parâmetros.
+
+---
+
+# O que retorna?
+
+Retorna:
+
+```python
+dict_items
+```
+
+Cada elemento representa:
+
+```python
+(chave, valor)
+```
+
+---
+
+# Forma mais utilizada
+
+```python
+for chave, valor in host.items():
+
+    print(
+        chave,
+        valor
+    )
+```
+
+Resultado:
+
+```text
+ip 192.168.1.10
+porta 22
+servico SSH
+```
+
+---
+
+# Como funciona?
+
+O `items()` produz algo parecido com:
+
+```python
+(
+    "ip",
+    "192.168.1.10"
+)
+```
+
+Depois o `for` desempacota:
+
+```text
+"ip"
+
+↓
+
+chave
+
+
+"192.168.1.10"
+
+↓
+
+valor
+```
+
+Por isso conseguimos fazer:
+
+```python
+for chave, valor in host.items():
+```
+
+---
+
+# Sem items()
+
+Também poderíamos escrever:
+
+```python
+for chave in host:
+
+    print(
+        chave,
+        host[chave]
+    )
+```
+
+Funciona.
+
+Mas:
+
+```python
+for chave, valor in host.items():
+
+    print(chave, valor)
+```
+
+costuma ficar mais limpo.
+
+---
+
+# keys() x values() x items()
+
+| Método | Retorna |
+|---|---|
+| `keys()` | Chaves |
+| `values()` | Valores |
+| `items()` | Chave + valor |
+
+---
+
+# Forma mental
+
+```text
+.keys()
+
+↓
+
+"ip"
+"porta"
+"servico"
+```
+
+---
+
+```text
+.values()
+
+↓
+
+"192.168.1.10"
+22
+"SSH"
+```
+
+---
+
+```text
+.items()
+
+↓
+
+("ip", "192.168.1.10")
+
+("porta", 22)
+
+("servico", "SSH")
+```
+
+---
+
+# Exemplo em Cyber Security
+
+Imagine resultados de enumeração:
+
+```python
+servicos = {
+    22: "SSH",
+    80: "HTTP",
+    443: "HTTPS"
+}
+```
+
+Percorrendo:
+
+```python
+for porta, servico in servicos.items():
+
+    print(
+        f"{porta}/tcp -> {servico}"
+    )
+```
+
+Resultado:
+
+```text
+22/tcp -> SSH
+80/tcp -> HTTP
+443/tcp -> HTTPS
+```
+
+Esse formato é extremamente útil em scanners, parsers e geração de relatórios.
+
+---
+
+# Outro exemplo
+
+```python
+host = {
+    "ip": "10.10.10.10",
+    "os": "Linux",
+    "hostname": "nexus"
+}
+```
+
+```python
+for campo, valor in host.items():
+
+    print(
+        f"{campo}: {valor}"
+    )
+```
+
+Resultado:
+
+```text
+ip: 10.10.10.10
+os: Linux
+hostname: nexus
+```
+
+---
+
+# Qual é mais usado?
+
+Para percorrer apenas chaves:
+
+```python
+for chave in dicionario:
+```
+
+é a forma mais comum.
+
+Para percorrer apenas valores:
+
+```python
+for valor in dicionario.values():
+```
+
+Para trabalhar com chave e valor juntos:
+
+```python
+for chave, valor in dicionario.items():
+```
+
+Essa última aparece o tempo todo em código Python real.

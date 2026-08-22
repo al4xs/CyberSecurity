@@ -2673,3 +2673,2615 @@ session.get(url)
 
 A principal diferença é que, na segunda abordagem, o Header passa a fazer parte da configuração da Session e pode ser reutilizado nas requisições feitas através dela.
 
+---
+
+# Session
+
+## O que é?
+
+O `Session` é um objeto fornecido pelo Requests que permite realizar várias requisições HTTP mantendo determinadas informações e configurações entre elas.
+
+Para criar uma Session:
+
+```python
+import requests
+
+session = requests.Session()
+```
+
+Agora:
+
+```python
+session
+```
+
+representa uma sessão de comunicação que pode ser reutilizada.
+
+Podemos realizar:
+
+```python
+session.get(url)
+```
+
+```python
+session.post(url)
+```
+
+```python
+session.put(url)
+```
+
+```python
+session.delete(url)
+```
+
+entre outras operações.
+
+---
+
+# Por que utilizar Session?
+
+Imagine que um programa precisa realizar várias requisições:
+
+```python
+requests.get(url1)
+
+requests.get(url2)
+
+requests.get(url3)
+
+requests.get(url4)
+```
+
+Cada chamada é feita diretamente através do módulo `requests`.
+
+Com uma Session:
+
+```python
+session = requests.Session()
+
+session.get(url1)
+session.get(url2)
+session.get(url3)
+session.get(url4)
+```
+
+A Session permite centralizar configurações e manter determinados estados entre essas requisições.
+
+Por exemplo:
+
+```text
+Session
+   │
+   ├── Headers
+   │
+   ├── Cookies
+   │
+   └── outras configurações
+         │
+         ▼
+   ┌───────────────┐
+   │               │
+   ▼               ▼
+GET /login     GET /admin
+   │               │
+   └───────┬───────┘
+           ▼
+        servidor
+```
+
+---
+
+# Session como um estado compartilhado
+
+Uma forma simples de entender uma Session é imaginar que ela funciona como um objeto que mantém determinadas informações enquanto o programa está executando.
+
+Exemplo:
+
+```python
+session = requests.Session()
+```
+
+Podemos configurar:
+
+```python
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+Depois realizar várias requisições:
+
+```python
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+A configuração continua associada à Session.
+
+---
+
+# Session e Cookies
+
+Um dos recursos mais importantes de uma Session é o gerenciamento de **Cookies**.
+
+Cookies são pequenos dados enviados pelo servidor que podem ser armazenados pelo cliente e enviados novamente em requisições posteriores.
+
+Exemplo simplificado:
+
+```text
+Cliente ──────── GET /login ────────► Servidor
+Cliente ◄────── Set-Cookie ───────── Servidor
+
+Cliente ──────── Cookie ────────────► Servidor
+```
+
+Um servidor pode responder:
+
+```http
+Set-Cookie: sessionid=abc123
+```
+
+O cliente pode armazenar esse Cookie.
+
+Depois, em uma nova requisição:
+
+```http
+Cookie: sessionid=abc123
+```
+
+O servidor pode utilizar esse Cookie para reconhecer aquela sessão.
+
+---
+
+# O que é um Cookie?
+
+Um Cookie é um dado associado a um domínio que pode ser enviado pelo cliente em requisições futuras.
+
+Exemplo:
+
+```text
+sessionid=abc123
+```
+
+Outro exemplo:
+
+```text
+theme=dark
+```
+
+Podemos ter vários Cookies:
+
+```text
+sessionid=abc123
+theme=dark
+language=pt-BR
+```
+
+---
+
+# Cookies e Session
+
+Quando utilizamos:
+
+```python
+session = requests.Session()
+```
+
+o Requests fornece um mecanismo para manter Cookies recebidos durante a utilização daquela Session.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+response = session.get(
+    "https://example.com"
+)
+```
+
+Se o servidor enviar um Cookie apropriado, ele poderá ficar armazenado no Cookie Jar da Session.
+
+Depois:
+
+```python
+session.get(
+    "https://example.com/dashboard"
+)
+```
+
+a Session poderá enviar os Cookies aplicáveis à nova requisição.
+
+---
+
+# Cookie Jar
+
+Os Cookies da Session ficam associados ao:
+
+```python
+session.cookies
+```
+
+Podemos visualizar:
+
+```python
+print(session.cookies)
+```
+
+Dependendo dos Cookies recebidos, podemos obter uma representação semelhante a:
+
+```text
+<RequestsCookieJar[...]>
+```
+
+O objeto utilizado pelo Requests para administrar esses Cookies é chamado:
+
+```text
+RequestsCookieJar
+```
+
+---
+
+# Visualizando Cookies
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+response = session.get(
+    "https://example.com"
+)
+
+print(session.cookies)
+```
+
+Também podemos iterar sobre os Cookies:
+
+```python
+for cookie in session.cookies:
+    print(cookie.name)
+    print(cookie.value)
+```
+
+---
+
+# Obtendo nome e valor
+
+Um Cookie possui principalmente:
+
+```text
+nome
+valor
+```
+
+Exemplo:
+
+```text
+sessionid=abc123
+```
+
+Nesse caso:
+
+```text
+nome  → sessionid
+valor → abc123
+```
+
+Podemos acessar:
+
+```python
+for cookie in session.cookies:
+
+    print(
+        cookie.name,
+        cookie.value
+    )
+```
+
+---
+
+# Adicionando um Cookie manualmente
+
+Também podemos adicionar Cookies à Session.
+
+Exemplo:
+
+```python
+session.cookies.set(
+    "teste",
+    "123"
+)
+```
+
+Agora podemos verificar:
+
+```python
+print(session.cookies)
+```
+
+---
+
+# Exemplo
+
+```python
+import requests
+
+session = requests.Session()
+
+session.cookies.set(
+    "usuario",
+    "admin"
+)
+
+response = session.get(
+    "https://example.com"
+)
+
+print(response.status_code)
+```
+
+Nesse caso o Cookie foi adicionado manualmente à Session.
+
+---
+
+# Cookies específicos de um domínio
+
+Também podemos associar um Cookie a um domínio.
+
+Exemplo:
+
+```python
+session.cookies.set(
+    "sessionid",
+    "abc123",
+    domain="example.com"
+)
+```
+
+Isso permite que o Cookie seja associado ao domínio correspondente.
+
+---
+
+# Removendo Cookies
+
+Podemos limpar os Cookies da Session:
+
+```python
+session.cookies.clear()
+```
+
+Depois:
+
+```python
+print(session.cookies)
+```
+
+A Cookie Jar estará vazia, caso não existam outros Cookies adicionados posteriormente.
+
+---
+
+# Session e Login
+
+Sessions são especialmente úteis em aplicações que utilizam autenticação baseada em Cookies.
+
+Imagine um sistema:
+
+```text
+/login
+/dashboard
+/admin
+/profile
+```
+
+Primeiro realizamos o login:
+
+```python
+session.post(
+    login_url,
+    data=credenciais
+)
+```
+
+O servidor pode responder definindo um Cookie de sessão.
+
+Depois:
+
+```python
+session.get(
+    dashboard_url
+)
+```
+
+A Session poderá enviar o Cookie recebido anteriormente.
+
+Visualmente:
+
+```text
+             Session
+                │
+                ▼
+          POST /login
+                │
+                ▼
+             Servidor
+                │
+          Set-Cookie
+                │
+                ▼
+          Session.cookies
+                │
+                ▼
+        GET /dashboard
+                │
+          Cookie enviado
+                │
+                ▼
+             Servidor
+```
+
+Isso é muito diferente de simplesmente fazer:
+
+```python
+requests.post(login_url)
+```
+
+e depois:
+
+```python
+requests.get(dashboard_url)
+```
+
+sem manter o estado apropriado.
+
+---
+
+# Exemplo de Login
+
+Um exemplo genérico:
+
+```python
+import requests
+
+session = requests.Session()
+
+login_url = "https://example.com/login"
+dashboard_url = "https://example.com/dashboard"
+
+dados = {
+    "username": "usuario",
+    "password": "senha"
+}
+
+response = session.post(
+    login_url,
+    data=dados
+)
+
+print(response.status_code)
+
+response = session.get(
+    dashboard_url
+)
+
+print(response.status_code)
+```
+
+A Session é utilizada nas duas requisições:
+
+```python
+session.post()
+```
+
+e:
+
+```python
+session.get()
+```
+
+Isso permite que o estado mantido pela Session seja reutilizado.
+
+> [!WARNING]
+> O exemplo acima é apenas conceitual. O nome dos campos, método de autenticação, Cookies e demais detalhes dependem da aplicação real.
+
+---
+
+# Session não garante autenticação
+
+É importante entender:
+
+```python
+session = requests.Session()
+```
+
+não significa que estamos autenticados.
+
+A Session apenas fornece um mecanismo para manter estado e configurações.
+
+A autenticação depende do servidor.
+
+Por exemplo, uma aplicação pode utilizar:
+
+```text
+Cookie
+```
+
+ou:
+
+```text
+Authorization Header
+```
+
+ou:
+
+```text
+Token
+```
+
+ou:
+
+```text
+OAuth
+```
+
+ou outros mecanismos.
+
+---
+
+# Session e Headers
+
+Podemos combinar Headers e Cookies na mesma Session.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0",
+    "Accept": "application/json"
+})
+```
+
+Depois:
+
+```python
+session.get(url)
+```
+
+A Session utilizará essas configurações.
+
+---
+
+# Header específico x Header da Session
+
+Podemos definir um Header padrão:
+
+```python
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+E depois alterar apenas uma requisição:
+
+```python
+session.get(
+    url,
+    headers={
+        "User-Agent": "OutroCliente/1.0"
+    }
+)
+```
+
+Nesse caso, o Header fornecido diretamente naquela chamada pode sobrescrever o valor padrão para aquela requisição.
+
+A configuração original da Session continua existindo para as próximas requisições.
+
+---
+
+# Exemplo
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Scanner/1.0"
+})
+
+response = session.get(
+    "https://example.com"
+)
+```
+
+Agora:
+
+```python
+response = session.get(
+    "https://example.com/admin",
+    headers={
+        "User-Agent": "OutroScanner/2.0"
+    }
+)
+```
+
+A segunda requisição utiliza:
+
+```text
+OutroScanner/2.0
+```
+
+Mas a Session continua configurada com:
+
+```text
+Scanner/1.0
+```
+
+Para as próximas requisições.
+
+---
+
+# Session e Cookies: diferença importante
+
+Headers e Cookies podem ser mantidos pela Session, mas possuem funções diferentes.
+
+### Headers
+
+São informações associadas às requisições.
+
+Exemplo:
+
+```text
+User-Agent: Scanner/1.0
+```
+
+### Cookies
+
+São dados que podem ser armazenados e posteriormente enviados ao servidor.
+
+Exemplo:
+
+```text
+sessionid=abc123
+```
+
+Podemos visualizar:
+
+```text
+Session
+   │
+   ├── Headers
+   │      │
+   │      └── User-Agent
+   │
+   └── Cookies
+          │
+          └── sessionid
+```
+
+---
+
+# Session e múltiplas requisições
+
+Uma grande vantagem é poder realizar várias requisições utilizando a mesma Session.
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+
+urls = [
+    "https://example.com/",
+    "https://example.com/login",
+    "https://example.com/admin",
+    "https://example.com/api"
+]
+
+for url in urls:
+
+    response = session.get(
+        url,
+        timeout=5
+    )
+
+    print(
+        response.status_code,
+        url
+    )
+```
+
+Todas as requisições utilizam:
+
+```python
+session
+```
+
+---
+
+# requests.get() x session.get()
+
+Podemos comparar:
+
+### Sem Session
+
+```python
+import requests
+
+response = requests.get(
+    url
+)
+```
+
+### Com Session
+
+```python
+import requests
+
+session = requests.Session()
+
+response = session.get(
+    url
+)
+```
+
+Para uma única requisição simples, a diferença de código pode parecer pequena.
+
+A vantagem da Session aparece quando precisamos realizar várias requisições relacionadas.
+
+---
+
+# Reutilizando uma Session
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+response1 = session.get(url1)
+
+response2 = session.get(url2)
+
+response3 = session.get(url3)
+```
+
+A mesma Session é utilizada nas três requisições.
+
+Isso permite manter configurações e estado entre elas.
+
+---
+
+# Fechando uma Session
+
+Quando terminamos de utilizar uma Session, podemos fechá-la:
+
+```python
+session.close()
+```
+
+Isso libera os recursos associados à Session.
+
+Também podemos utilizar:
+
+```python
+with requests.Session() as session:
+
+    response = session.get(
+        url
+    )
+```
+
+Quando o bloco `with` termina, a Session é fechada automaticamente.
+
+---
+
+# Context Manager
+
+O `with` é útil para garantir que a Session seja fechada corretamente.
+
+Exemplo:
+
+```python
+import requests
+
+with requests.Session() as session:
+
+    response = session.get(
+        "https://example.com"
+    )
+
+    print(response.status_code)
+```
+
+Fluxo:
+
+```text
+with
+ │
+ ▼
+Cria Session
+ │
+ ▼
+Realiza requisições
+ │
+ ▼
+Sai do bloco
+ │
+ ▼
+Session é fechada
+```
+
+---
+
+# Session em um Scanner Web
+
+Sessions são úteis em ferramentas de enumeração Web que precisam realizar várias requisições.
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "WebScanner/1.0"
+})
+
+paths = [
+    "/",
+    "/robots.txt",
+    "/login",
+    "/admin",
+    "/api"
+]
+
+for path in paths:
+
+    url = f"https://example.com{path}"
+
+    response = session.get(
+        url,
+        timeout=5
+    )
+
+    print(
+        response.status_code,
+        url
+    )
+```
+
+Esse padrão é bastante útil para ferramentas próprias de laboratório, CTFs e testes autorizados.
+
+---
+
+# Session em enumeração autenticada
+
+Em um ambiente autorizado, podemos utilizar uma Session para manter o estado de uma autenticação enquanto enumeramos endpoints.
+
+Exemplo conceitual:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "SecurityScanner/1.0"
+})
+
+session.post(
+    "https://example.com/login",
+    data={
+        "username": "usuario",
+        "password": "senha"
+    }
+)
+
+paths = [
+    "/",
+    "/dashboard",
+    "/profile",
+    "/admin"
+]
+
+for path in paths:
+
+    response = session.get(
+        f"https://example.com{path}"
+    )
+
+    print(
+        response.status_code,
+        path
+    )
+```
+
+A vantagem é que todas as requisições fazem parte da mesma Session.
+
+---
+
+# Session como base de uma ferramenta
+
+Uma estrutura comum para ferramentas Web é:
+
+```text
+Programa
+   │
+   ▼
+Cria Session
+   │
+   ├── Configura User-Agent
+   │
+   ├── Configura Headers
+   │
+   ├── Configura Cookies
+   │
+   └── Configura autenticação
+           │
+           ▼
+      Faz requisições
+           │
+           ▼
+      Analisa Response
+```
+
+Isso torna o código mais organizado.
+
+---
+
+# Exemplo integrando argparse
+
+Podemos combinar o que aprendemos anteriormente com `argparse`.
+
+```python
+import argparse
+import requests
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "-u",
+    "--url",
+    required=True
+)
+
+parser.add_argument(
+    "-A",
+    "--user-agent",
+    default="WebScanner/1.0"
+)
+
+args = parser.parse_args()
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": args.user_agent
+})
+
+response = session.get(
+    args.url,
+    timeout=5
+)
+
+print(response.status_code)
+```
+
+Executando:
+
+```bash
+python scanner.py \
+-u https://example.com
+```
+
+Ou:
+
+```bash
+python scanner.py \
+-u https://example.com \
+-A "Mozilla/5.0"
+```
+
+---
+
+# Session no código do scanner
+
+Podemos aplicar diretamente ao scanner de caminhos.
+
+Antes:
+
+```python
+response = requests.get(
+    new_url,
+    timeout=5
+)
+```
+
+Com Session:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "WebScanner/1.0"
+})
+```
+
+E dentro do loop:
+
+```python
+response = session.get(
+    new_url,
+    timeout=5
+)
+```
+
+A estrutura passa a ser:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "WebScanner/1.0"
+})
+
+for url in urls:
+
+    response = session.get(
+        url,
+        timeout=5
+    )
+```
+
+---
+
+# Conceito fundamental
+
+A ideia principal da Session pode ser resumida em:
+
+```text
+requests
+    │
+    └── Requisição individual
+
+Session
+    │
+    ├── Headers
+    ├── Cookies
+    ├── Estado
+    └── Requisições relacionadas
+```
+
+Ou seja:
+
+```python
+requests.get()
+```
+
+é útil para requisições simples.
+
+Enquanto:
+
+```python
+session.get()
+```
+
+é especialmente útil quando várias requisições fazem parte do mesmo contexto.
+
+---
+
+# Resumo
+
+| Conceito | Função |
+|---|---|
+| `requests.Session()` | Cria uma Session |
+| `session.get()` | Realiza uma requisição GET usando a Session |
+| `session.post()` | Realiza POST usando a Session |
+| `session.headers` | Acessa os Headers padrão da Session |
+| `session.headers.update()` | Adiciona ou atualiza Headers |
+| `session.cookies` | Acessa os Cookies da Session |
+| `session.cookies.set()` | Adiciona um Cookie |
+| `session.cookies.clear()` | Remove os Cookies |
+| `session.close()` | Fecha a Session |
+| `with requests.Session()` | Gerencia automaticamente o fechamento |
+| `RequestsCookieJar` | Estrutura utilizada para administrar Cookies |
+
+---
+
+# O que lembrar
+
+Uma Session não é simplesmente um "User-Agent salvo".
+
+Ela é um objeto que pode manter **configurações e estado entre várias requisições** realizadas através dela.
+
+Por exemplo:
+
+```python
+session = requests.Session()
+```
+
+Podemos configurar:
+
+```python
+session.headers.update({
+    "User-Agent": "Scanner/1.0"
+})
+```
+
+Podemos receber e manter Cookies:
+
+```python
+session.cookies
+```
+
+E realizar várias requisições:
+
+```python
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+Enquanto o programa estiver utilizando aquele objeto `session`, essas configurações e estados podem ser reutilizados.
+
+---
+
+# Fluxo final
+
+```text
+                 Session
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+       Headers             Cookies
+          │                   │
+          ▼                   ▼
+    User-Agent          sessionid=abc
+          │                   │
+          └─────────┬─────────┘
+                    │
+                    ▼
+              session.get()
+                    │
+                    ▼
+              HTTP Request
+                    │
+                    ▼
+                 Servidor
+                    │
+                    ▼
+              HTTP Response
+                    │
+                    ▼
+                 Session
+                    │
+             mantém estado
+                    │
+                    ▼
+           próxima requisição
+```
+
+
+---
+
+# Enviando dados com Requests
+
+Uma requisição HTTP não precisa conter apenas uma URL.
+
+Podemos enviar informações para o servidor através de:
+
+- parâmetros na URL;
+- formulário;
+- JSON;
+- arquivos;
+- Headers;
+- Cookies.
+
+O Requests fornece parâmetros específicos para cada situação.
+
+Os principais são:
+
+```python
+params=
+data=
+json=
+files=
+```
+
+Cada um possui uma finalidade diferente.
+
+---
+
+# params=
+
+## O que é?
+
+O parâmetro:
+
+```python
+params=
+```
+
+é utilizado para enviar **parâmetros na URL**.
+
+Esses parâmetros normalmente aparecem depois de:
+
+```text
+?
+```
+
+Exemplo:
+
+```text
+https://example.com/search?q=python
+```
+
+Nesse caso:
+
+```text
+q=python
+```
+
+é um parâmetro da URL.
+
+---
+
+# Exemplo com params
+
+Podemos escrever:
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com/search",
+    params={
+        "q": "python"
+    }
+)
+```
+
+O Requests transforma automaticamente o dicionário em parâmetros da URL.
+
+A requisição será equivalente a:
+
+```text
+https://example.com/search?q=python
+```
+
+---
+
+# O que params recebe?
+
+Normalmente utilizamos um:
+
+```python
+dict
+```
+
+Exemplo:
+
+```python
+params = {
+    "q": "python",
+    "page": 2
+}
+```
+
+Depois:
+
+```python
+response = requests.get(
+    url,
+    params=params
+)
+```
+
+O Requests transforma os valores em parâmetros da URL.
+
+Resultado conceitual:
+
+```text
+https://example.com/search?q=python&page=2
+```
+
+---
+
+# params com vários valores
+
+Exemplo:
+
+```python
+params = {
+    "q": "python",
+    "page": 2,
+    "limit": 10
+}
+
+response = requests.get(
+    "https://example.com/search",
+    params=params
+)
+```
+
+A URL resultante será equivalente a:
+
+```text
+https://example.com/search?q=python&page=2&limit=10
+```
+
+O Requests realiza o processo de codificação necessário.
+
+---
+
+# Por que utilizar params?
+
+É muito utilizado em:
+
+- mecanismos de busca;
+- APIs;
+- filtros;
+- paginação;
+- ordenação;
+- consultas;
+- endpoints de pesquisa.
+
+Exemplo:
+
+```text
+/search?q=admin
+```
+
+```text
+/users?page=2
+```
+
+```text
+/products?category=books
+```
+
+---
+
+# params em APIs
+
+Imagine uma API:
+
+```text
+https://api.example.com/users
+```
+
+Ela permite filtrar usuários através de:
+
+```text
+?role=admin
+```
+
+Podemos utilizar:
+
+```python
+params = {
+    "role": "admin"
+}
+
+response = requests.get(
+    "https://api.example.com/users",
+    params=params
+)
+```
+
+---
+
+# Visualizando a URL final
+
+Depois da requisição podemos verificar:
+
+```python
+print(response.url)
+```
+
+Exemplo:
+
+```text
+https://api.example.com/users?role=admin
+```
+
+Isso é extremamente útil durante o desenvolvimento e análise de requisições.
+
+---
+
+# params x URL manual
+
+Podemos fazer:
+
+```python
+url = "https://example.com/search?q=python"
+
+response = requests.get(url)
+```
+
+Mas também:
+
+```python
+url = "https://example.com/search"
+
+response = requests.get(
+    url,
+    params={
+        "q": "python"
+    }
+)
+```
+
+A segunda forma normalmente é mais organizada.
+
+Além disso, o Requests cuida da codificação dos parâmetros.
+
+---
+
+# Exemplo em Cyber Security
+
+Durante a análise autorizada de uma aplicação Web, podemos testar diferentes valores de parâmetros.
+
+Exemplo:
+
+```python
+params = {
+    "id": 1
+}
+
+response = requests.get(
+    "https://example.com/user",
+    params=params
+)
+
+print(response.url)
+print(response.status_code)
+```
+
+Podemos alterar o valor:
+
+```python
+params = {
+    "id": 2
+}
+```
+
+ou:
+
+```python
+params = {
+    "id": 100
+}
+```
+
+Esse conceito é utilizado em ferramentas de enumeração e testes de parâmetros.
+
+> [!WARNING]
+> Testes de segurança devem ser realizados somente em aplicações próprias ou em ambientes nos quais você possui autorização.
+
+---
+
+# data=
+
+## O que é?
+
+O parâmetro:
+
+```python
+data=
+```
+
+é utilizado principalmente para enviar dados no corpo da requisição, especialmente dados de formulários.
+
+Por exemplo:
+
+```text
+username=admin&password=123
+```
+
+Esse formato é conhecido como:
+
+```text
+application/x-www-form-urlencoded
+```
+
+---
+
+# Exemplo simples
+
+```python
+import requests
+
+dados = {
+    "username": "admin",
+    "password": "123456"
+}
+
+response = requests.post(
+    "https://example.com/login",
+    data=dados
+)
+```
+
+O Requests envia os dados no corpo da requisição.
+
+---
+
+# data recebe um dict
+
+Assim como:
+
+```python
+params=
+```
+
+podemos passar um dicionário.
+
+Exemplo:
+
+```python
+dados = {
+    "nome": "Allan",
+    "idade": 24
+}
+```
+
+Depois:
+
+```python
+requests.post(
+    url,
+    data=dados
+)
+```
+
+---
+
+# params e data são diferentes
+
+Essa diferença é fundamental.
+
+### params
+
+Envia os dados na URL.
+
+```python
+requests.get(
+    url,
+    params={
+        "id": 10
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+GET /user?id=10
+```
+
+---
+
+### data
+
+Envia os dados no corpo da requisição.
+
+```python
+requests.post(
+    url,
+    data={
+        "id": 10
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+POST /user
+
+id=10
+```
+
+---
+
+# Comparação
+
+```text
+params
+   │
+   ▼
+URL
+ │
+ └── ?id=10
+
+
+data
+ │
+ ▼
+Body
+ │
+ └── id=10
+```
+
+---
+
+# data em formulários HTML
+
+Imagine um formulário:
+
+```html
+<form method="POST">
+
+    <input name="username">
+
+    <input name="password">
+
+</form>
+```
+
+O navegador pode enviar algo semelhante a:
+
+```text
+username=admin&password=123456
+```
+
+Com Requests:
+
+```python
+dados = {
+    "username": "admin",
+    "password": "123456"
+}
+
+response = requests.post(
+    url,
+    data=dados
+)
+```
+
+---
+
+# Exemplo de Login
+
+```python
+import requests
+
+session = requests.Session()
+
+dados = {
+    "username": "usuario",
+    "password": "senha"
+}
+
+response = session.post(
+    "https://example.com/login",
+    data=dados
+)
+
+print(response.status_code)
+```
+
+Esse padrão é comum quando uma aplicação utiliza formulários tradicionais.
+
+---
+
+# json=
+
+## O que é?
+
+O parâmetro:
+
+```python
+json=
+```
+
+é utilizado para enviar dados no formato **JSON**.
+
+JSON é muito utilizado em APIs modernas.
+
+Exemplo:
+
+```json
+{
+    "username": "admin",
+    "password": "123456"
+}
+```
+
+---
+
+# Exemplo com json
+
+```python
+import requests
+
+dados = {
+    "username": "admin",
+    "password": "123456"
+}
+
+response = requests.post(
+    "https://api.example.com/login",
+    json=dados
+)
+```
+
+O Requests converte o dicionário para JSON.
+
+---
+
+# O que acontece internamente?
+
+Quando fazemos:
+
+```python
+requests.post(
+    url,
+    json=dados
+)
+```
+
+com:
+
+```python
+dados = {
+    "username": "admin",
+    "password": "123456"
+}
+```
+
+o Requests serializa os dados para JSON.
+
+Conceitualmente:
+
+```python
+dict
+ │
+ ▼
+JSON
+ │
+ ▼
+HTTP Request Body
+```
+
+---
+
+# JSON x data
+
+Essa é uma das diferenças mais importantes da biblioteca.
+
+### data=
+
+Normalmente utilizado para dados de formulário.
+
+```python
+requests.post(
+    url,
+    data={
+        "username": "admin"
+    }
+)
+```
+
+### json=
+
+Utilizado para enviar JSON.
+
+```python
+requests.post(
+    url,
+    json={
+        "username": "admin"
+    }
+)
+```
+
+Embora ambos recebam um dicionário, o formato enviado é diferente.
+
+---
+
+# Exemplo visual
+
+Com:
+
+```python
+data={
+    "username": "admin"
+}
+```
+
+podemos ter um corpo semelhante a:
+
+```text
+username=admin
+```
+
+Com:
+
+```python
+json={
+    "username": "admin"
+}
+```
+
+o corpo será JSON:
+
+```json
+{
+    "username": "admin"
+}
+```
+
+---
+
+# Content-Type
+
+O servidor precisa saber qual formato está recebendo.
+
+Um Header importante para isso é:
+
+```http
+Content-Type
+```
+
+Por exemplo:
+
+```http
+Content-Type: application/json
+```
+
+Ao utilizar:
+
+```python
+json=dados
+```
+
+o Requests cuida do envio apropriado do JSON e do Header correspondente.
+
+---
+
+# Não confundir json= com json.dumps()
+
+Podemos encontrar código como:
+
+```python
+import json
+
+dados = {
+    "username": "admin"
+}
+
+corpo = json.dumps(dados)
+```
+
+Nesse caso:
+
+```python
+json.dumps()
+```
+
+converte manualmente o dicionário para uma string JSON.
+
+Com Requests, normalmente podemos simplificar utilizando:
+
+```python
+requests.post(
+    url,
+    json=dados
+)
+```
+
+Em vez de:
+
+```python
+requests.post(
+    url,
+    data=json.dumps(dados)
+)
+```
+
+Para o uso comum de APIs, `json=` é mais conveniente.
+
+---
+
+# Exemplo de API
+
+Imagine que uma API aceite:
+
+```json
+{
+    "username": "admin",
+    "role": "user"
+}
+```
+
+Podemos enviar:
+
+```python
+dados = {
+    "username": "admin",
+    "role": "user"
+}
+
+response = requests.post(
+    "https://api.example.com/users",
+    json=dados
+)
+
+print(response.status_code)
+```
+
+---
+
+# json e APIs
+
+O parâmetro `json=` é extremamente comum em:
+
+- APIs REST;
+- aplicações Web modernas;
+- sistemas de autenticação;
+- APIs de automação;
+- ferramentas de segurança;
+- scripts de integração.
+
+Exemplo:
+
+```python
+response = requests.post(
+    api_url,
+    json={
+        "target": "example.com",
+        "scan": "quick"
+    }
+)
+```
+
+---
+
+# files=
+
+## O que é?
+
+O parâmetro:
+
+```python
+files=
+```
+
+é utilizado para enviar arquivos em uma requisição HTTP.
+
+É comum em formulários que possuem:
+
+```html
+<input type="file">
+```
+
+---
+
+# Exemplo básico
+
+Imagine que exista um arquivo:
+
+```text
+arquivo.txt
+```
+
+Podemos fazer:
+
+```python
+import requests
+
+with open(
+    "arquivo.txt",
+    "rb"
+) as arquivo:
+
+    response = requests.post(
+        "https://example.com/upload",
+        files={
+            "file": arquivo
+        }
+    )
+```
+
+O arquivo será enviado através da requisição.
+
+---
+
+# Por que utilizar "rb"?
+
+Utilizamos:
+
+```python
+"rb"
+```
+
+para abrir o arquivo em modo:
+
+```text
+read binary
+```
+
+ou:
+
+```text
+leitura binária
+```
+
+Isso é adequado para envio de arquivos.
+
+---
+
+# files recebe um dict
+
+Assim como outros parâmetros do Requests, podemos utilizar um dicionário.
+
+Exemplo:
+
+```python
+files = {
+    "file": arquivo
+}
+```
+
+O nome:
+
+```text
+file
+```
+
+deve corresponder ao nome esperado pelo formulário ou pela API.
+
+---
+
+# Formulário com upload
+
+Imagine:
+
+```html
+<form method="POST" enctype="multipart/form-data">
+
+    <input
+        type="file"
+        name="arquivo"
+    >
+
+</form>
+```
+
+O nome esperado pelo servidor é:
+
+```text
+arquivo
+```
+
+Então:
+
+```python
+files = {
+    "arquivo": arquivo
+}
+```
+
+---
+
+# Upload com dados adicionais
+
+Também podemos enviar dados junto com o arquivo.
+
+Exemplo:
+
+```python
+import requests
+
+dados = {
+    "descricao": "arquivo de teste"
+}
+
+with open(
+    "arquivo.txt",
+    "rb"
+) as arquivo:
+
+    response = requests.post(
+        "https://example.com/upload",
+        data=dados,
+        files={
+            "file": arquivo
+        }
+    )
+```
+
+Nesse caso:
+
+```text
+data=
+```
+
+envia os campos do formulário.
+
+Enquanto:
+
+```text
+files=
+```
+
+envia o arquivo.
+
+---
+
+# Estrutura da requisição
+
+Podemos imaginar:
+
+```text
+POST /upload
+        │
+        ├── Campos do formulário
+        │      │
+        │      └── descricao
+        │
+        └── Arquivo
+               │
+               └── arquivo.txt
+```
+
+Esse tipo de requisição normalmente utiliza:
+
+```text
+multipart/form-data
+```
+
+---
+
+# params + data + json + files
+
+Esses parâmetros podem parecer semelhantes porque todos enviam informações.
+
+Mas cada um possui uma finalidade diferente.
+
+| Parâmetro | Local/Formato | Uso comum |
+|---|---|---|
+| `params=` | URL | Query parameters |
+| `data=` | Body | Formulários |
+| `json=` | Body | APIs JSON |
+| `files=` | Body | Upload de arquivos |
+
+---
+
+# Exemplo comparativo
+
+## params
+
+```python
+requests.get(
+    url,
+    params={
+        "id": 10
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+GET /user?id=10
+```
+
+---
+
+## data
+
+```python
+requests.post(
+    url,
+    data={
+        "username": "admin"
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+POST /login
+
+username=admin
+```
+
+---
+
+## json
+
+```python
+requests.post(
+    url,
+    json={
+        "username": "admin"
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+POST /api/login
+
+{
+    "username": "admin"
+}
+```
+
+---
+
+## files
+
+```python
+requests.post(
+    url,
+    files={
+        "file": arquivo
+    }
+)
+```
+
+Resultado conceitual:
+
+```text
+POST /upload
+
+multipart/form-data
+
+arquivo
+```
+
+---
+
+# Utilizando com Session
+
+Todos esses parâmetros também podem ser utilizados com uma Session.
+
+Exemplo:
+
+```python
+session = requests.Session()
+```
+
+Depois:
+
+```python
+session.get(
+    url,
+    params={
+        "page": 1
+    }
+)
+```
+
+Ou:
+
+```python
+session.post(
+    url,
+    data={
+        "username": "admin"
+    }
+)
+```
+
+Ou:
+
+```python
+session.post(
+    url,
+    json={
+        "username": "admin"
+    }
+)
+```
+
+Ou:
+
+```python
+session.post(
+    url,
+    files={
+        "file": arquivo
+    }
+)
+```
+
+A diferença é que a requisição é realizada através da Session.
+
+---
+
+# Exemplo prático para Cyber Security
+
+Em um ambiente de laboratório, podemos criar um script para testar diferentes valores de um parâmetro.
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "SecurityLab/1.0"
+})
+
+valores = [
+    "admin",
+    "guest",
+    "test"
+]
+
+for valor in valores:
+
+    response = session.get(
+        "https://example.com/user",
+        params={
+            "username": valor
+        },
+        timeout=5
+    )
+
+    print(
+        response.status_code,
+        response.url
+    )
+```
+
+Aqui estamos combinando:
+
+```python
+Session
+```
+
+com:
+
+```python
+headers
+```
+
+e:
+
+```python
+params
+```
+
+Esse padrão é útil para automação de testes autorizados.
+
+---
+
+# Testando uma API
+
+Podemos também automatizar requisições JSON.
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "SecurityLab/1.0"
+})
+
+dados = {
+    "username": "admin",
+    "action": "test"
+}
+
+response = session.post(
+    "https://api.example.com/test",
+    json=dados,
+    timeout=5
+)
+
+print(response.status_code)
+print(response.text)
+```
+
+---
+
+# Testando um formulário
+
+Para uma aplicação que utiliza formulário:
+
+```python
+dados = {
+    "username": "admin",
+    "password": "123456"
+}
+
+response = session.post(
+    url,
+    data=dados,
+    timeout=5
+)
+```
+
+---
+
+# Testando parâmetros GET
+
+```python
+params = {
+    "id": 1,
+    "page": 1
+}
+
+response = session.get(
+    url,
+    params=params,
+    timeout=5
+)
+
+print(response.url)
+```
+
+---
+
+# Ordem mental para escolher o parâmetro
+
+Quando precisar enviar alguma informação, pense:
+
+```text
+Preciso enviar algo na URL?
+        │
+       SIM
+        │
+        ▼
+     params=
+```
+
+Caso não:
+
+```text
+Preciso enviar um formulário?
+        │
+       SIM
+        │
+        ▼
+      data=
+```
+
+Caso seja uma API JSON:
+
+```text
+Preciso enviar JSON?
+        │
+       SIM
+        │
+        ▼
+      json=
+```
+
+Caso seja um arquivo:
+
+```text
+Preciso enviar arquivo?
+        │
+       SIM
+        │
+        ▼
+      files=
+```
+
+---
+
+# Resumo
+
+```text
+params=
+   │
+   └── parâmetros da URL
+
+data=
+   │
+   └── dados de formulário
+
+json=
+   │
+   └── dados em JSON
+
+files=
+   │
+   └── upload de arquivos
+```
+
+Os quatro parâmetros são fundamentais para trabalhar com Requests.
+
+---
+
+# Exemplo completo
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "SecurityLab/1.0"
+})
+
+# Parâmetros na URL
+response = session.get(
+    "https://example.com/search",
+    params={
+        "q": "admin"
+    },
+    timeout=5
+)
+
+# Formulário
+response = session.post(
+    "https://example.com/login",
+    data={
+        "username": "admin",
+        "password": "123456"
+    },
+    timeout=5
+)
+
+# JSON
+response = session.post(
+    "https://api.example.com/users",
+    json={
+        "username": "admin",
+        "role": "user"
+    },
+    timeout=5
+)
+```
+
+Esse exemplo reúne os principais mecanismos estudados até agora:
+
+```text
+Session
+   │
+   ├── Headers
+   │
+   ├── GET
+   │    └── params=
+   │
+   └── POST
+        ├── data=
+        └── json=
+```
+
+---
+
+# Resumo da Parte
+
+Nesta parte estudamos:
+
+- `params=`;
+- `data=`;
+- `json=`;
+- `files=`;
+- diferença entre parâmetros da URL e Body;
+- formulários HTML;
+- JSON em APIs;
+- upload de arquivos;
+- `Content-Type`;
+- utilização desses parâmetros com `Session`;
+- aplicação em automação e testes de segurança autorizados.
+
+Na próxima parte vamos estudar o **Response** em profundidade: `status_code`, `headers`, `text`, `content`, `json()`, `url`, `cookies`, `history`, `raise_for_status()` e como analisar respostas HTTP em scripts de Cyber Security.
+
+

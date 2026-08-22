@@ -1,12 +1,3 @@
----
-tags:
-  - Python
-  - Bibliotecas
-  - Requests
-  - HTTP
----
-## O que é?
-
 O **Requests** é uma biblioteca Python utilizada para realizar requisições HTTP e HTTPS.
 
 Ela permite que um programa Python se comunique com servidores Web, APIs e aplicações que utilizam o protocolo HTTP.

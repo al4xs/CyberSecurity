@@ -6769,3 +6769,1181 @@ Na próxima parte vamos aprofundar **Cookies, autenticação e Session**, inclui
 
 
 
+---
+
+# Cookies
+
+Cookies são pequenos dados enviados pelo servidor para o cliente.
+
+Eles são utilizados para manter informações entre diferentes requisições HTTP.
+
+Um dos usos mais importantes é a **manutenção de sessão**.
+
+Podemos visualizar:
+
+```text
+Cliente
+   │
+   │ GET /login
+   ▼
+Servidor
+   │
+   │ Set-Cookie: sessionid=abc123
+   ▼
+Cliente
+   │
+   │ Cookie: sessionid=abc123
+   ▼
+Servidor
+```
+
+O Cookie permite que o servidor reconheça requisições posteriores como pertencentes à mesma sessão.
+
+---
+
+# Set-Cookie
+
+Quando o servidor deseja criar ou modificar um Cookie, normalmente utiliza o Header:
+
+```http
+Set-Cookie
+```
+
+Exemplo:
+
+```http
+Set-Cookie: sessionid=abc123
+```
+
+No Requests podemos acessar esses Cookies através de:
+
+```python
+response.cookies
+```
+
+Exemplo:
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com"
+)
+
+print(response.cookies)
+```
+
+---
+
+# Acessando Cookies
+
+Podemos percorrer os Cookies:
+
+```python
+for cookie in response.cookies:
+
+    print(
+        cookie.name,
+        cookie.value
+    )
+```
+
+Exemplo de saída:
+
+```text
+sessionid abc123
+```
+
+Cada Cookie possui informações como:
+
+```text
+name
+value
+domain
+path
+expires
+secure
+```
+
+---
+
+# Cookie como dicionário
+
+Também podemos acessar o valor pelo nome:
+
+```python
+valor = response.cookies.get(
+    "sessionid"
+)
+
+print(valor)
+```
+
+Resultado:
+
+```text
+abc123
+```
+
+O método:
+
+```python
+.get()
+```
+
+é útil porque permite retornar `None` caso o Cookie não exista.
+
+---
+
+# Enviando Cookies manualmente
+
+Também podemos enviar Cookies através do parâmetro:
+
+```python
+cookies=
+```
+
+Exemplo:
+
+```python
+import requests
+
+cookies = {
+    "sessionid": "abc123"
+}
+
+response = requests.get(
+    "https://example.com/dashboard",
+    cookies=cookies
+)
+```
+
+Aqui estamos informando ao Requests:
+
+```text
+Cookie:
+sessionid=abc123
+```
+
+---
+
+# Estrutura do parâmetro cookies=
+
+O parâmetro:
+
+```python
+cookies=
+```
+
+normalmente recebe um:
+
+```python
+dict
+```
+
+Exemplo:
+
+```python
+cookies = {
+    "sessionid": "abc123",
+    "language": "pt-BR"
+}
+```
+
+Podemos enviar:
+
+```python
+response = requests.get(
+    url,
+    cookies=cookies
+)
+```
+
+---
+
+# Cookie x Header
+
+Existe uma diferença importante.
+
+Podemos enviar um Cookie através do parâmetro:
+
+```python
+cookies=
+```
+
+ou manualmente através de Headers.
+
+Exemplo:
+
+```python
+headers = {
+    "Cookie": "sessionid=abc123"
+}
+```
+
+Porém, para trabalhar com Cookies, normalmente é melhor utilizar:
+
+```python
+cookies=
+```
+
+porque o Requests possui mecanismos próprios para gerenciamento de Cookies.
+
+---
+
+# Session
+
+Até agora utilizamos:
+
+```python
+requests.get()
+```
+
+e:
+
+```python
+requests.post()
+```
+
+Essas chamadas funcionam muito bem para requisições independentes.
+
+Porém, aplicações Web frequentemente precisam manter um estado entre várias requisições.
+
+É exatamente nesse cenário que:
+
+```python
+requests.Session()
+```
+
+se torna importante.
+
+---
+
+# O que é Session?
+
+Uma `Session` é um objeto que permite realizar várias requisições HTTP mantendo determinadas informações entre elas.
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+```
+
+Agora temos:
+
+```text
+session
+   │
+   ├── Cookies
+   ├── Headers
+   └── outras configurações
+```
+
+Podemos utilizar essa mesma Session em várias requisições:
+
+```python
+session.get(...)
+session.post(...)
+session.get(...)
+session.post(...)
+```
+
+---
+
+# requests.get() x session.get()
+
+Sem Session:
+
+```python
+requests.get(url)
+requests.get(url)
+requests.get(url)
+```
+
+Cada chamada utiliza a API diretamente.
+
+Com Session:
+
+```python
+session = requests.Session()
+
+session.get(url)
+session.get(url)
+session.get(url)
+```
+
+Todas essas requisições utilizam o mesmo objeto `Session`.
+
+Isso permite manter informações entre as requisições.
+
+---
+
+# Persistência da Session
+
+É importante entender o significado de "persistência".
+
+Quando criamos:
+
+```python
+session = requests.Session()
+```
+
+a Session permanece disponível **durante a execução do objeto no programa**.
+
+Por exemplo:
+
+```python
+session = requests.Session()
+
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+As três requisições utilizam a mesma Session.
+
+Porém, quando o programa termina:
+
+```text
+Programa encerrado
+       │
+       ▼
+Session destruída
+```
+
+ela não continua automaticamente existindo na próxima execução.
+
+Portanto:
+
+> Session fornece persistência de estado entre requisições enquanto aquela Session estiver sendo utilizada.
+
+---
+
+# Session e User-Agent
+
+Uma das configurações que podemos armazenar na Session são os Headers.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Meu User-Agent"
+})
+```
+
+Agora, quando utilizarmos:
+
+```python
+session.get(url)
+```
+
+o User-Agent configurado será utilizado nas requisições daquela Session.
+
+Visualmente:
+
+```text
+Session
+   │
+   ├── User-Agent
+   │
+   └── Cookies
+        │
+        ▼
+   session.get()
+        │
+        ▼
+     Servidor
+```
+
+---
+
+# Session e Headers
+
+Podemos configurar Headers padrão:
+
+```python
+session.headers.update({
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html"
+})
+```
+
+Depois:
+
+```python
+session.get(
+    "https://example.com"
+)
+```
+
+Não precisamos repetir os Headers em cada requisição.
+
+---
+
+# Session com múltiplos Headers
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html",
+    "Accept-Language": "pt-BR,pt;q=0.9"
+})
+```
+
+Todas as requisições realizadas através dessa Session utilizarão essas configurações como Headers padrão.
+
+---
+
+# Alterando Headers de uma única requisição
+
+Os Headers definidos na Session são padrões.
+
+Podemos sobrescrever ou adicionar Headers em uma requisição específica.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Meu User-Agent"
+})
+
+response = session.get(
+    url,
+    headers={
+        "Accept": "application/json"
+    }
+)
+```
+
+Nesse caso:
+
+```text
+Session
+   │
+   └── User-Agent padrão
+
+Requisição
+   │
+   └── Accept específico
+```
+
+---
+
+# Session e Cookies automaticamente
+
+Uma das maiores vantagens da Session é o gerenciamento de Cookies.
+
+Imagine que o servidor responda:
+
+```http
+Set-Cookie: sessionid=abc123
+```
+
+Se utilizarmos uma Session:
+
+```python
+session = requests.Session()
+
+response = session.get(
+    "https://example.com/login"
+)
+```
+
+o Cookie recebido pode ser armazenado pela Session.
+
+Depois:
+
+```python
+response = session.get(
+    "https://example.com/dashboard"
+)
+```
+
+a Session pode enviar o Cookie automaticamente.
+
+---
+
+# Fluxo
+
+```text
+1. session.get("/login")
+          │
+          ▼
+     Servidor
+          │
+          │ Set-Cookie
+          ▼
+       Session
+          │
+          │ armazena Cookie
+          ▼
+2. session.get("/dashboard")
+          │
+          │ Cookie enviado
+          ▼
+       Servidor
+```
+
+Isso é extremamente importante para automação Web.
+
+---
+
+# Visualizando os Cookies da Session
+
+Podemos acessar:
+
+```python
+session.cookies
+```
+
+Exemplo:
+
+```python
+print(
+    session.cookies
+)
+```
+
+Também podemos percorrer:
+
+```python
+for cookie in session.cookies:
+
+    print(
+        cookie.name,
+        cookie.value
+    )
+```
+
+---
+
+# Adicionando Cookie à Session
+
+Também podemos adicionar um Cookie manualmente:
+
+```python
+session.cookies.set(
+    "sessionid",
+    "abc123"
+)
+```
+
+Agora:
+
+```python
+session.get(
+    "https://example.com/dashboard"
+)
+```
+
+poderá enviar esse Cookie.
+
+---
+
+# Removendo Cookies
+
+Podemos limpar os Cookies da Session:
+
+```python
+session.cookies.clear()
+```
+
+Depois disso, os Cookies armazenados serão removidos.
+
+---
+
+# Session como estado da aplicação
+
+Podemos pensar na Session como um objeto que mantém o contexto das requisições.
+
+```text
+Session
+│
+├── Headers padrão
+│
+├── Cookies
+│
+├── Configurações
+│
+└── Requisições
+       │
+       ├── GET
+       ├── POST
+       ├── GET
+       └── POST
+```
+
+Isso facilita muito a automação de aplicações que dependem de estado.
+
+---
+
+# Login utilizando Session
+
+Uma situação comum é uma aplicação possuir:
+
+```text
+GET /login
+POST /login
+GET /dashboard
+GET /profile
+```
+
+Podemos utilizar uma Session para manter o estado.
+
+Exemplo conceitual:
+
+```python
+import requests
+
+session = requests.Session()
+
+response = session.get(
+    "https://example.com/login"
+)
+
+response = session.post(
+    "https://example.com/login",
+    data={
+        "username": "usuario",
+        "password": "senha"
+    }
+)
+
+response = session.get(
+    "https://example.com/dashboard"
+)
+```
+
+A mesma Session é utilizada durante todo o fluxo.
+
+---
+
+# Por que utilizar Session em login?
+
+Imagine que o servidor retorne:
+
+```http
+Set-Cookie: sessionid=abc123
+```
+
+Depois do login:
+
+```text
+POST /login
+       │
+       ▼
+Set-Cookie
+       │
+       ▼
+Session
+       │
+       ▼
+GET /dashboard
+       │
+       └── Cookie enviado
+```
+
+Sem uma Session, precisaríamos gerenciar esse estado manualmente.
+
+Com uma Session, o Requests facilita esse processo.
+
+---
+
+# Atenção: Login não é apenas usuário e senha
+
+Nem toda aplicação Web utiliza apenas:
+
+```python
+username
+password
+```
+
+O formulário pode exigir outros dados.
+
+Exemplo:
+
+```python
+data = {
+    "username": "usuario",
+    "password": "senha",
+    "csrf_token": "abc123"
+}
+```
+
+O nome dos parâmetros depende da aplicação.
+
+Por isso, em automação autorizada, é importante primeiro entender como a aplicação realiza o login.
+
+---
+
+# data=
+
+No exemplo anterior utilizamos:
+
+```python
+data=
+```
+
+Esse parâmetro é utilizado para enviar dados no corpo da requisição.
+
+Exemplo:
+
+```python
+data = {
+    "username": "usuario",
+    "password": "senha"
+}
+
+response = session.post(
+    url,
+    data=data
+)
+```
+
+O Requests normalmente enviará esses dados como:
+
+```text
+application/x-www-form-urlencoded
+```
+
+quando apropriado.
+
+---
+
+# json=
+
+Quando uma API espera JSON, podemos utilizar:
+
+```python
+json=
+```
+
+Exemplo:
+
+```python
+dados = {
+    "username": "usuario",
+    "password": "senha"
+}
+
+response = session.post(
+    url,
+    json=dados
+)
+```
+
+Nesse caso, o Requests serializa o objeto Python para JSON.
+
+---
+
+# data= x json=
+
+A diferença fundamental:
+
+```text
+data=
+    │
+    └── Dados de formulário
+```
+
+Enquanto:
+
+```text
+json=
+    │
+    └── JSON
+```
+
+Exemplo:
+
+```python
+response = session.post(
+    url,
+    data={
+        "username": "usuario"
+    }
+)
+```
+
+ou:
+
+```python
+response = session.post(
+    url,
+    json={
+        "username": "usuario"
+    }
+)
+```
+
+O formato enviado será diferente.
+
+---
+
+# Verificando o que foi enviado
+
+O objeto `Response` possui acesso à requisição que originou a resposta através de:
+
+```python
+response.request
+```
+
+Podemos verificar:
+
+```python
+print(
+    response.request.method
+)
+```
+
+ou:
+
+```python
+print(
+    response.request.url
+)
+```
+
+Também podemos verificar os Headers enviados:
+
+```python
+print(
+    response.request.headers
+)
+```
+
+---
+
+# response.request
+
+Esse recurso é muito útil para entender o que realmente foi enviado.
+
+Podemos visualizar:
+
+```text
+response
+   │
+   └── request
+          │
+          ├── method
+          ├── url
+          ├── headers
+          └── body
+```
+
+Exemplo:
+
+```python
+print(
+    response.request.method
+)
+
+print(
+    response.request.url
+)
+
+print(
+    response.request.headers
+)
+```
+
+---
+
+# Analisando o Body enviado
+
+Podemos acessar:
+
+```python
+response.request.body
+```
+
+Exemplo:
+
+```python
+print(
+    response.request.body
+)
+```
+
+Isso é bastante útil durante desenvolvimento e depuração de ferramentas HTTP.
+
+---
+
+# Exemplo completo com Session
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html"
+})
+
+try:
+
+    response = session.get(
+        "https://example.com",
+        timeout=5
+    )
+
+    print(
+        "Status:",
+        response.status_code
+    )
+
+    print(
+        "Cookies:",
+        session.cookies
+    )
+
+except requests.RequestException as error:
+
+    print(
+        f"Erro: {error}"
+    )
+```
+
+---
+
+# Exemplo de Session para seu scanner
+
+No seu scanner de diretórios, em vez de:
+
+```python
+response = requests.get(
+    new_url,
+    timeout=5
+)
+```
+
+podemos criar uma Session antes do loop:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+```
+
+Depois:
+
+```python
+response = session.get(
+    new_url,
+    timeout=5
+)
+```
+
+A estrutura fica:
+
+```text
+Session criada
+     │
+     ▼
+Headers configurados
+     │
+     ▼
+Lê paths.txt
+     │
+     ▼
+path encontrado
+     │
+     ▼
+session.get()
+     │
+     ▼
+Analisa Response
+     │
+     ▼
+Próximo path
+```
+
+---
+
+# Session + seu scanner
+
+Uma versão simplificada:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+
+for path in paths:
+
+    url = f"{base_url}/{path}"
+
+    try:
+
+        response = session.get(
+            url,
+            timeout=5
+        )
+
+        print(
+            response.status_code,
+            url
+        )
+
+    except requests.RequestException as error:
+
+        print(
+            f"Erro: {error}"
+        )
+```
+
+Agora todas as requisições utilizam a mesma Session.
+
+---
+
+# Session não significa "login automático"
+
+É importante não confundir.
+
+Criar:
+
+```python
+session = requests.Session()
+```
+
+não significa que o usuário está autenticado.
+
+A Session apenas fornece um mecanismo para manter estado entre requisições.
+
+A autenticação depende da aplicação.
+
+Por exemplo:
+
+```text
+Session
+   │
+   ├── Headers
+   ├── Cookies
+   └── configurações
+```
+
+Se a aplicação exigir login, será necessário realizar o fluxo de autenticação apropriado.
+
+---
+
+# Session não é permanente
+
+Também é importante lembrar:
+
+```python
+session = requests.Session()
+```
+
+não salva automaticamente seus dados em disco.
+
+Se o programa terminar:
+
+```text
+Programa termina
+       │
+       ▼
+Session deixa de existir
+```
+
+Na próxima execução:
+
+```python
+session = requests.Session()
+```
+
+será criada uma nova Session.
+
+Se fosse necessário persistir dados entre execuções, seria necessário implementar algum mecanismo próprio de armazenamento.
+
+---
+
+# Quando utilizar Session?
+
+Session é especialmente útil quando temos:
+
+- várias requisições para o mesmo sistema;
+- Cookies;
+- autenticação;
+- login;
+- Headers padrão;
+- configurações compartilhadas;
+- automação de aplicações Web;
+- APIs que dependem de estado;
+- testes automatizados.
+
+---
+
+# Session em Cyber Security
+
+Em ambientes autorizados, Session pode ser utilizada para:
+
+- automatizar fluxos de autenticação;
+- testar aplicações Web;
+- reproduzir requisições;
+- verificar respostas autenticadas;
+- automatizar enumeração;
+- analisar Cookies;
+- testar controles de acesso;
+- construir ferramentas de segurança Web.
+
+Por exemplo:
+
+```text
+Login
+  │
+  ▼
+Session autenticada
+  │
+  ├── /dashboard
+  ├── /profile
+  ├── /api/user
+  └── /admin
+```
+
+A mesma Session pode ser utilizada para realizar as requisições necessárias durante o teste.
+
+---
+
+# Resumo da Parte
+
+Nesta parte estudamos:
+
+- Cookies;
+- `Set-Cookie`;
+- `response.cookies`;
+- `cookies=`;
+- Cookies manuais;
+- `Session`;
+- persistência durante a execução;
+- Session x `requests.get()`;
+- Headers dentro da Session;
+- User-Agent dentro da Session;
+- Cookies dentro da Session;
+- `session.cookies`;
+- `session.cookies.set()`;
+- `session.cookies.clear()`;
+- automação de login;
+- `data=`;
+- `json=`;
+- `response.request`;
+- `response.request.body`;
+- utilização de Session em ferramentas de Cyber Security.
+
+A próxima parte será a última e vai fechar a anotação com **tratamento de erros, proxy, SSL/TLS, autenticação HTTP, parâmetros avançados e um projeto final juntando `Session + Headers + Cookies + Response + argparse`**.
+
+

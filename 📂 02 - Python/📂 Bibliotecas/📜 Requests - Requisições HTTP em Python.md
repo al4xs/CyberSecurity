@@ -1277,3 +1277,1399 @@ Web Security
 ```
 
 A partir daqui, o próximo passo é entender como controlar **o que o Python envia para o servidor**, principalmente através de Headers e Sessions.
+
+---
+
+# Headers
+
+## O que são?
+
+**Headers** são informações adicionais enviadas junto com uma requisição HTTP.
+
+Eles permitem que o cliente informe informações ao servidor sobre a requisição.
+
+Exemplo:
+
+```http
+GET / HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/html
+```
+
+Nesse exemplo temos três Headers:
+
+```text
+Host
+User-Agent
+Accept
+```
+
+Cada Header possui:
+
+```text
+Nome: Valor
+```
+
+Por exemplo:
+
+```text
+User-Agent: Mozilla/5.0
+```
+
+Onde:
+
+```text
+User-Agent
+```
+
+é o nome do Header.
+
+E:
+
+```text
+Mozilla/5.0
+```
+
+é o valor.
+
+---
+
+# Estrutura de um Header
+
+Podemos visualizar um Header dessa forma:
+
+```text
+Header
+  │
+  ├── Nome
+  │
+  └── Valor
+```
+
+Exemplo:
+
+```text
+User-Agent: Mozilla/5.0
+```
+
+```text
+      User-Agent
+           │
+           ▼
+      nome do Header
+           │
+           ▼
+      Mozilla/5.0
+           │
+           ▼
+       valor
+```
+
+Uma requisição pode possuir vários Headers:
+
+```text
+User-Agent: Mozilla/5.0
+Accept: text/html
+Authorization: Bearer TOKEN
+```
+
+---
+
+# Headers no Requests
+
+No Requests podemos enviar Headers utilizando o parâmetro:
+
+```python
+headers=
+```
+
+Exemplo:
+
+```python
+import requests
+
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+
+response = requests.get(
+    "https://example.com",
+    headers=headers
+)
+```
+
+Nesse caso:
+
+```python
+headers
+```
+
+é um `dict` contendo os Headers que queremos enviar.
+
+---
+
+# Por que é utilizado um dict?
+
+O Requests espera os Headers em uma estrutura semelhante a:
+
+```python
+{
+    "Nome-Do-Header": "Valor"
+}
+```
+
+Um `dict` é apropriado porque trabalha com pares:
+
+```text
+chave → valor
+```
+
+Exemplo:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html"
+}
+```
+
+Podemos visualizar:
+
+```text
+headers
+   │
+   ├── "User-Agent" → "Meu User-Agent"
+   │
+   └── "Accept"     → "text/html"
+```
+
+A chave representa o nome do Header.
+
+O valor representa o conteúdo daquele Header.
+
+---
+
+# Um Header
+
+Podemos enviar apenas um Header:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+Depois:
+
+```python
+requests.get(
+    url,
+    headers=headers
+)
+```
+
+---
+
+# Vários Headers
+
+Também podemos enviar vários Headers dentro do mesmo `dict`.
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html",
+    "Accept-Language": "pt-BR"
+}
+```
+
+Depois:
+
+```python
+response = requests.get(
+    url,
+    headers=headers
+)
+```
+
+O Requests enviará os Headers definidos na requisição.
+
+---
+
+# Exemplo completo
+
+```python
+import requests
+
+url = "https://example.com"
+
+headers = {
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html"
+}
+
+response = requests.get(
+    url,
+    headers=headers
+)
+
+print(response.status_code)
+```
+
+---
+
+# User-Agent
+
+## O que é?
+
+O:
+
+```text
+User-Agent
+```
+
+é um Header HTTP utilizado pelo cliente para informar ao servidor uma identificação sobre o software que está realizando a requisição.
+
+Exemplo:
+
+```http
+User-Agent: Mozilla/5.0
+```
+
+Um navegador normalmente envia um User-Agent contendo informações relacionadas ao navegador e ao sistema.
+
+Por exemplo:
+
+```text
+Mozilla/5.0 (...)
+```
+
+O conteúdo exato pode variar dependendo do navegador, sistema operacional e versão.
+
+---
+
+# User-Agent no Requests
+
+Uma requisição simples:
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com"
+)
+```
+
+é realizada pelo Requests e possui seus próprios Headers padrão.
+
+Podemos definir nosso próprio User-Agent:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+E enviar:
+
+```python
+response = requests.get(
+    "https://example.com",
+    headers=headers
+)
+```
+
+---
+
+# Alterando o User-Agent
+
+Podemos simplesmente modificar o valor:
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+```
+
+Ou:
+
+```python
+headers = {
+    "User-Agent": "MeuScanner/1.0"
+}
+```
+
+Ou:
+
+```python
+headers = {
+    "User-Agent": "PythonSecurityTool/1.0"
+}
+```
+
+O valor é uma `str`.
+
+---
+
+# User-Agent como variável
+
+Também podemos armazenar o valor em uma variável:
+
+```python
+user_agent = "MeuScanner/1.0"
+
+headers = {
+    "User-Agent": user_agent
+}
+```
+
+Depois:
+
+```python
+response = requests.get(
+    url,
+    headers=headers
+)
+```
+
+Isso é útil quando queremos alterar o User-Agent dinamicamente.
+
+---
+
+# User-Agent recebido por argumento
+
+Podemos combinar `argparse` com Requests.
+
+Exemplo:
+
+```python
+import argparse
+import requests
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "-u",
+    "--url",
+    required=True
+)
+
+parser.add_argument(
+    "-A",
+    "--user-agent",
+    default="MeuScanner/1.0"
+)
+
+args = parser.parse_args()
+
+headers = {
+    "User-Agent": args.user_agent
+}
+
+response = requests.get(
+    args.url,
+    headers=headers
+)
+
+print(response.status_code)
+```
+
+Agora podemos executar:
+
+```bash
+python scanner.py -u https://example.com
+```
+
+Nesse caso será utilizado:
+
+```text
+MeuScanner/1.0
+```
+
+Ou podemos definir outro:
+
+```bash
+python scanner.py \
+-u https://example.com \
+-A "Mozilla/5.0"
+```
+
+---
+
+# Headers e dict
+
+É importante entender que:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+cria um `dict`.
+
+Podemos verificar:
+
+```python
+print(type(headers))
+```
+
+Resultado:
+
+```text
+<class 'dict'>
+```
+
+Podemos acessar um valor específico:
+
+```python
+print(headers["User-Agent"])
+```
+
+Resultado:
+
+```text
+Meu User-Agent
+```
+
+---
+
+# Adicionando Headers dinamicamente
+
+Como `headers` é um `dict`, podemos adicionar novos valores normalmente.
+
+Exemplo:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+Depois:
+
+```python
+headers["Accept"] = "text/html"
+```
+
+Agora o `dict` possui:
+
+```python
+{
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html"
+}
+```
+
+Também podemos fazer:
+
+```python
+headers["Authorization"] = "Bearer TOKEN"
+```
+
+Agora:
+
+```python
+{
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html",
+    "Authorization": "Bearer TOKEN"
+}
+```
+
+---
+
+# .update()
+
+O método:
+
+```python
+.update()
+```
+
+é um método de `dict` utilizado para adicionar ou atualizar valores.
+
+Exemplo:
+
+```python
+dados = {
+    "nome": "Marcos"
+}
+```
+
+Podemos adicionar:
+
+```python
+dados.update({
+    "idade": 24
+})
+```
+
+Agora:
+
+```python
+print(dados)
+```
+
+Resultado:
+
+```python
+{
+    "nome": "Marcos",
+    "idade": 24
+}
+```
+
+---
+
+# update() com vários valores
+
+Podemos adicionar vários valores de uma vez:
+
+```python
+dados.update({
+    "idade": 24,
+    "cidade": "São Paulo",
+    "profissao": "Programador"
+})
+```
+
+Resultado:
+
+```python
+{
+    "nome": "Marcos",
+    "idade": 24,
+    "cidade": "São Paulo",
+    "profissao": "Programador"
+}
+```
+
+---
+
+# update() também atualiza valores existentes
+
+Se a chave já existir:
+
+```python
+dados = {
+    "nome": "Marcos",
+    "idade": 20
+}
+```
+
+Podemos atualizar:
+
+```python
+dados.update({
+    "idade": 24
+})
+```
+
+Agora:
+
+```python
+{
+    "nome": "Marcos",
+    "idade": 24
+}
+```
+
+O valor antigo:
+
+```text
+20
+```
+
+foi substituído por:
+
+```text
+24
+```
+
+Portanto:
+
+```text
+chave não existe
+       │
+       ▼
+    adiciona
+
+chave já existe
+       │
+       ▼
+    atualiza
+```
+
+---
+
+# update() aplicado aos Headers
+
+Podemos utilizar o mesmo conceito com Headers.
+
+Inicialmente:
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+Depois:
+
+```python
+headers.update({
+    "Accept": "text/html"
+})
+```
+
+Resultado:
+
+```python
+{
+    "User-Agent": "Meu User-Agent",
+    "Accept": "text/html"
+}
+```
+
+---
+
+# Atualizando um Header
+
+Também podemos atualizar um Header existente.
+
+```python
+headers = {
+    "User-Agent": "Meu User-Agent"
+}
+```
+
+Depois:
+
+```python
+headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+```
+
+Agora:
+
+```python
+{
+    "User-Agent": "Mozilla/5.0"
+}
+```
+
+O valor anterior foi substituído.
+
+---
+
+# Session e Headers
+
+Quando utilizamos uma `Session`, podemos definir Headers padrão para aquela Session.
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+Agora podemos realizar:
+
+```python
+response = session.get(
+    "https://example.com"
+)
+```
+
+O Header definido na Session será utilizado nas requisições realizadas através dela.
+
+---
+
+# O que significa Session?
+
+Uma `Session` representa uma sessão de comunicação entre o nosso programa e os servidores.
+
+Podemos criar uma Session:
+
+```python
+session = requests.Session()
+```
+
+Depois utilizamos:
+
+```python
+session.get()
+```
+
+em vez de:
+
+```python
+requests.get()
+```
+
+Exemplo:
+
+```python
+import requests
+
+session = requests.Session()
+
+response = session.get(
+    "https://example.com"
+)
+```
+
+---
+
+# requests.get() x session.get()
+
+Sem Session:
+
+```python
+requests.get(url)
+```
+
+Com Session:
+
+```python
+session = requests.Session()
+
+session.get(url)
+```
+
+A Session permite manter determinadas informações e configurações entre várias requisições realizadas através daquela Session.
+
+Por exemplo:
+
+```text
+Session
+   │
+   ├── Headers
+   ├── Cookies
+   └── outras configurações
+```
+
+Isso será especialmente útil quando fazemos várias requisições para o mesmo serviço.
+
+---
+
+# Headers diretamente na requisição
+
+Podemos definir:
+
+```python
+headers = {
+    "User-Agent": "MeuScanner/1.0"
+}
+```
+
+E utilizar:
+
+```python
+requests.get(
+    url,
+    headers=headers
+)
+```
+
+Nesse caso o Header é fornecido especificamente para aquela requisição.
+
+---
+
+# Headers na Session
+
+Também podemos definir:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+Depois:
+
+```python
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+As requisições realizadas pela Session utilizarão essa configuração de Header.
+
+Visualmente:
+
+```text
+Session
+   │
+   └── User-Agent: MeuScanner/1.0
+          │
+          ├── GET /login
+          │
+          ├── GET /admin
+          │
+          └── GET /api
+```
+
+---
+
+# Quando utilizar Headers diretamente?
+
+Quando o Header será utilizado apenas em uma determinada requisição.
+
+Exemplo:
+
+```python
+requests.get(
+    url,
+    headers={
+        "User-Agent": "Scanner/1.0"
+    }
+)
+```
+
+---
+
+# Quando utilizar Headers na Session?
+
+Quando queremos manter uma configuração para várias requisições.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Scanner/1.0"
+})
+
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+Isso evita repetir:
+
+```python
+headers=headers
+```
+
+em todas as chamadas.
+
+---
+
+# Exemplo prático
+
+Imagine que temos várias URLs:
+
+```python
+urls = [
+    "https://example.com/",
+    "https://example.com/login",
+    "https://example.com/admin"
+]
+```
+
+Sem Session:
+
+```python
+import requests
+
+headers = {
+    "User-Agent": "MeuScanner/1.0"
+}
+
+for url in urls:
+
+    response = requests.get(
+        url,
+        headers=headers
+    )
+
+    print(
+        response.status_code,
+        url
+    )
+```
+
+Com Session:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+
+for url in urls:
+
+    response = session.get(url)
+
+    print(
+        response.status_code,
+        url
+    )
+```
+
+A segunda abordagem é especialmente interessante quando várias requisições fazem parte da mesma interação.
+
+---
+
+# Headers comuns
+
+Existem diversos Headers HTTP.
+
+Alguns importantes:
+
+| Header | Função |
+|---|---|
+| `User-Agent` | Identifica o cliente |
+| `Accept` | Informa tipos de conteúdo aceitos |
+| `Accept-Language` | Idiomas preferidos |
+| `Content-Type` | Tipo do conteúdo enviado |
+| `Authorization` | Informações de autenticação |
+| `Cookie` | Envia Cookies |
+| `Referer` | Indica uma página de referência |
+| `Host` | Indica o host solicitado |
+
+---
+
+# Accept
+
+O Header:
+
+```text
+Accept
+```
+
+informa quais tipos de conteúdo o cliente aceita receber.
+
+Exemplo:
+
+```python
+headers = {
+    "Accept": "text/html"
+}
+```
+
+Também podemos utilizar:
+
+```python
+headers = {
+    "Accept": "application/json"
+}
+```
+
+Isso é muito comum quando estamos trabalhando com APIs.
+
+---
+
+# Accept-Language
+
+Indica uma preferência de idioma.
+
+Exemplo:
+
+```python
+headers = {
+    "Accept-Language": "pt-BR"
+}
+```
+
+Podemos combinar:
+
+```python
+headers = {
+    "User-Agent": "MeuScanner/1.0",
+    "Accept": "text/html",
+    "Accept-Language": "pt-BR"
+}
+```
+
+---
+
+# Content-Type
+
+O Header:
+
+```text
+Content-Type
+```
+
+indica o tipo do conteúdo enviado no corpo da requisição.
+
+Exemplo:
+
+```text
+Content-Type: application/json
+```
+
+Isso significa que o conteúdo enviado é JSON.
+
+Outro exemplo:
+
+```text
+Content-Type: application/x-www-form-urlencoded
+```
+
+Esse Header será importante quando estudarmos:
+
+```python
+data=
+```
+
+e:
+
+```python
+json=
+```
+
+---
+
+# Authorization
+
+O Header:
+
+```text
+Authorization
+```
+
+é utilizado por muitas APIs para enviar informações de autenticação.
+
+Exemplo:
+
+```python
+headers = {
+    "Authorization": "Bearer TOKEN"
+}
+```
+
+> [!WARNING]
+> Nunca coloque tokens, senhas ou chaves reais diretamente em código que será compartilhado ou versionado.
+
+---
+
+# Referer
+
+O Header:
+
+```text
+Referer
+```
+
+pode informar ao servidor a página de origem da requisição.
+
+Exemplo:
+
+```python
+headers = {
+    "Referer": "https://example.com/login"
+}
+```
+
+É importante observar que o comportamento e a interpretação desses Headers dependem do servidor e da aplicação.
+
+---
+
+# Exemplo com vários Headers
+
+```python
+import requests
+
+headers = {
+    "User-Agent": "MeuScanner/1.0",
+    "Accept": "text/html",
+    "Accept-Language": "pt-BR",
+    "Referer": "https://example.com/"
+}
+
+response = requests.get(
+    "https://example.com/login",
+    headers=headers,
+    timeout=5
+)
+
+print(response.status_code)
+```
+
+---
+
+# Exemplo aplicado à Cyber Security
+
+Em um ambiente autorizado, podemos utilizar Headers para analisar como uma aplicação responde a diferentes clientes.
+
+Por exemplo:
+
+```python
+import requests
+
+url = "https://example.com"
+
+user_agents = [
+    "Mozilla/5.0",
+    "MeuScanner/1.0",
+    "PythonSecurityTool/1.0"
+]
+
+for user_agent in user_agents:
+
+    headers = {
+        "User-Agent": user_agent
+    }
+
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=5
+    )
+
+    print(
+        response.status_code,
+        user_agent
+    )
+```
+
+Isso permite comparar as respostas obtidas com diferentes valores de Header em um ambiente autorizado.
+
+---
+
+# Session com User-Agent
+
+Uma forma mais organizada quando várias requisições utilizam o mesmo User-Agent:
+
+```python
+import requests
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+
+urls = [
+    "https://example.com/",
+    "https://example.com/login",
+    "https://example.com/admin"
+]
+
+for url in urls:
+
+    response = session.get(
+        url,
+        timeout=5
+    )
+
+    print(
+        response.status_code,
+        url
+    )
+```
+
+Nesse exemplo:
+
+```python
+session.headers.update()
+```
+
+define um Header padrão para a Session.
+
+Depois:
+
+```python
+session.get()
+```
+
+utiliza essa Session.
+
+---
+
+# Um detalhe importante sobre persistência
+
+Quando falamos que uma Session possui "persistência", isso **não significa que o User-Agent foi salvo permanentemente no computador ou no site**.
+
+A persistência ocorre durante a utilização daquele objeto `Session`.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+Enquanto esse objeto existir:
+
+```python
+session
+```
+
+podemos utilizar:
+
+```python
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+e a configuração da Session continuará disponível.
+
+Se o programa for encerrado:
+
+```text
+Programa
+   │
+   ▼
+Session criada
+   │
+   ▼
+Requisições
+   │
+   ▼
+Programa encerrado
+   │
+   ▼
+Session deixa de existir
+```
+
+Ao executar o programa novamente, uma nova Session será criada.
+
+---
+
+# Session não significa login automático
+
+É importante não confundir:
+
+```python
+requests.Session()
+```
+
+com:
+
+```text
+login
+```
+
+Criar uma Session não significa que o usuário está autenticado.
+
+A Session apenas fornece um objeto que pode manter configurações e estado entre requisições.
+
+Por exemplo:
+
+```python
+session = requests.Session()
+```
+
+não significa:
+
+```text
+Usuário autenticado
+```
+
+A autenticação depende da aplicação e dos dados enviados.
+
+---
+
+# Resumo
+
+| Conceito | Função |
+|---|---|
+| `headers=` | Envia Headers em uma requisição |
+| `User-Agent` | Identifica o cliente |
+| `Accept` | Indica tipos de conteúdo aceitos |
+| `Authorization` | Pode transportar informações de autenticação |
+| `Content-Type` | Indica o tipo do conteúdo enviado |
+| `dict` | Estrutura utilizada para representar os Headers |
+| `.update()` | Adiciona ou atualiza valores de um `dict` |
+| `requests.Session()` | Cria uma Session |
+| `session.headers` | Acessa os Headers da Session |
+| `session.headers.update()` | Adiciona ou atualiza Headers da Session |
+| `session.get()` | Realiza GET utilizando a Session |
+
+---
+
+# Fluxo completo
+
+```text
+                 Python
+                    │
+                    ▼
+             requests.Session()
+                    │
+                    ▼
+                 Session
+                    │
+                    ├── Headers
+                    │      │
+                    │      └── User-Agent
+                    │
+                    └── Cookies
+                    │
+                    ▼
+              session.get()
+                    │
+                    ▼
+              HTTP Request
+                    │
+                    ▼
+                 Servidor
+                    │
+                    ▼
+             HTTP Response
+                    │
+                    ▼
+                 Python
+```
+
+---
+
+# Conceito principal
+
+O ponto mais importante desta parte é entender a relação:
+
+```python
+headers = {
+    "User-Agent": "MeuScanner/1.0"
+}
+```
+
+é um `dict`.
+
+Esse `dict` pode ser passado para:
+
+```python
+requests.get(
+    url,
+    headers=headers
+)
+```
+
+Ou podemos configurar uma Session:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "MeuScanner/1.0"
+})
+```
+
+E depois utilizar:
+
+```python
+session.get(url)
+```
+
+A principal diferença é que, na segunda abordagem, o Header passa a fazer parte da configuração da Session e pode ser reutilizado nas requisições feitas através dela.
+

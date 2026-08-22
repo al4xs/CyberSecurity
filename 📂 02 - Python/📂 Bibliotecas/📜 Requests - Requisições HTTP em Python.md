@@ -5285,3 +5285,1487 @@ Nesta parte estudamos:
 Na próxima parte vamos estudar o **Response** em profundidade: `status_code`, `headers`, `text`, `content`, `json()`, `url`, `cookies`, `history`, `raise_for_status()` e como analisar respostas HTTP em scripts de Cyber Security.
 
 
+---
+
+# Response
+
+Até agora estudamos como enviar requisições utilizando:
+
+```python
+requests.get()
+requests.post()
+session.get()
+session.post()
+```
+
+Porém, enviar uma requisição é apenas uma parte do processo.
+
+Depois que o servidor recebe a requisição, ele devolve uma **resposta HTTP**.
+
+O Requests armazena essa resposta em um objeto chamado:
+
+```python
+Response
+```
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+```
+
+Nesse caso:
+
+```python
+response
+```
+
+é um objeto `Response`.
+
+---
+
+# Fluxo da requisição
+
+Podemos visualizar o processo completo:
+
+```text
+Python
+   │
+   │ requests.get()
+   ▼
+Servidor Web
+   │
+   │ HTTP Response
+   ▼
+Response
+   │
+   ├── status_code
+   ├── headers
+   ├── text
+   ├── content
+   ├── url
+   ├── cookies
+   ├── history
+   └── json()
+```
+
+O objeto `Response` fornece vários atributos e métodos para analisar aquilo que o servidor retornou.
+
+---
+
+# response.status_code
+
+## O que é?
+
+O atributo:
+
+```python
+response.status_code
+```
+
+retorna o **código de status HTTP** da resposta.
+
+Exemplo:
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com"
+)
+
+print(response.status_code)
+```
+
+Resultado:
+
+```text
+200
+```
+
+O código:
+
+```text
+200
+```
+
+significa que a requisição foi processada com sucesso.
+
+---
+
+# Principais Status Codes
+
+Os códigos HTTP são divididos em grupos.
+
+```text
+1xx → Informativos
+
+2xx → Sucesso
+
+3xx → Redirecionamento
+
+4xx → Erro do cliente
+
+5xx → Erro do servidor
+```
+
+Os mais importantes para automação e Cyber Security são:
+
+| Código | Significado |
+|---|---|
+| `200` | OK |
+| `201` | Created |
+| `204` | No Content |
+| `301` | Moved Permanently |
+| `302` | Found |
+| `304` | Not Modified |
+| `400` | Bad Request |
+| `401` | Unauthorized |
+| `403` | Forbidden |
+| `404` | Not Found |
+| `405` | Method Not Allowed |
+| `429` | Too Many Requests |
+| `500` | Internal Server Error |
+| `502` | Bad Gateway |
+| `503` | Service Unavailable |
+
+---
+
+# Verificando o status
+
+Podemos utilizar:
+
+```python
+if response.status_code == 200:
+    print("Sucesso")
+```
+
+Ou:
+
+```python
+if response.status_code == 404:
+    print("Não encontrado")
+```
+
+---
+
+# Verificando grupos de status
+
+Também podemos verificar intervalos.
+
+Exemplo:
+
+```python
+if 200 <= response.status_code < 300:
+    print("Sucesso")
+```
+
+Ou:
+
+```python
+if 400 <= response.status_code < 500:
+    print("Erro do cliente")
+```
+
+Ou:
+
+```python
+if 500 <= response.status_code < 600:
+    print("Erro do servidor")
+```
+
+Isso é útil quando não precisamos verificar cada código individualmente.
+
+---
+
+# response.ok
+
+O objeto `Response` possui o atributo:
+
+```python
+response.ok
+```
+
+Ele permite verificar de forma simples se a resposta foi considerada bem-sucedida.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+
+if response.ok:
+    print("Requisição OK")
+```
+
+Para uma análise mais precisa, normalmente é melhor utilizar:
+
+```python
+response.status_code
+```
+
+porque ele informa exatamente qual foi o status retornado.
+
+---
+
+# response.headers
+
+## O que é?
+
+O atributo:
+
+```python
+response.headers
+```
+
+contém os **Headers HTTP enviados pelo servidor**.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+
+print(response.headers)
+```
+
+O resultado será semelhante a:
+
+```text
+{
+    'Date': '...',
+    'Content-Type': 'text/html',
+    'Content-Length': '...',
+    'Server': '...'
+}
+```
+
+Os Headers fornecem informações adicionais sobre a resposta.
+
+---
+
+# response.headers é um dicionário?
+
+Podemos acessar um Header específico utilizando uma chave.
+
+Exemplo:
+
+```python
+print(
+    response.headers["Content-Type"]
+)
+```
+
+Resultado:
+
+```text
+text/html
+```
+
+Também podemos utilizar:
+
+```python
+print(
+    response.headers.get("Content-Type")
+)
+```
+
+---
+
+# Por que utilizar .get()?
+
+Se tentarmos acessar uma chave que não existe:
+
+```python
+response.headers["X-Header"]
+```
+
+podemos receber:
+
+```text
+KeyError
+```
+
+Com:
+
+```python
+response.headers.get("X-Header")
+```
+
+o resultado será:
+
+```text
+None
+```
+
+quando o Header não existir.
+
+Podemos também definir um valor padrão:
+
+```python
+response.headers.get(
+    "X-Header",
+    "Não encontrado"
+)
+```
+
+---
+
+# Headers importantes para análise
+
+Alguns Headers podem ser especialmente interessantes durante análise de aplicações Web.
+
+Exemplos:
+
+```text
+Content-Type
+Content-Length
+Server
+Set-Cookie
+Location
+Cache-Control
+Content-Encoding
+Strict-Transport-Security
+X-Frame-Options
+X-Content-Type-Options
+```
+
+Nem todos estarão presentes em todas as respostas.
+
+---
+
+# Exemplo de análise de Headers
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com"
+)
+
+print(
+    "Status:",
+    response.status_code
+)
+
+print(
+    "Content-Type:",
+    response.headers.get("Content-Type")
+)
+
+print(
+    "Server:",
+    response.headers.get("Server")
+)
+
+print(
+    "Location:",
+    response.headers.get("Location")
+)
+```
+
+Esse padrão é bastante útil em ferramentas de análise HTTP.
+
+---
+
+# response.text
+
+## O que é?
+
+O atributo:
+
+```python
+response.text
+```
+
+retorna o conteúdo da resposta como uma **string**.
+
+Por exemplo, se o servidor retornar:
+
+```html
+<html>
+    <body>
+        <h1>Olá</h1>
+    </body>
+</html>
+```
+
+podemos fazer:
+
+```python
+print(response.text)
+```
+
+Resultado:
+
+```html
+<html>
+    <body>
+        <h1>Olá</h1>
+    </body>
+</html>
+```
+
+---
+
+# Quando utilizar response.text?
+
+É especialmente útil quando estamos trabalhando com:
+
+- HTML;
+- XML;
+- texto;
+- respostas de servidores;
+- mensagens de erro;
+- páginas Web.
+
+Por exemplo:
+
+```python
+if "login" in response.text:
+    print("Página de login encontrada")
+```
+
+---
+
+# Pesquisa de conteúdo
+
+Uma técnica simples de automação consiste em procurar determinadas palavras dentro da resposta.
+
+Exemplo:
+
+```python
+if "admin" in response.text:
+    print("Palavra encontrada")
+```
+
+Outro exemplo:
+
+```python
+if "Welcome" in response.text:
+    print("Página identificada")
+```
+
+Isso pode ser utilizado em ferramentas de enumeração.
+
+---
+
+# response.content
+
+## O que é?
+
+O atributo:
+
+```python
+response.content
+```
+
+retorna o conteúdo da resposta como:
+
+```python
+bytes
+```
+
+Exemplo:
+
+```python
+print(
+    type(response.content)
+)
+```
+
+Resultado:
+
+```text
+<class 'bytes'>
+```
+
+---
+
+# text x content
+
+Essa diferença é importante.
+
+```text
+response.text
+      │
+      ▼
+    str
+```
+
+Enquanto:
+
+```text
+response.content
+      │
+      ▼
+   bytes
+```
+
+---
+
+# Quando utilizar content?
+
+`response.content` é útil quando estamos trabalhando com dados binários.
+
+Exemplos:
+
+- imagens;
+- arquivos;
+- PDFs;
+- arquivos compactados;
+- respostas binárias.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com/imagem.png"
+)
+
+with open(
+    "imagem.png",
+    "wb"
+) as arquivo:
+
+    arquivo.write(
+        response.content
+    )
+```
+
+---
+
+# response.encoding
+
+O Requests precisa saber qual codificação utilizar para transformar os bytes da resposta em texto.
+
+Podemos verificar:
+
+```python
+print(response.encoding)
+```
+
+Exemplo:
+
+```text
+utf-8
+```
+
+Também podemos definir manualmente:
+
+```python
+response.encoding = "utf-8"
+```
+
+Depois:
+
+```python
+print(response.text)
+```
+
+---
+
+# response.url
+
+O atributo:
+
+```python
+response.url
+```
+
+retorna a URL associada à resposta.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+
+print(response.url)
+```
+
+Resultado:
+
+```text
+https://example.com/
+```
+
+Isso se torna especialmente interessante quando existem redirecionamentos.
+
+---
+
+# Redirecionamentos
+
+Imagine:
+
+```text
+http://example.com
+        │
+        ▼
+https://example.com
+```
+
+O servidor pode responder:
+
+```text
+301
+```
+
+ou:
+
+```text
+302
+```
+
+O Requests, por padrão, segue redirecionamentos em métodos como `GET`.
+
+Por isso:
+
+```python
+response.url
+```
+
+pode ser diferente da URL originalmente informada.
+
+---
+
+# allow_redirects
+
+Podemos controlar esse comportamento.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "http://example.com",
+    allow_redirects=False
+)
+```
+
+Agora o Requests não seguirá automaticamente o redirecionamento.
+
+Podemos analisar a resposta original:
+
+```python
+print(response.status_code)
+```
+
+e:
+
+```python
+print(
+    response.headers.get("Location")
+)
+```
+
+---
+
+# Location
+
+O Header:
+
+```text
+Location
+```
+
+normalmente informa para onde o servidor deseja redirecionar o cliente.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "http://example.com",
+    allow_redirects=False
+)
+
+print(
+    response.headers.get("Location")
+)
+```
+
+Podemos receber:
+
+```text
+https://example.com/
+```
+
+---
+
+# response.history
+
+Quando existem redirecionamentos, podemos analisar o histórico através de:
+
+```python
+response.history
+```
+
+Exemplo:
+
+```python
+response = requests.get(
+    "http://example.com"
+)
+
+print(response.history)
+```
+
+O resultado é uma lista contendo as respostas anteriores.
+
+---
+
+# Analisando o histórico
+
+Podemos percorrer:
+
+```python
+for resposta in response.history:
+
+    print(
+        resposta.status_code,
+        resposta.url
+    )
+```
+
+Isso pode produzir algo semelhante a:
+
+```text
+301 http://example.com
+```
+
+Enquanto a resposta final pode ser:
+
+```python
+print(response.status_code)
+```
+
+```text
+200
+```
+
+---
+
+# Fluxo de redirecionamento
+
+```text
+URL inicial
+     │
+     ▼
+   301
+     │
+     ▼
+Nova URL
+     │
+     ▼
+   302
+     │
+     ▼
+URL final
+     │
+     ▼
+   200
+```
+
+O histórico permite analisar esse caminho.
+
+---
+
+# response.cookies
+
+## O que é?
+
+O atributo:
+
+```python
+response.cookies
+```
+
+contém os Cookies recebidos na resposta.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+
+print(response.cookies)
+```
+
+---
+
+# Cookie
+
+Cookies são pequenos dados utilizados por aplicações Web para armazenar informações relacionadas ao cliente.
+
+Um caso muito comum é a identificação de uma sessão.
+
+Por exemplo:
+
+```text
+sessionid=abc123
+```
+
+O servidor pode enviar:
+
+```http
+Set-Cookie: sessionid=abc123
+```
+
+O Requests consegue armazenar esse Cookie.
+
+---
+
+# Acessando um Cookie
+
+Podemos iterar:
+
+```python
+for cookie in response.cookies:
+
+    print(
+        cookie.name,
+        cookie.value
+    )
+```
+
+Exemplo:
+
+```text
+sessionid abc123
+```
+
+---
+
+# Session e Cookies
+
+Aqui começa a ficar clara uma das grandes vantagens de:
+
+```python
+requests.Session()
+```
+
+Imagine:
+
+```text
+Requisição 1
+     │
+     ▼
+Servidor
+     │
+     └── Set-Cookie
+             │
+             ▼
+          Session
+             │
+             ▼
+Requisição 2
+             │
+             └── Cookie enviado
+```
+
+A Session pode manter Cookies entre requisições.
+
+Exemplo:
+
+```python
+session = requests.Session()
+
+response = session.get(
+    "https://example.com/login"
+)
+```
+
+Depois:
+
+```python
+response = session.get(
+    "https://example.com/dashboard"
+)
+```
+
+A Session mantém o estado necessário, quando o servidor utiliza Cookies para isso.
+
+---
+
+# response.json()
+
+## O que é?
+
+O método:
+
+```python
+response.json()
+```
+
+é utilizado quando o servidor retorna JSON.
+
+Exemplo de resposta:
+
+```json
+{
+    "id": 1,
+    "username": "admin",
+    "role": "user"
+}
+```
+
+Podemos fazer:
+
+```python
+dados = response.json()
+```
+
+Agora:
+
+```python
+print(dados)
+```
+
+retorna um objeto Python equivalente, normalmente um `dict`.
+
+---
+
+# Exemplo
+
+```python
+response = requests.get(
+    "https://api.example.com/user"
+)
+
+dados = response.json()
+
+print(
+    dados["username"]
+)
+```
+
+Resultado:
+
+```text
+admin
+```
+
+---
+
+# json() x text
+
+Essa diferença é importante.
+
+Se utilizarmos:
+
+```python
+response.text
+```
+
+recebemos o conteúdo como texto.
+
+Exemplo:
+
+```text
+{"id": 1, "username": "admin"}
+```
+
+Já:
+
+```python
+response.json()
+```
+
+converte o JSON para uma estrutura Python.
+
+Conceitualmente:
+
+```text
+JSON
+ │
+ ▼
+response.json()
+ │
+ ▼
+Python dict/list
+```
+
+---
+
+# Exemplo com API
+
+```python
+response = requests.get(
+    "https://api.example.com/users"
+)
+
+usuarios = response.json()
+
+for usuario in usuarios:
+
+    print(
+        usuario["username"]
+    )
+```
+
+Se a API retornar uma lista de usuários, `usuarios` poderá ser uma lista de dicionários.
+
+---
+
+# Cuidado com response.json()
+
+Nem toda resposta HTTP contém JSON.
+
+Se tentarmos:
+
+```python
+response.json()
+```
+
+em uma página HTML, por exemplo, poderá ocorrer um erro de decodificação.
+
+Por isso, é importante verificar o tipo da resposta.
+
+Podemos analisar:
+
+```python
+response.headers.get(
+    "Content-Type"
+)
+```
+
+Por exemplo:
+
+```text
+application/json
+```
+
+indica que a resposta é JSON.
+
+---
+
+# Verificando Content-Type
+
+```python
+content_type = response.headers.get(
+    "Content-Type",
+    ""
+)
+
+if "application/json" in content_type:
+
+    dados = response.json()
+
+    print(dados)
+```
+
+Esse padrão evita tentar interpretar qualquer resposta como JSON.
+
+---
+
+# response.raise_for_status()
+
+## O que é?
+
+O método:
+
+```python
+response.raise_for_status()
+```
+
+verifica se a resposta HTTP possui um erro de cliente ou servidor.
+
+Se existir um erro HTTP apropriado, ele gera uma exceção.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+
+response.raise_for_status()
+```
+
+Se a resposta for:
+
+```text
+200
+```
+
+o programa continua normalmente.
+
+Se for um erro HTTP como:
+
+```text
+404
+```
+
+ou:
+
+```text
+500
+```
+
+o método gera uma exceção correspondente.
+
+---
+
+# Utilizando try/except
+
+Podemos combinar:
+
+```python
+raise_for_status()
+```
+
+com:
+
+```python
+try/except
+```
+
+Exemplo:
+
+```python
+import requests
+
+try:
+
+    response = requests.get(
+        "https://example.com",
+        timeout=5
+    )
+
+    response.raise_for_status()
+
+    print(response.text)
+
+except requests.HTTPError as error:
+
+    print(
+        f"Erro HTTP: {error}"
+    )
+```
+
+Isso permite separar erros HTTP de outros problemas.
+
+---
+
+# status_code x raise_for_status()
+
+Podemos verificar manualmente:
+
+```python
+if response.status_code == 404:
+
+    print("Não encontrado")
+```
+
+Ou utilizar:
+
+```python
+response.raise_for_status()
+```
+
+A escolha depende do objetivo.
+
+Quando queremos tratar códigos específicos:
+
+```python
+status_code
+```
+
+é mais apropriado.
+
+Quando queremos simplesmente interromper o fluxo diante de erros HTTP:
+
+```python
+raise_for_status()
+```
+
+pode ser mais conveniente.
+
+---
+
+# timeout
+
+Durante análise de respostas, também é importante evitar que o programa fique esperando indefinidamente.
+
+Podemos utilizar:
+
+```python
+timeout=
+```
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com",
+    timeout=5
+)
+```
+
+Isso limita o tempo de espera da requisição.
+
+Em ferramentas de automação, utilizar `timeout` é uma boa prática.
+
+---
+
+# Exemplo completo de análise
+
+```python
+import requests
+
+url = "https://example.com"
+
+try:
+
+    response = requests.get(
+        url,
+        timeout=5
+    )
+
+    print(
+        "URL:",
+        response.url
+    )
+
+    print(
+        "Status:",
+        response.status_code
+    )
+
+    print(
+        "Content-Type:",
+        response.headers.get("Content-Type")
+    )
+
+    print(
+        "Server:",
+        response.headers.get("Server")
+    )
+
+    print(
+        "Tamanho:",
+        len(response.content)
+    )
+
+except requests.RequestException as error:
+
+    print(
+        f"Erro: {error}"
+    )
+```
+
+---
+
+# Exemplo aplicado à enumeração Web
+
+Podemos utilizar o objeto `Response` para identificar diferentes comportamentos.
+
+```python
+import requests
+
+urls = [
+    "https://example.com/",
+    "https://example.com/admin",
+    "https://example.com/login",
+    "https://example.com/robots.txt"
+]
+
+for url in urls:
+
+    try:
+
+        response = requests.get(
+            url,
+            timeout=5
+        )
+
+        print(
+            response.status_code,
+            response.url
+        )
+
+    except requests.RequestException as error:
+
+        print(
+            f"Erro: {error}"
+        )
+```
+
+A partir do `status_code`, podemos classificar os resultados.
+
+---
+
+# Identificando páginas pelo conteúdo
+
+Também podemos utilizar:
+
+```python
+response.text
+```
+
+Exemplo:
+
+```python
+if "login" in response.text.lower():
+
+    print(
+        "[+] Possível página de login"
+    )
+```
+
+Outro exemplo:
+
+```python
+if "admin" in response.text.lower():
+
+    print(
+        "[+] Referência a admin encontrada"
+    )
+```
+
+Esse tipo de análise é utilizado em ferramentas de enumeração e automação.
+
+---
+
+# Identificando tecnologias através de Headers
+
+Durante uma análise autorizada, podemos verificar Headers fornecidos pelo servidor.
+
+```python
+server = response.headers.get(
+    "Server"
+)
+
+print(
+    f"Server: {server}"
+)
+```
+
+Também podemos verificar:
+
+```python
+content_type = response.headers.get(
+    "Content-Type"
+)
+
+print(
+    f"Content-Type: {content_type}"
+)
+```
+
+Isso pode fornecer informações úteis sobre o comportamento da aplicação.
+
+> [!WARNING]
+> Headers podem ser alterados, removidos ou falsificados pelo servidor. Portanto, não devem ser tratados isoladamente como prova definitiva da tecnologia utilizada.
+
+---
+
+# Resumo do Response
+
+O objeto:
+
+```python
+response
+```
+
+é uma das partes mais importantes do Requests.
+
+Principais atributos e métodos:
+
+| Recurso | Função |
+|---|---|
+| `status_code` | Código HTTP |
+| `ok` | Indica resposta considerada bem-sucedida |
+| `headers` | Headers da resposta |
+| `text` | Conteúdo como `str` |
+| `content` | Conteúdo como `bytes` |
+| `encoding` | Codificação utilizada |
+| `url` | URL da resposta |
+| `history` | Histórico de redirecionamentos |
+| `cookies` | Cookies recebidos |
+| `json()` | Converte resposta JSON para Python |
+| `raise_for_status()` | Gera exceção para erros HTTP |
+
+---
+
+# Fluxo mental para analisar uma resposta
+
+Quando receber uma resposta, pense:
+
+```text
+Recebi uma resposta
+        │
+        ▼
+Qual foi o Status?
+        │
+        ▼
+response.status_code
+        │
+        ▼
+Que tipo de conteúdo recebi?
+        │
+        ▼
+response.headers
+        │
+        ├── HTML?
+        │      └── response.text
+        │
+        ├── JSON?
+        │      └── response.json()
+        │
+        └── Binário?
+               └── response.content
+```
+
+Depois:
+
+```text
+Existiu redirecionamento?
+        │
+        └── response.history
+
+Existem Cookies?
+        │
+        └── response.cookies
+
+Preciso tratar erros?
+        │
+        └── response.raise_for_status()
+```
+
+---
+
+# Resumo da Parte
+
+Nesta parte estudamos:
+
+- o objeto `Response`;
+- `status_code`;
+- `ok`;
+- `headers`;
+- `headers.get()`;
+- `text`;
+- `content`;
+- `encoding`;
+- `url`;
+- redirecionamentos;
+- `allow_redirects`;
+- `Location`;
+- `history`;
+- Cookies;
+- `json()`;
+- `Content-Type`;
+- `raise_for_status()`;
+- `timeout`;
+- análise de respostas HTTP;
+- aplicação em enumeração e automação de segurança.
+
+Na próxima parte vamos aprofundar **Cookies, autenticação e Session**, incluindo como a Session mantém estado entre requisições, como trabalhar com Cookies manualmente e como analisar fluxos de login em aplicações Web autorizadas.
+
+
+

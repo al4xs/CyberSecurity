@@ -18,6 +18,8 @@ Com o Requests podemos:
 - Consumir APIs
 - Automatizar tarefas Web
 
+---
+
 Exemplo básico:
 
 ```python
@@ -7947,3 +7949,1855 @@ Nesta parte estudamos:
 A próxima parte será a última e vai fechar a anotação com **tratamento de erros, proxy, SSL/TLS, autenticação HTTP, parâmetros avançados e um projeto final juntando `Session + Headers + Cookies + Response + argparse`**.
 
 
+---
+
+# Tratamento de Erros
+
+Ao trabalhar com requisições HTTP, diversos problemas podem acontecer.
+
+Por exemplo:
+
+- servidor indisponível;
+- conexão recusada;
+- DNS não resolvido;
+- timeout;
+- erro SSL/TLS;
+- URL inválida;
+- erro HTTP;
+- conexão interrompida.
+
+O Requests possui uma hierarquia de exceções para permitir que esses problemas sejam tratados.
+
+---
+
+# requests.RequestException
+
+A classe:
+
+```python
+requests.RequestException
+```
+
+é uma exceção base para diversos erros relacionados ao Requests.
+
+Por isso, podemos utilizar:
+
+```python
+except requests.RequestException:
+```
+
+para capturar erros relacionados às requisições.
+
+Exemplo:
+
+```python
+import requests
+
+try:
+
+    response = requests.get(
+        "https://example.com",
+        timeout=5
+    )
+
+except requests.RequestException as error:
+
+    print(
+        f"Erro: {error}"
+    )
+```
+
+---
+
+# Por que utilizar try/except?
+
+Sem tratamento de erro:
+
+```python
+response = requests.get(
+    url,
+    timeout=5
+)
+
+print(response.status_code)
+```
+
+Se ocorrer um erro de conexão, o programa poderá ser interrompido.
+
+Com:
+
+```python
+try:
+
+    response = requests.get(
+        url,
+        timeout=5
+    )
+
+except requests.RequestException:
+
+    print("Erro na requisição")
+```
+
+podemos controlar o comportamento do programa.
+
+---
+
+# Timeout
+
+Um dos parâmetros mais importantes em ferramentas HTTP é:
+
+```python
+timeout=
+```
+
+Ele define quanto tempo o Requests deve esperar por uma resposta antes de considerar a requisição como falha por timeout.
+
+Exemplo:
+
+```python
+response = requests.get(
+    url,
+    timeout=5
+)
+```
+
+Nesse caso:
+
+```text
+timeout = 5 segundos
+```
+
+---
+
+# Por que timeout é importante?
+
+Imagine um scanner verificando:
+
+```text
+1000 URLs
+```
+
+Se uma URL nunca responder e não existir um limite de espera, o programa poderá ficar preso naquela requisição.
+
+Com:
+
+```python
+timeout=5
+```
+
+o programa consegue abandonar aquela tentativa depois do limite definido e continuar.
+
+Fluxo:
+
+```text
+URL
+ │
+ ▼
+Requisição
+ │
+ ├── Respondeu
+ │      │
+ │      ▼
+ │    Response
+ │
+ └── Não respondeu
+        │
+        ▼
+      Timeout
+        │
+        ▼
+    Próxima URL
+```
+
+---
+
+# Timeout não significa tempo total da requisição
+
+É importante entender que:
+
+```python
+timeout=5
+```
+
+não deve ser interpretado simplesmente como:
+
+> "A requisição inteira obrigatoriamente terminará em 5 segundos."
+
+O Requests utiliza timeout relacionado à comunicação da requisição, e o comportamento pode envolver diferentes etapas da conexão.
+
+Para a maioria dos scripts simples:
+
+```python
+timeout=5
+```
+
+é um bom ponto de partida.
+
+---
+
+# Timeout personalizado
+
+Podemos definir valores diferentes para conexão e leitura:
+
+```python
+response = requests.get(
+    url,
+    timeout=(3, 10)
+)
+```
+
+Nesse caso:
+
+```text
+3 segundos → conexão
+
+10 segundos → leitura
+```
+
+Essa forma permite um controle maior sobre o comportamento da requisição.
+
+---
+
+# ConnectionError
+
+Quando ocorre um problema relacionado à conexão, podemos capturar:
+
+```python
+requests.ConnectionError
+```
+
+Exemplo:
+
+```python
+try:
+
+    response = requests.get(
+        "https://example.com",
+        timeout=5
+    )
+
+except requests.ConnectionError:
+
+    print(
+        "Erro de conexão"
+    )
+```
+
+---
+
+# Timeout
+
+Também podemos tratar especificamente:
+
+```python
+requests.Timeout
+```
+
+Exemplo:
+
+```python
+try:
+
+    response = requests.get(
+        url,
+        timeout=5
+    )
+
+except requests.Timeout:
+
+    print(
+        "A requisição excedeu o tempo limite"
+    )
+```
+
+---
+
+# HTTPError
+
+Erros HTTP podem ser tratados através de:
+
+```python
+requests.HTTPError
+```
+
+Normalmente em conjunto com:
+
+```python
+response.raise_for_status()
+```
+
+Exemplo:
+
+```python
+try:
+
+    response = requests.get(
+        url,
+        timeout=5
+    )
+
+    response.raise_for_status()
+
+except requests.HTTPError as error:
+
+    print(
+        f"Erro HTTP: {error}"
+    )
+```
+
+---
+
+# Hierarquia simplificada
+
+Podemos pensar na estrutura assim:
+
+```text
+RequestException
+│
+├── ConnectionError
+│
+├── Timeout
+│
+├── HTTPError
+│
+└── outras exceções
+```
+
+Por isso:
+
+```python
+except requests.RequestException:
+```
+
+é uma forma ampla de capturar problemas relacionados ao Requests.
+
+Enquanto:
+
+```python
+except requests.Timeout:
+```
+
+é mais específico.
+
+---
+
+# Proxy
+
+Um Proxy funciona como intermediário entre o cliente e o servidor.
+
+Normalmente:
+
+```text
+Sem Proxy
+
+Python
+  │
+  ▼
+Servidor
+```
+
+Com Proxy:
+
+```text
+Python
+  │
+  ▼
+Proxy
+  │
+  ▼
+Servidor
+```
+
+O Requests permite configurar um Proxy através do parâmetro:
+
+```python
+proxies=
+```
+
+---
+
+# Estrutura de proxies=
+
+O parâmetro normalmente recebe um dicionário.
+
+Exemplo:
+
+```python
+proxies = {
+    "http": "http://127.0.0.1:8080",
+    "https": "http://127.0.0.1:8080"
+}
+```
+
+Depois:
+
+```python
+response = requests.get(
+    url,
+    proxies=proxies
+)
+```
+
+---
+
+# Por que proxies são úteis em Cyber Security?
+
+Em ambientes autorizados, proxies são extremamente úteis para:
+
+- analisar requisições;
+- depurar aplicações Web;
+- observar Headers;
+- testar modificações nas requisições;
+- reproduzir requisições;
+- estudar o comportamento de aplicações;
+- utilizar ferramentas de interceptação HTTP.
+
+Um fluxo comum é:
+
+```text
+Python
+   │
+   ▼
+Proxy de análise
+   │
+   ▼
+Aplicação Web
+```
+
+Isso permite observar o tráfego gerado pela ferramenta.
+
+---
+
+# Proxy através de Session
+
+Também podemos configurar um Proxy na Session.
+
+```python
+session = requests.Session()
+
+session.proxies.update({
+    "http": "http://127.0.0.1:8080",
+    "https": "http://127.0.0.1:8080"
+})
+```
+
+Depois:
+
+```python
+response = session.get(
+    url
+)
+```
+
+Todas as requisições realizadas pela Session utilizarão essa configuração.
+
+---
+
+# Session como configuração central
+
+Nesse ponto podemos visualizar melhor a vantagem da Session.
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+
+session.proxies.update({
+    "http": "http://127.0.0.1:8080",
+    "https": "http://127.0.0.1:8080"
+})
+```
+
+Agora temos:
+
+```text
+Session
+│
+├── Headers
+│
+├── Cookies
+│
+├── Proxy
+│
+└── Requisições
+```
+
+Isso evita repetir configurações em todas as chamadas.
+
+---
+
+# SSL/TLS
+
+Quando acessamos:
+
+```text
+https://
+```
+
+a comunicação utiliza TLS.
+
+Exemplo:
+
+```python
+response = requests.get(
+    "https://example.com"
+)
+```
+
+Por padrão, o Requests verifica o certificado TLS do servidor.
+
+---
+
+# verify=
+
+O parâmetro:
+
+```python
+verify=
+```
+
+controla a verificação do certificado TLS.
+
+Normalmente:
+
+```python
+verify=True
+```
+
+é o comportamento padrão.
+
+Exemplo:
+
+```python
+response = requests.get(
+    url,
+    verify=True
+)
+```
+
+---
+
+# Desabilitando a verificação
+
+Também é possível utilizar:
+
+```python
+verify=False
+```
+
+Exemplo:
+
+```python
+response = requests.get(
+    url,
+    verify=False
+)
+```
+
+Isso desabilita a verificação do certificado.
+
+> [!WARNING]
+> `verify=False` reduz a segurança da conexão e não deve ser utilizado indiscriminadamente. Em ambientes reais, a validação TLS deve permanecer habilitada sempre que possível.
+
+---
+
+# Quando verify=False pode aparecer?
+
+Pode ser utilizado em situações controladas, por exemplo:
+
+- laboratório;
+- ambiente de testes;
+- certificado interno;
+- aplicações com certificados não confiáveis durante desenvolvimento;
+- testes específicos de TLS.
+
+Mesmo nesses casos, é importante entender a consequência.
+
+---
+
+# Certificado personalizado
+
+Também podemos informar um certificado CA específico.
+
+Exemplo:
+
+```python
+response = requests.get(
+    url,
+    verify="/caminho/ca.pem"
+)
+```
+
+Nesse caso, o Requests utilizará o certificado fornecido para validar a conexão.
+
+---
+
+# Autenticação HTTP
+
+Além de autenticação através de formulários, algumas aplicações utilizam mecanismos de autenticação HTTP.
+
+Um exemplo é:
+
+```text
+Basic Authentication
+```
+
+O Requests possui suporte através do parâmetro:
+
+```python
+auth=
+```
+
+---
+
+# HTTP Basic Authentication
+
+Podemos utilizar:
+
+```python
+import requests
+
+response = requests.get(
+    "https://example.com",
+    auth=("usuario", "senha")
+)
+```
+
+O formato:
+
+```python
+auth=(
+    "usuario",
+    "senha"
+)
+```
+
+representa:
+
+```text
+usuário
+senha
+```
+
+---
+
+# Session com autenticação
+
+Também podemos utilizar:
+
+```python
+session = requests.Session()
+
+session.auth = (
+    "usuario",
+    "senha"
+)
+```
+
+Depois:
+
+```python
+response = session.get(
+    url
+)
+```
+
+A autenticação será aplicada às requisições feitas através daquela Session.
+
+---
+
+# Authorization Header
+
+Também podemos configurar manualmente um Header de autorização.
+
+Exemplo conceitual:
+
+```python
+headers = {
+    "Authorization": "Bearer TOKEN"
+}
+```
+
+Depois:
+
+```python
+response = requests.get(
+    url,
+    headers=headers
+)
+```
+
+Esse padrão é muito comum em APIs.
+
+---
+
+# Bearer Token
+
+Muitas APIs utilizam:
+
+```text
+Authorization: Bearer TOKEN
+```
+
+Podemos representar isso em Python:
+
+```python
+token = "SEU_TOKEN"
+
+headers = {
+    "Authorization": f"Bearer {token}"
+}
+
+response = requests.get(
+    url,
+    headers=headers
+)
+```
+
+---
+
+# Token através de Session
+
+Se todas as requisições utilizarem o mesmo Token:
+
+```python
+session = requests.Session()
+
+session.headers.update({
+    "Authorization": "Bearer SEU_TOKEN"
+})
+```
+
+Agora:
+
+```python
+session.get(url1)
+session.get(url2)
+session.get(url3)
+```
+
+utilizarão esse Header.
+
+---
+
+# Não confundir Cookies com Authorization
+
+Existem diferentes formas de autenticação.
+
+Por exemplo:
+
+```text
+Cookie
+
+sessionid=abc123
+```
+
+e:
+
+```text
+Authorization
+
+Bearer TOKEN
+```
+
+São mecanismos diferentes.
+
+Uma aplicação pode utilizar:
+
+```text
+Cookie
+```
+
+ou:
+
+```text
+Bearer Token
+```
+
+ou:
+
+```text
+Basic Auth
+```
+
+ou uma combinação de mecanismos.
+
+---
+
+# Estrutura completa de uma requisição
+
+Agora podemos juntar os principais conceitos estudados.
+
+```text
+REQUEST
+│
+├── Method
+│     └── GET / POST / PUT / DELETE
+│
+├── URL
+│
+├── Headers
+│     ├── User-Agent
+│     ├── Accept
+│     └── Authorization
+│
+├── Cookies
+│
+├── Body
+│     ├── data=
+│     └── json=
+│
+├── Proxy
+│
+└── TLS
+      └── verify=
+```
+
+A resposta:
+
+```text
+RESPONSE
+│
+├── status_code
+│
+├── headers
+│
+├── cookies
+│
+├── text
+│
+├── content
+│
+├── json()
+│
+├── history
+│
+└── url
+```
+
+---
+
+# Preparando o projeto final
+
+Agora podemos juntar os principais conceitos do Requests em uma ferramenta simples.
+
+O objetivo será criar um pequeno enumerador Web que:
+
+- recebe a URL através do `argparse`;
+- utiliza `Session`;
+- configura User-Agent;
+- permite configurar timeout;
+- lê uma wordlist;
+- envia requisições;
+- analisa `status_code`;
+- identifica redirecionamentos;
+- trata erros;
+- exibe resultados.
+
+---
+
+# Estrutura do projeto
+
+```text
+web_enum.py
+paths.txt
+```
+
+O arquivo:
+
+```text
+paths.txt
+```
+
+poderá conter:
+
+```text
+admin
+login
+robots.txt
+dashboard
+api
+```
+
+---
+
+# Importações
+
+Começamos com:
+
+```python
+import argparse
+import requests
+```
+
+---
+
+# Argumentos
+
+Podemos criar:
+
+```python
+parser = argparse.ArgumentParser(
+    description="Enumerador Web simples"
+)
+
+parser.add_argument(
+    "-u",
+    "--url",
+    required=True,
+    help="URL do alvo"
+)
+
+parser.add_argument(
+    "-w",
+    "--wordlist",
+    default="paths.txt",
+    help="Arquivo contendo os caminhos"
+)
+
+parser.add_argument(
+    "-t",
+    "--timeout",
+    type=float,
+    default=5,
+    help="Timeout das requisições"
+)
+
+args = parser.parse_args()
+```
+
+---
+
+# Criando a Session
+
+Depois:
+
+```python
+session = requests.Session()
+```
+
+Agora podemos configurar:
+
+```python
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+```
+
+---
+
+# Normalizando a URL
+
+Podemos utilizar:
+
+```python
+if not args.url.startswith(
+    ("http://", "https://")
+):
+
+    url = f"https://{args.url}"
+
+else:
+
+    url = args.url
+
+url = url.rstrip("/")
+```
+
+Isso evita problemas como:
+
+```text
+https://example.com/
+```
+
+gerando:
+
+```text
+https://example.com//admin
+```
+
+---
+
+# Lendo a Wordlist
+
+Podemos abrir:
+
+```python
+with open(
+    args.wordlist,
+    "r",
+    encoding="utf-8"
+) as arquivo:
+```
+
+Depois:
+
+```python
+for path in arquivo:
+
+    path = path.strip().lstrip("/")
+
+    if not path:
+        continue
+```
+
+---
+
+# Montando a URL
+
+Para cada caminho:
+
+```python
+new_url = f"{url}/{path}"
+```
+
+Exemplo:
+
+```text
+Base:
+
+https://example.com
+
+Path:
+
+admin
+```
+
+Resultado:
+
+```text
+https://example.com/admin
+```
+
+---
+
+# Enviando a requisição
+
+Utilizamos a Session:
+
+```python
+response = session.get(
+    new_url,
+    timeout=args.timeout
+)
+```
+
+Agora:
+
+```text
+Session
+   │
+   ├── User-Agent
+   │
+   └── GET
+        │
+        ▼
+https://example.com/admin
+```
+
+---
+
+# Analisando o Status
+
+Podemos verificar:
+
+```python
+if response.status_code == 200:
+
+    print(
+        f"[+] {response.status_code} {new_url}"
+    )
+```
+
+Para:
+
+```text
+403
+```
+
+podemos fazer:
+
+```python
+elif response.status_code == 403:
+
+    print(
+        f"[!] {response.status_code} {new_url}"
+    )
+```
+
+E:
+
+```python
+elif response.status_code == 404:
+
+    print(
+        f"[-] {response.status_code} {new_url}"
+    )
+```
+
+---
+
+# Tratando Redirecionamentos
+
+Podemos verificar:
+
+```python
+elif response.status_code in (
+    301,
+    302
+):
+
+    location = response.headers.get(
+        "Location"
+    )
+
+    print(
+        f"[→] {response.status_code} "
+        f"{new_url} -> {location}"
+    )
+```
+
+---
+
+# Tratando erros
+
+A requisição deve estar dentro de:
+
+```python
+try:
+```
+
+Exemplo:
+
+```python
+try:
+
+    response = session.get(
+        new_url,
+        timeout=args.timeout
+    )
+
+except requests.RequestException as error:
+
+    print(
+        f"[!] Erro: {error}"
+    )
+```
+
+Assim, um problema em uma URL não precisa encerrar todo o programa.
+
+---
+
+# Projeto final completo
+
+```python
+import argparse
+import requests
+
+# CORES
+
+VERMELHO = "\033[31m"
+VERDE = "\033[32m"
+AMARELO = "\033[93m"
+CINZA = "\033[90m"
+RESET = "\033[0m"
+
+
+# ARGUMENTOS
+
+parser = argparse.ArgumentParser(
+    description="Enumerador Web simples"
+)
+
+parser.add_argument(
+    "-u",
+    "--url",
+    type=str,
+    required=True,
+    help="URL do alvo"
+)
+
+parser.add_argument(
+    "-w",
+    "--wordlist",
+    type=str,
+    default="paths.txt",
+    help="Arquivo contendo os caminhos"
+)
+
+parser.add_argument(
+    "-t",
+    "--timeout",
+    type=float,
+    default=5,
+    help="Timeout das requisições"
+)
+
+args = parser.parse_args()
+
+
+# URL
+
+if not args.url.startswith(
+    ("https://", "http://")
+):
+
+    url = f"https://{args.url}"
+
+else:
+
+    url = args.url
+
+url = url.rstrip("/")
+
+
+# SESSION
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+
+
+# WORDLIST
+
+try:
+
+    with open(
+        args.wordlist,
+        "r",
+        encoding="utf-8"
+    ) as arquivo:
+
+        for path in arquivo:
+
+            path = path.strip().lstrip("/")
+
+            if not path:
+                continue
+
+            new_url = f"{url}/{path}"
+
+            try:
+
+                response = session.get(
+                    new_url,
+                    timeout=args.timeout
+                )
+
+                if response.status_code == 200:
+
+                    print(
+                        f"{VERDE}"
+                        f"[✓] {response.status_code} "
+                        f"│ FOUND "
+                        f"│ {new_url}"
+                        f"{RESET}"
+                    )
+
+                elif response.status_code == 403:
+
+                    print(
+                        f"{AMARELO}"
+                        f"[!] {response.status_code} "
+                        f"│ FORBIDDEN "
+                        f"│ {new_url}"
+                        f"{RESET}"
+                    )
+
+                elif response.status_code == 404:
+
+                    print(
+                        f"{CINZA}"
+                        f"[-] {response.status_code} "
+                        f"│ MISS "
+                        f"│ {new_url}"
+                        f"{RESET}"
+                    )
+
+                elif response.status_code in (
+                    301,
+                    302
+                ):
+
+                    location = response.headers.get(
+                        "Location"
+                    )
+
+                    print(
+                        f"{AMARELO}"
+                        f"[→] {response.status_code} "
+                        f"│ REDIRECT "
+                        f"│ {new_url} "
+                        f"-> {location}"
+                        f"{RESET}"
+                    )
+
+                else:
+
+                    print(
+                        f"{VERMELHO}"
+                        f"[✗] {response.status_code} "
+                        f"│ OTHER "
+                        f"│ {new_url}"
+                        f"{RESET}"
+                    )
+
+            except requests.RequestException as error:
+
+                print(
+                    f"{VERMELHO}"
+                    f"[!] Erro "
+                    f"│ {new_url} "
+                    f"│ {error}"
+                    f"{RESET}"
+                )
+
+
+except FileNotFoundError:
+
+    print(
+        f"{VERMELHO}"
+        f"[!] Wordlist não encontrada: "
+        f"{args.wordlist}"
+        f"{RESET}"
+    )
+
+except KeyboardInterrupt:
+
+    print(
+        "\n[!] Programa encerrado..."
+    )
+```
+
+---
+
+# Executando
+
+Podemos executar:
+
+```bash
+python web_enum.py \
+-u https://example.com
+```
+
+Como utilizamos:
+
+```python
+default="paths.txt"
+```
+
+não precisamos informar a wordlist.
+
+Também podemos especificar:
+
+```bash
+python web_enum.py \
+-u https://example.com \
+-w paths.txt
+```
+
+E alterar o timeout:
+
+```bash
+python web_enum.py \
+-u https://example.com \
+-w paths.txt \
+-t 10
+```
+
+---
+
+# O que acontece internamente?
+
+Quando executamos:
+
+```bash
+python web_enum.py \
+-u https://example.com
+```
+
+o fluxo é:
+
+```text
+argparse
+   │
+   ▼
+Recebe URL
+   │
+   ▼
+Cria Session
+   │
+   ▼
+Configura User-Agent
+   │
+   ▼
+Abre paths.txt
+   │
+   ▼
+Lê um path
+   │
+   ▼
+Monta URL
+   │
+   ▼
+session.get()
+   │
+   ▼
+Servidor
+   │
+   ▼
+Response
+   │
+   ├── status_code
+   ├── headers
+   ├── cookies
+   └── conteúdo
+   │
+   ▼
+Exibe resultado
+   │
+   ▼
+Próximo path
+```
+
+---
+
+# O que aprendemos com esse projeto?
+
+O projeto utiliza praticamente todos os conceitos principais estudados na anotação.
+
+```text
+argparse
+   │
+   ├── type
+   ├── required
+   ├── default
+   └── help
+```
+
+Requests:
+
+```text
+requests
+   │
+   ├── Session
+   ├── GET
+   ├── Headers
+   ├── User-Agent
+   ├── timeout
+   └── Response
+```
+
+Response:
+
+```text
+Response
+   │
+   ├── status_code
+   ├── headers
+   └── Location
+```
+
+Tratamento:
+
+```text
+try
+ │
+ └── requests.RequestException
+```
+
+---
+
+# Modelo mental do Requests
+
+Depois de estudar a biblioteca, podemos pensar nela através de três componentes principais:
+
+```text
+REQUEST
+   │
+   ▼
+SERVIDOR
+   │
+   ▼
+RESPONSE
+```
+
+A Request possui:
+
+```text
+URL
+Method
+Headers
+Cookies
+Body
+```
+
+A Response possui:
+
+```text
+Status Code
+Headers
+Cookies
+Body
+URL
+History
+```
+
+E a Session permite manter informações entre várias Requests:
+
+```text
+Session
+ │
+ ├── Headers
+ ├── Cookies
+ ├── Auth
+ ├── Proxy
+ └── outras configurações
+```
+
+---
+
+# Checklist para trabalhar com Requests
+
+Quando criar uma ferramenta utilizando Requests, pense:
+
+```text
+1. Qual método HTTP preciso utilizar?
+```
+
+```text
+GET
+POST
+PUT
+DELETE
+...
+```
+
+Depois:
+
+```text
+2. Qual é a URL?
+```
+
+Depois:
+
+```text
+3. Preciso de Headers?
+```
+
+Exemplo:
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+```
+
+Depois:
+
+```text
+4. Preciso manter Cookies?
+```
+
+Se sim:
+
+```python
+session = requests.Session()
+```
+
+Depois:
+
+```text
+5. Preciso enviar dados?
+```
+
+Formulário:
+
+```python
+data={}
+```
+
+JSON:
+
+```python
+json={}
+```
+
+Depois:
+
+```text
+6. Preciso de autenticação?
+```
+
+Por exemplo:
+
+```python
+auth=()
+```
+
+ou:
+
+```python
+Authorization
+```
+
+Depois:
+
+```text
+7. Preciso de Proxy?
+```
+
+```python
+proxies={}
+```
+
+Depois:
+
+```text
+8. Qual timeout utilizar?
+```
+
+```python
+timeout=5
+```
+
+Depois:
+
+```text
+9. Como analisar a resposta?
+```
+
+```python
+response.status_code
+response.headers
+response.text
+response.content
+response.json()
+```
+
+---
+
+# Principais métodos do Requests
+
+Os métodos HTTP mais utilizados através do Requests são:
+
+```python
+requests.get()
+```
+
+```python
+requests.post()
+```
+
+```python
+requests.put()
+```
+
+```python
+requests.patch()
+```
+
+```python
+requests.delete()
+```
+
+```python
+requests.head()
+```
+
+```python
+requests.options()
+```
+
+Com Session:
+
+```python
+session.get()
+session.post()
+session.put()
+session.patch()
+session.delete()
+session.head()
+session.options()
+```
+
+A ideia é a mesma.
+
+A diferença é que a Session mantém configurações e estado entre as requisições.
+
+---
+
+# Principais parâmetros
+
+Alguns dos parâmetros mais importantes estudados:
+
+| Parâmetro | Utilidade |
+|---|---|
+| `headers=` | Headers da requisição |
+| `cookies=` | Cookies da requisição |
+| `params=` | Parâmetros na URL |
+| `data=` | Dados enviados no corpo |
+| `json=` | JSON enviado no corpo |
+| `auth=` | Autenticação |
+| `timeout=` | Limite de espera |
+| `proxies=` | Configuração de Proxy |
+| `verify=` | Verificação TLS |
+| `allow_redirects=` | Controle de redirecionamentos |
+
+---
+
+# Principais recursos do Response
+
+| Recurso | Utilidade |
+|---|---|
+| `status_code` | Código HTTP |
+| `headers` | Headers recebidos |
+| `cookies` | Cookies recebidos |
+| `text` | Conteúdo como string |
+| `content` | Conteúdo como bytes |
+| `json()` | Conversão de JSON |
+| `url` | URL final |
+| `history` | Histórico de redirects |
+| `ok` | Verificação simplificada |
+| `raise_for_status()` | Tratamento de erros HTTP |
+
+---
+
+# Principais recursos da Session
+
+| Recurso | Utilidade |
+|---|---|
+| `session.headers` | Headers padrão |
+| `session.cookies` | Cookies persistentes na Session |
+| `session.auth` | Autenticação padrão |
+| `session.proxies` | Proxy padrão |
+| `session.get()` | GET utilizando a Session |
+| `session.post()` | POST utilizando a Session |
+| `session.put()` | PUT utilizando a Session |
+| `session.delete()` | DELETE utilizando a Session |
+
+---
+
+# Conclusão
+
+A biblioteca `requests` fornece uma interface simples para trabalhar com HTTP no Python.
+
+Porém, seu funcionamento se torna muito mais poderoso quando combinamos:
+
+```text
+Requests
+   │
+   ├── HTTP Methods
+   │
+   ├── Headers
+   │
+   ├── Cookies
+   │
+   ├── Session
+   │
+   ├── Authentication
+   │
+   ├── Proxy
+   │
+   ├── TLS
+   │
+   └── Response
+```
+
+A ideia principal é entender o ciclo completo:
+
+```text
+Python
+  │
+  │ Request
+  ▼
+Servidor Web
+  │
+  │ Response
+  ▼
+Python
+  │
+  ├── status_code
+  ├── headers
+  ├── cookies
+  └── conteúdo
+```
+
+Depois disso, podemos utilizar essas informações para automatizar tarefas, testar aplicações, criar ferramentas HTTP e desenvolver scripts de Cyber Security em ambientes autorizados.
+
+---
+
+# Resumo final
+
+A biblioteca pode ser resumida mentalmente assim:
+
+```python
+import requests
+```
+
+Criar uma Session:
+
+```python
+session = requests.Session()
+```
+
+Configurar Headers:
+
+```python
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+```
+
+Enviar requisição:
+
+```python
+response = session.get(
+    url,
+    timeout=5
+)
+```
+
+Analisar resposta:
+
+```python
+response.status_code
+```
+
+```python
+response.headers
+```
+
+```python
+response.text
+```
+
+```python
+response.cookies
+```
+
+```python
+response.json()
+```
+
+Tratar erros:
+
+```python
+try:
+
+    response = session.get(
+        url,
+        timeout=5
+    )
+
+except requests.RequestException as error:
+
+    print(error)
+```
+
+Esse conjunto de conceitos forma uma base sólida para começar a criar ferramentas de automação HTTP e Web em Python.

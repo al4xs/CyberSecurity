@@ -7861,3 +7861,1473 @@ tratamento de erros e encerramento
 Esse fluxo é uma boa base para começar a construir automações maiores com Selenium.
 
 A partir daqui, os próximos assuntos naturais para aprofundar são **seletores CSS e XPath**, **iframes**, **abas/janelas**, **cookies**, **JavaScript**, **ações de mouse/teclado**, **download/upload de arquivos** e **tratamento mais avançado de exceções e waits**.
+
+---
+
+
+## Exceções e `except`
+
+## O que são exceções?
+
+Durante uma automação Selenium, várias coisas podem dar errado:
+
+- o elemento não aparecer;
+    
+- o elemento desaparecer;
+    
+- o elemento estar bloqueado;
+    
+- o navegador fechar;
+    
+- uma página demorar demais;
+    
+- um seletor estar errado;
+    
+- uma janela não existir;
+    
+- o elemento estar dentro de um `iframe`;
+    
+- a conexão com o navegador ser perdida.
+    
+
+Quando isso acontece, o Selenium normalmente gera uma **exceção**.
+
+Exemplo:
+
+```python
+elemento = driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+Se o elemento não existir, o Selenium pode gerar:
+
+```text
+NoSuchElementException
+```
+
+Sem tratamento, o programa pode parar.
+
+Podemos tratar:
+
+```python
+try:
+
+    elemento = driver.find_element(
+        By.ID,
+        "login"
+    )
+
+except NoSuchElementException:
+
+    print("Elemento não encontrado.")
+```
+
+---
+
+# Estrutura básica
+
+A estrutura fundamental é:
+
+```python
+try:
+
+    # código que pode gerar erro
+
+except:
+
+    # código executado quando ocorre uma exceção
+```
+
+Exemplo:
+
+```python
+try:
+
+    driver.find_element(
+        By.ID,
+        "login"
+    )
+
+except:
+
+    print("Erro ao encontrar elemento.")
+```
+
+---
+
+# Por que usar exceções específicas?
+
+É possível fazer:
+
+```python
+except Exception as erro:
+    print(erro)
+```
+
+Mas isso captura praticamente qualquer exceção comum.
+
+É melhor, quando possível, tratar o problema específico:
+
+```python
+except TimeoutException:
+    print("A página demorou demais.")
+
+except NoSuchElementException:
+    print("Elemento não encontrado.")
+```
+
+Assim o programa consegue tomar decisões diferentes dependendo do problema.
+
+---
+
+# Importando as exceções do Selenium
+
+As exceções ficam em:
+
+```python
+from selenium.common.exceptions import ...
+```
+
+Podemos importar somente as que precisamos:
+
+```python
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    ElementNotInteractableException,
+    StaleElementReferenceException,
+    NoSuchWindowException,
+    WebDriverException
+)
+```
+
+---
+
+# `TimeoutException`
+
+## O que é?
+
+`TimeoutException` ocorre quando uma operação que deveria acontecer dentro de determinado tempo não acontece.
+
+É uma das exceções mais importantes para quem utiliza:
+
+```python
+WebDriverWait
+```
+
+Exemplo:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+
+try:
+
+    elemento = wait.until(
+        EC.presence_of_element_located(
+            (By.ID, "login")
+        )
+    )
+
+except TimeoutException:
+
+    print("O elemento não apareceu em 10 segundos.")
+```
+
+---
+
+## O que aconteceu?
+
+O Selenium ficou esperando:
+
+```text
+0s
+ ↓
+1s
+ ↓
+2s
+ ↓
+...
+ ↓
+10s
+ ↓
+elemento não apareceu
+ ↓
+TimeoutException
+```
+
+---
+
+## Exemplo real
+
+Imagine uma página que possui:
+
+```html
+<input id="email">
+```
+
+Mas o elemento demora para aparecer.
+
+Você pode fazer:
+
+```python
+try:
+
+    email = wait.until(
+        EC.visibility_of_element_located(
+            (By.ID, "email")
+        )
+    )
+
+except TimeoutException:
+
+    print("Campo de email não apareceu.")
+```
+
+---
+
+## Quando usar?
+
+Principalmente com:
+
+```python
+WebDriverWait
+```
+
+e:
+
+```python
+until()
+```
+
+É uma das exceções que você provavelmente mais utilizará em automações Selenium.
+
+---
+
+# `NoSuchElementException`
+
+## O que é?
+
+Ocorre quando o Selenium tenta encontrar um elemento que não existe naquele momento.
+
+Exemplo:
+
+```python
+from selenium.common.exceptions import NoSuchElementException
+
+try:
+
+    login = driver.find_element(
+        By.ID,
+        "login"
+    )
+
+except NoSuchElementException:
+
+    print("Elemento não encontrado.")
+```
+
+---
+
+## Exemplo real
+
+Se você fizer:
+
+```python
+driver.find_element(
+    By.ID,
+    "botao_inexistente"
+)
+```
+
+e esse elemento não estiver no DOM, pode ocorrer:
+
+```text
+NoSuchElementException
+```
+
+---
+
+# Diferença entre `find_element()` e `WebDriverWait`
+
+Existe uma diferença importante.
+
+### Busca direta
+
+```python
+driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+Se não encontrar, pode gerar:
+
+```text
+NoSuchElementException
+```
+
+### Espera explícita
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.ID, "login")
+    )
+)
+```
+
+Se o elemento não aparecer dentro do tempo:
+
+```text
+TimeoutException
+```
+
+Por isso, quando estamos esperando elementos dinâmicos, geralmente utilizamos `WebDriverWait`.
+
+---
+
+# `ElementClickInterceptedException`
+
+## O que é?
+
+Ocorre quando você tenta clicar em um elemento, mas **outro elemento está bloqueando o clique**.
+
+Exemplo:
+
+```python
+try:
+
+    botao.click()
+
+except ElementClickInterceptedException:
+
+    print("Outro elemento está bloqueando o clique.")
+```
+
+---
+
+## Exemplo real
+
+Imagine:
+
+```text
+Página
+│
+├── Botão "Comprar"
+│
+└── Modal cobrindo o botão
+```
+
+Você tenta:
+
+```python
+botao.click()
+```
+
+Mas o modal está na frente.
+
+O Selenium pode gerar:
+
+```text
+ElementClickInterceptedException
+```
+
+---
+
+## Possível solução
+
+Primeiro espere o elemento estar clicável:
+
+```python
+try:
+
+    botao = wait.until(
+        EC.element_to_be_clickable(
+            (By.ID, "comprar")
+        )
+    )
+
+    botao.click()
+
+except ElementClickInterceptedException:
+
+    print("O clique foi bloqueado.")
+```
+
+Dependendo da página, pode ser necessário fechar o modal ou esperar que ele desapareça.
+
+---
+
+# `ElementNotInteractableException`
+
+## O que é?
+
+O elemento existe, mas não pode ser utilizado naquele momento.
+
+Por exemplo:
+
+```text
+elemento existe
+      ↓
+mas está escondido/desabilitado
+      ↓
+não pode interagir
+```
+
+Exemplo:
+
+```python
+try:
+
+    campo = driver.find_element(
+        By.ID,
+        "email"
+    )
+
+    campo.send_keys("teste@example.com")
+
+except ElementNotInteractableException:
+
+    print("O elemento não pode receber interação.")
+```
+
+---
+
+## Diferença para `NoSuchElementException`
+
+```text
+NoSuchElementException
+    ↓
+elemento não foi encontrado
+
+ElementNotInteractableException
+    ↓
+elemento existe
+mas não pode ser utilizado
+```
+
+---
+
+# `StaleElementReferenceException`
+
+Essa é uma exceção muito importante em páginas dinâmicas.
+
+## O que significa "stale"?
+
+`stale` significa que a referência que você tinha para aquele elemento ficou **desatualizada/inválida**.
+
+Imagine:
+
+```python
+botao = driver.find_element(
+    By.ID,
+    "botao"
+)
+```
+
+Agora `botao` representa determinado elemento.
+
+A página atualiza o DOM:
+
+```text
+DOM antigo
+   ↓
+página atualiza
+   ↓
+DOM novo
+```
+
+O elemento antigo pode ser removido e recriado.
+
+Então:
+
+```python
+botao.click()
+```
+
+pode gerar:
+
+```text
+StaleElementReferenceException
+```
+
+---
+
+# Exemplo real
+
+```python
+try:
+
+    botao = driver.find_element(
+        By.ID,
+        "atualizar"
+    )
+
+    driver.refresh()
+
+    botao.click()
+
+except StaleElementReferenceException:
+
+    print("A referência do elemento ficou inválida.")
+```
+
+O problema é:
+
+```text
+botao
+ ↓
+referência antiga
+ ↓
+refresh()
+ ↓
+DOM reconstruído
+ ↓
+botao não representa mais o elemento atual
+```
+
+---
+
+# Solução comum
+
+Encontrar o elemento novamente:
+
+```python
+try:
+
+    botao = driver.find_element(
+        By.ID,
+        "atualizar"
+    )
+
+    driver.refresh()
+
+    botao = driver.find_element(
+        By.ID,
+        "atualizar"
+    )
+
+    botao.click()
+
+except StaleElementReferenceException:
+
+    print("Elemento ficou obsoleto.")
+```
+
+Em automações mais complexas, também podemos implementar uma tentativa novamente.
+
+---
+
+# `NoSuchWindowException`
+
+## O que é?
+
+Ocorre quando o Selenium tenta trabalhar com uma janela ou aba que não existe mais.
+
+Exemplo conceitual:
+
+```text
+Janela A
+Janela B
+```
+
+Se a janela B for fechada:
+
+```text
+Janela A
+```
+
+e o código tentar acessar a janela B, pode ocorrer:
+
+```text
+NoSuchWindowException
+```
+
+---
+
+## Exemplo
+
+```python
+from selenium.common.exceptions import NoSuchWindowException
+
+try:
+
+    driver.switch_to.window(
+        janela
+    )
+
+except NoSuchWindowException:
+
+    print("Essa janela não existe mais.")
+```
+
+Isso é particularmente relevante quando trabalhamos com:
+
+```python
+driver.window_handles
+```
+
+e:
+
+```python
+driver.switch_to.window()
+```
+
+---
+
+# `NoSuchFrameException`
+
+## O que é?
+
+Ocorre quando você tenta acessar um `iframe` que não existe.
+
+Exemplo:
+
+```python
+from selenium.common.exceptions import NoSuchFrameException
+
+try:
+
+    driver.switch_to.frame(
+        "meu_iframe"
+    )
+
+except NoSuchFrameException:
+
+    print("Iframe não encontrado.")
+```
+
+---
+
+## Exemplo real
+
+Se a página possuir:
+
+```html
+<iframe id="pagamento">
+</iframe>
+```
+
+podemos fazer:
+
+```python
+driver.switch_to.frame(
+    "pagamento"
+)
+```
+
+Mas se esse iframe não existir, pode ocorrer:
+
+```text
+NoSuchFrameException
+```
+
+---
+
+# `NoSuchAlertException`
+
+## O que é?
+
+Ocorre quando tentamos interagir com um alerta JavaScript que não existe.
+
+Exemplo:
+
+```python
+from selenium.common.exceptions import NoAlertPresentException
+
+try:
+
+    alerta = driver.switch_to.alert
+
+    alerta.accept()
+
+except NoAlertPresentException:
+
+    print("Não existe nenhum alerta.")
+```
+
+---
+
+# `UnexpectedAlertPresentException`
+
+É praticamente o problema inverso.
+
+Ocorre quando existe um alerta inesperado na página e ele interfere na operação que o Selenium estava tentando realizar.
+
+Exemplo:
+
+```text
+Selenium tenta clicar
+       ↓
+JavaScript abre alert()
+       ↓
+alerta bloqueia a página
+       ↓
+UnexpectedAlertPresentException
+```
+
+Tratamento:
+
+```python
+from selenium.common.exceptions import UnexpectedAlertPresentException
+
+try:
+
+    botao.click()
+
+except UnexpectedAlertPresentException:
+
+    print("Existe um alerta bloqueando a operação.")
+```
+
+---
+
+# `InvalidSelectorException`
+
+## O que é?
+
+Ocorre quando o seletor utilizado é inválido.
+
+Por exemplo, um XPath malformado:
+
+```python
+driver.find_element(
+    By.XPATH,
+    "//div[@id="
+)
+```
+
+Isso pode gerar:
+
+```text
+InvalidSelectorException
+```
+
+---
+
+## Exemplo de tratamento
+
+```python
+from selenium.common.exceptions import InvalidSelectorException
+
+try:
+
+    elemento = driver.find_element(
+        By.XPATH,
+        xpath
+    )
+
+except InvalidSelectorException:
+
+    print("XPath ou seletor inválido.")
+```
+
+Normalmente, porém, esse tipo de erro deve ser corrigido no código em vez de simplesmente ignorado.
+
+---
+
+# `WebDriverException`
+
+## O que é?
+
+É uma exceção mais geral relacionada ao WebDriver.
+
+Exemplo:
+
+```python
+from selenium.common.exceptions import WebDriverException
+
+try:
+
+    driver.get(
+        "https://example.com"
+    )
+
+except WebDriverException as erro:
+
+    print(f"Erro do WebDriver: {erro}")
+```
+
+Ela pode representar vários problemas relacionados ao navegador, WebDriver ou comunicação com ele.
+
+---
+
+# `SessionNotCreatedException`
+
+Essa exceção pode aparecer quando o Selenium/ChromeDriver não consegue criar a sessão do navegador.
+
+Um motivo comum pode ser incompatibilidade ou problema na configuração do navegador/driver.
+
+Exemplo:
+
+```python
+from selenium.common.exceptions import SessionNotCreatedException
+
+try:
+
+    driver = uc.Chrome()
+
+except SessionNotCreatedException:
+
+    print("Não foi possível criar a sessão do navegador.")
+```
+
+No caso do `undetected_chromedriver`, problemas de versão/configuração também podem estar envolvidos.
+
+---
+
+# `ElementNotVisibleException`
+
+Em versões modernas do Selenium, muitas situações relacionadas à visibilidade são tratadas através de outras exceções/condições, então não é uma exceção que você normalmente precisa colocar no seu código novo.
+
+Em vez de depender disso, normalmente é melhor utilizar:
+
+```python
+EC.visibility_of_element_located()
+```
+
+Exemplo:
+
+```python
+try:
+
+    campo = wait.until(
+        EC.visibility_of_element_located(
+            (By.ID, "email")
+        )
+    )
+
+except TimeoutException:
+
+    print("Campo não ficou visível.")
+```
+
+---
+
+# `ElementNotSelectableException`
+
+Também é uma exceção que raramente precisa ser tratada diretamente em automações modernas.
+
+Quando a preocupação é saber se um elemento pode ser utilizado, geralmente é mais interessante utilizar as condições do `Expected Conditions`.
+
+Por exemplo:
+
+```python
+EC.element_to_be_clickable()
+```
+
+---
+
+# Exceções mais importantes para memorizar
+
+Você não precisa decorar todas.
+
+Comece por estas:
+
+```text
+TimeoutException
+NoSuchElementException
+ElementClickInterceptedException
+ElementNotInteractableException
+StaleElementReferenceException
+WebDriverException
+```
+
+Depois:
+
+```text
+NoSuchWindowException
+NoSuchFrameException
+NoAlertPresentException
+UnexpectedAlertPresentException
+InvalidSelectorException
+SessionNotCreatedException
+```
+
+---
+
+# Exemplo real de vários `except`
+
+Uma automação pode fazer:
+
+```python
+try:
+
+    botao = wait.until(
+        EC.element_to_be_clickable(
+            (By.ID, "login")
+        )
+    )
+
+    botao.click()
+
+except TimeoutException:
+
+    print("O botão não ficou disponível.")
+
+except ElementClickInterceptedException:
+
+    print("Outro elemento bloqueou o clique.")
+
+except ElementNotInteractableException:
+
+    print("O botão não pode ser utilizado.")
+
+except StaleElementReferenceException:
+
+    print("O elemento ficou desatualizado.")
+
+except WebDriverException as erro:
+
+    print(f"Erro do WebDriver: {erro}")
+```
+
+A ordem é importante.
+
+As exceções mais específicas devem aparecer antes das mais genéricas.
+
+---
+
+# Por que a ordem importa?
+
+Imagine:
+
+```python
+except WebDriverException:
+    ...
+```
+
+antes de:
+
+```python
+except TimeoutException:
+    ...
+```
+
+Como várias exceções do Selenium possuem uma hierarquia de classes, uma exceção mais geral pode capturar uma exceção específica antes que ela chegue ao `except` específico.
+
+Por isso:
+
+```python
+except TimeoutException:
+    ...
+
+except WebDriverException:
+    ...
+```
+
+é melhor do que:
+
+```python
+except WebDriverException:
+    ...
+
+except TimeoutException:
+    ...
+```
+
+---
+
+# `except Exception as erro`
+
+Também podemos capturar uma exceção geral:
+
+```python
+try:
+
+    ...
+
+except Exception as erro:
+
+    print(
+        f"Erro: {erro}"
+    )
+```
+
+O:
+
+```python
+as erro
+```
+
+guarda o objeto da exceção na variável:
+
+```python
+erro
+```
+
+Assim podemos imprimir:
+
+```python
+print(erro)
+```
+
+ou:
+
+```python
+print(
+    type(erro).__name__
+)
+```
+
+---
+
+# Descobrindo qual exceção aconteceu
+
+Durante o desenvolvimento, pode ser útil:
+
+```python
+except Exception as erro:
+
+    print(
+        f"Tipo: {type(erro).__name__}"
+    )
+
+    print(
+        f"Mensagem: {erro}"
+    )
+```
+
+Por exemplo:
+
+```text
+Tipo: TimeoutException
+Mensagem: Message: timeout...
+```
+
+Isso ajuda a entender o que aconteceu.
+
+---
+
+# `finally`
+
+Além de `try` e `except`, existe:
+
+```python
+finally
+```
+
+Ele é executado independentemente de ocorrer uma exceção ou não.
+
+Exemplo:
+
+```python
+try:
+
+    driver.get(
+        "https://example.com"
+    )
+
+except WebDriverException as erro:
+
+    print(erro)
+
+finally:
+
+    driver.quit()
+```
+
+Fluxo:
+
+```text
+try
+ │
+ ├── sucesso ──────┐
+ │                 │
+ └── erro ─────────┤
+                   ↓
+                finally
+                   ↓
+              driver.quit()
+```
+
+---
+
+# `else`
+
+Também existe:
+
+```python
+else
+```
+
+Ele é executado somente quando não ocorreu exceção.
+
+Exemplo:
+
+```python
+try:
+
+    elemento = driver.find_element(
+        By.ID,
+        "login"
+    )
+
+except NoSuchElementException:
+
+    print("Elemento não encontrado.")
+
+else:
+
+    print("Elemento encontrado.")
+```
+
+Fluxo:
+
+```text
+try
+ │
+ ├── erro → except
+ │
+ └── sucesso → else
+```
+
+---
+
+# Estrutura completa
+
+Podemos combinar:
+
+```python
+try:
+
+    ...
+
+except TimeoutException:
+
+    ...
+
+except NoSuchElementException:
+
+    ...
+
+except WebDriverException:
+
+    ...
+
+else:
+
+    ...
+
+finally:
+
+    driver.quit()
+```
+
+Cada parte possui uma responsabilidade:
+
+```text
+try
+ ↓
+tente executar
+
+except
+ ↓
+trate erros
+
+else
+ ↓
+execute se deu certo
+
+finally
+ ↓
+execute sempre
+```
+
+---
+
+# `continue` dentro do `except`
+
+Isso é muito útil em loops.
+
+Imagine:
+
+```python
+for url in urls:
+
+    try:
+
+        driver.get(url)
+
+        titulo = driver.title
+
+        print(titulo)
+
+    except TimeoutException:
+
+        print(
+            f"Timeout: {url}"
+        )
+
+        continue
+```
+
+Se uma página der timeout:
+
+```text
+URL 1 → sucesso
+URL 2 → sucesso
+URL 3 → timeout
+          ↓
+       except
+          ↓
+       continue
+          ↓
+URL 4 → continua normalmente
+```
+
+Isso evita que um único erro encerre todo o processamento.
+
+---
+
+# Exemplo semelhante ao seu projeto
+
+No seu projeto você visitava vários resultados:
+
+```python
+for numero in range(quantidade):
+
+    try:
+
+        resultados = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.yuRUbf a"
+        )
+
+        link = resultados[numero]
+
+        driver.execute_script(
+            "arguments[0].click();",
+            link
+        )
+
+        titulo = driver.title
+
+        print(titulo)
+
+        driver.back()
+
+    except TimeoutException:
+
+        print("A página demorou demais.")
+        continue
+
+    except StaleElementReferenceException:
+
+        print("O elemento ficou obsoleto.")
+        continue
+
+    except WebDriverException as erro:
+
+        print(
+            f"Erro do Selenium: {erro}"
+        )
+        continue
+```
+
+A vantagem é que:
+
+```text
+resultado 1
+   ↓
+sucesso
+
+resultado 2
+   ↓
+erro
+
+resultado 3
+   ↓
+continua
+
+resultado 4
+   ↓
+sucesso
+```
+
+O programa não precisa morrer porque uma página apresentou um problema.
+
+---
+
+# Não use `except: pass` sem motivo
+
+Evite:
+
+```python
+except:
+    pass
+```
+
+Isso simplesmente ignora o erro.
+
+Exemplo:
+
+```python
+try:
+
+    driver.get(url)
+
+except:
+    pass
+```
+
+Se alguma coisa der errado, você não saberá o que aconteceu.
+
+Durante o aprendizado, é muito melhor:
+
+```python
+except Exception as erro:
+
+    print(
+        f"Erro: {erro}"
+    )
+```
+
+Ou, melhor ainda, utilizar a exceção específica:
+
+```python
+except TimeoutException:
+
+    print("Timeout.")
+```
+
+---
+
+# Estratégia recomendada
+
+Uma boa estrutura para seus projetos Selenium é:
+
+```python
+try:
+
+    # operação Selenium
+
+except TimeoutException:
+
+    # problema de tempo
+
+except NoSuchElementException:
+
+    # elemento não encontrado
+
+except ElementClickInterceptedException:
+
+    # clique bloqueado
+
+except StaleElementReferenceException:
+
+    # referência antiga
+
+except WebDriverException as erro:
+
+    # outros problemas do WebDriver
+
+finally:
+
+    # limpeza necessária
+```
+
+---
+
+# Tabela de referência rápida
+
+|Exceção|O que significa|
+|---|---|
+|`TimeoutException`|Espera ultrapassou o tempo limite|
+|`NoSuchElementException`|Elemento não encontrado|
+|`ElementClickInterceptedException`|Clique bloqueado por outro elemento|
+|`ElementNotInteractableException`|Elemento existe, mas não pode ser utilizado|
+|`StaleElementReferenceException`|Referência do elemento ficou desatualizada|
+|`NoSuchWindowException`|Janela/aba não existe mais|
+|`NoSuchFrameException`|`iframe` não encontrado|
+|`NoAlertPresentException`|Não existe alerta para acessar|
+|`UnexpectedAlertPresentException`|Alerta inesperado está bloqueando a operação|
+|`InvalidSelectorException`|Seletor inválido|
+|`SessionNotCreatedException`|Sessão do navegador não pôde ser criada|
+|`WebDriverException`|Erro geral relacionado ao WebDriver|
+
+---
+
+# Regra mental
+
+Quando uma automação Selenium falhar, pense primeiro:
+
+```text
+O que aconteceu?
+      │
+      ├── demorou demais?
+      │       ↓
+      │   TimeoutException
+      │
+      ├── elemento não existe?
+      │       ↓
+      │   NoSuchElementException
+      │
+      ├── elemento existe mas não interage?
+      │       ↓
+      │   ElementNotInteractableException
+      │
+      ├── clique bloqueado?
+      │       ↓
+      │   ElementClickInterceptedException
+      │
+      ├── elemento ficou velho?
+      │       ↓
+      │   StaleElementReferenceException
+      │
+      └── problema geral no navegador?
+              ↓
+          WebDriverException
+```
+
+---
+
+# Resumo
+
+As exceções fazem parte do controle de fluxo de uma automação Selenium.
+
+Em vez de pensar:
+
+```text
+"deu erro → programa morreu"
+```
+
+podemos pensar:
+
+```text
+"deu erro → descubro qual erro → tomo uma decisão"
+```
+
+Por exemplo:
+
+```python
+try:
+
+    elemento = wait.until(
+        EC.element_to_be_clickable(
+            (By.ID, "login")
+        )
+    )
+
+    elemento.click()
+
+except TimeoutException:
+
+    print("O botão não apareceu a tempo.")
+
+except ElementClickInterceptedException:
+
+    print("O botão estava bloqueado.")
+
+except WebDriverException as erro:
+
+    print(f"Erro do navegador: {erro}")
+```
+
+Essa abordagem deixa a automação mais **resistente, previsível e fácil de depurar**.

@@ -1073,3 +1073,1056 @@ driver.quit()
 ```
 
 Encerra a sessão do navegador.
+
+---
+
+# Localização de elementos com `By`
+
+## O que é `By`?
+
+`By` é uma classe do Selenium utilizada para definir **qual estratégia será usada para localizar um elemento HTML** na página.
+
+Quando queremos encontrar um elemento, precisamos informar duas coisas:
+
+```text
+1. COMO procurar
+2. O QUE procurar
+```
+
+Por exemplo:
+
+```python
+driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+Nesse caso:
+
+```text
+By.NAME
+   ↓
+como procurar
+
+"q"
+   ↓
+o que procurar
+```
+
+O Selenium então procura um elemento cujo atributo `name` seja:
+
+```html
+name="q"
+```
+
+---
+
+## Importando `By`
+
+Para utilizar `By`:
+
+```python
+from selenium.webdriver.common.by import By
+```
+
+Depois podemos utilizar:
+
+```python
+By.ID
+By.NAME
+By.CLASS_NAME
+By.TAG_NAME
+By.CSS_SELECTOR
+By.XPATH
+```
+
+---
+
+# Estrutura do `By`
+
+As principais estratégias são:
+
+```text
+By
+│
+├── ID
+├── NAME
+├── CLASS_NAME
+├── TAG_NAME
+├── CSS_SELECTOR
+└── XPATH
+```
+
+Todas elas são utilizadas para localizar elementos, mas cada uma utiliza uma forma diferente de identificação.
+
+---
+
+# `By.ID`
+
+## O que é?
+
+`By.ID` procura um elemento através do atributo HTML `id`.
+
+Imagine o seguinte HTML:
+
+```html
+<input
+    id="usuario"
+    type="text"
+>
+```
+
+Podemos localizar esse elemento com:
+
+```python
+elemento = driver.find_element(
+    By.ID,
+    "usuario"
+)
+```
+
+O Selenium procura:
+
+```text
+id="usuario"
+```
+
+---
+
+## Parâmetros
+
+Quando utilizamos:
+
+```python
+driver.find_element(
+    By.ID,
+    "usuario"
+)
+```
+
+temos:
+
+|Argumento|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`By.ID`|`str`/estratégia|Sim|Define que a busca será feita pelo `id`|
+|`"usuario"`|`str`|Sim|Valor do atributo `id`|
+
+---
+
+## Exemplo
+
+HTML:
+
+```html
+<input id="email">
+```
+
+Python:
+
+```python
+email = driver.find_element(
+    By.ID,
+    "email"
+)
+```
+
+Depois podemos trabalhar com o elemento:
+
+```python
+email.send_keys(
+    "teste@example.com"
+)
+```
+
+---
+
+## Quando utilizar `By.ID`?
+
+Quando o elemento possui um `id` confiável e estável.
+
+Exemplo:
+
+```html
+<input id="login">
+```
+
+Nesse caso:
+
+```python
+driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+é geralmente uma forma simples de localizar o elemento.
+
+---
+
+# `By.NAME`
+
+## O que é?
+
+`By.NAME` procura pelo atributo HTML:
+
+```html
+name=""
+```
+
+Exemplo:
+
+```html
+<input
+    name="q"
+    type="text"
+>
+```
+
+Podemos localizar:
+
+```python
+pesquisa = driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+---
+
+## O que acontece?
+
+O Selenium procura um elemento que possua:
+
+```html
+name="q"
+```
+
+Portanto:
+
+```python
+By.NAME
+```
+
+significa:
+
+```text
+procure pelo atributo name
+```
+
+e:
+
+```python
+"q"
+```
+
+é o valor procurado.
+
+---
+
+## Parâmetros
+
+|Argumento|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`By.NAME`|estratégia|Sim|Informa que a busca utiliza `name`|
+|`"q"`|`str`|Sim|Valor do atributo `name`|
+
+---
+
+## Exemplo do seu código
+
+Você utiliza:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Aqui:
+
+```python
+(By.NAME, "q")
+```
+
+é uma tupla contendo:
+
+```text
+(By.NAME, "q")
+    │       │
+    │       └── valor procurado
+    │
+    └────────── estratégia
+```
+
+O Selenium interpreta isso como:
+
+```text
+Procure um elemento
+pelo atributo NAME
+cujo valor seja "q"
+```
+
+---
+
+# `By.CLASS_NAME`
+
+## O que é?
+
+`By.CLASS_NAME` procura um elemento através do atributo:
+
+```html
+class=""
+```
+
+Exemplo:
+
+```html
+<div class="resultado">
+```
+
+Podemos localizar:
+
+```python
+elemento = driver.find_element(
+    By.CLASS_NAME,
+    "resultado"
+)
+```
+
+---
+
+## Parâmetros
+
+|Argumento|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`By.CLASS_NAME`|estratégia|Sim|Informa que a busca utiliza classe CSS|
+|`"resultado"`|`str`|Sim|Nome da classe procurada|
+
+---
+
+## Cuidado com múltiplas classes
+
+Considere:
+
+```html
+<div class="resultado ativo">
+```
+
+Existem duas classes:
+
+```text
+resultado
+ativo
+```
+
+Podemos procurar:
+
+```python
+driver.find_element(
+    By.CLASS_NAME,
+    "resultado"
+)
+```
+
+ou:
+
+```python
+driver.find_element(
+    By.CLASS_NAME,
+    "ativo"
+)
+```
+
+Mas não devemos passar:
+
+```python
+driver.find_element(
+    By.CLASS_NAME,
+    "resultado ativo"
+)
+```
+
+porque `By.CLASS_NAME` espera uma classe individual.
+
+Para procurar combinações de classes, podemos utilizar `CSS_SELECTOR`.
+
+---
+
+# `By.TAG_NAME`
+
+## O que é?
+
+`By.TAG_NAME` procura pelo nome da tag HTML.
+
+Exemplo:
+
+```html
+<a href="https://example.com">
+    Example
+</a>
+```
+
+A tag é:
+
+```text
+a
+```
+
+Podemos procurar:
+
+```python
+link = driver.find_element(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+---
+
+## Outro exemplo
+
+HTML:
+
+```html
+<input>
+<input>
+<input>
+```
+
+Podemos procurar elementos `input`:
+
+```python
+driver.find_elements(
+    By.TAG_NAME,
+    "input"
+)
+```
+
+---
+
+## Parâmetros
+
+|Argumento|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`By.TAG_NAME`|estratégia|Sim|Procura pelo nome da tag|
+|`"input"`|`str`|Sim|Nome da tag HTML|
+
+---
+
+# `By.CSS_SELECTOR`
+
+## O que é?
+
+`By.CSS_SELECTOR` permite utilizar **seletores CSS** para localizar elementos.
+
+É uma das estratégias mais importantes do Selenium porque permite criar seletores muito mais específicos.
+
+Exemplo:
+
+```html
+<input
+    id="email"
+    class="campo"
+    type="text"
+>
+```
+
+Podemos procurar pelo ID:
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    "#email"
+)
+```
+
+Pela classe:
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    ".campo"
+)
+```
+
+Pelo tipo:
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    "input"
+)
+```
+
+---
+
+## Estrutura dos seletores CSS
+
+Alguns exemplos básicos:
+
+|Seletor|Significado|
+|---|---|
+|`#email`|elemento com `id="email"`|
+|`.campo`|elemento com classe `campo`|
+|`input`|elementos `<input>`|
+|`a`|elementos `<a>`|
+|`div`|elementos `<div>`|
+
+---
+
+## Selecionando por atributo
+
+HTML:
+
+```html
+<input
+    name="q"
+    type="text"
+>
+```
+
+Podemos utilizar:
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    'input[name="q"]'
+)
+```
+
+Aqui temos:
+
+```text
+input
+  ↓
+tipo da tag
+
+[name="q"]
+  ↓
+atributo
+```
+
+---
+
+# O seletor do seu código
+
+No seu programa você utiliza:
+
+```python
+By.CSS_SELECTOR,
+"div.yuRUbf a"
+```
+
+Isso significa:
+
+```text
+div.yuRUbf a
+│   │      │
+│   │      └── elemento <a>
+│   │
+│   └────────── classe yuRUbf
+│
+└────────────── elemento <div>
+```
+
+O espaço entre:
+
+```css
+div.yuRUbf a
+```
+
+significa que queremos encontrar um elemento `<a>` que esteja dentro de um:
+
+```html
+<div class="yuRUbf">
+```
+
+Conceitualmente:
+
+```text
+<div class="yuRUbf">
+        │
+        └── <a>
+```
+
+---
+
+## Outro exemplo
+
+HTML:
+
+```html
+<div class="resultado">
+    <a href="https://example.com">
+        Example
+    </a>
+</div>
+```
+
+Podemos localizar o link com:
+
+```python
+link = driver.find_element(
+    By.CSS_SELECTOR,
+    "div.resultado a"
+)
+```
+
+---
+
+# `By.XPATH`
+
+## O que é?
+
+`By.XPATH` utiliza XPath para localizar elementos dentro do documento HTML.
+
+Exemplo:
+
+```html
+<input
+    name="q"
+    type="text"
+>
+```
+
+Podemos utilizar:
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//input[@name="q"]'
+)
+```
+
+Aqui:
+
+```text
+//input
+   ↓
+procure elementos input
+
+[@name="q"]
+   ↓
+cujo atributo name seja q
+```
+
+---
+
+## Parâmetros
+
+|Argumento|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`By.XPATH`|estratégia|Sim|Informa que será utilizado XPath|
+|expressão XPath|`str`|Sim|Define o elemento procurado|
+
+---
+
+## Exemplos
+
+Por ID:
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//*[@id="login"]'
+)
+```
+
+Por `name`:
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//input[@name="q"]'
+)
+```
+
+Por texto:
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//button[text()="Entrar"]'
+)
+```
+
+---
+
+# CSS Selector x XPath
+
+Os dois conseguem realizar buscas bastante específicas.
+
+Exemplo com CSS:
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    'input[name="q"]'
+)
+```
+
+Exemplo equivalente usando XPath:
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//input[@name="q"]'
+)
+```
+
+Para seletores simples, CSS costuma ser bastante legível.
+
+XPath possui recursos próprios para navegar pela estrutura do documento e trabalhar com relações entre elementos.
+
+---
+
+# Resumo das estratégias
+
+```text
+By.ID
+   ↓
+atributo id
+
+By.NAME
+   ↓
+atributo name
+
+By.CLASS_NAME
+   ↓
+classe CSS
+
+By.TAG_NAME
+   ↓
+nome da tag HTML
+
+By.CSS_SELECTOR
+   ↓
+seletor CSS
+
+By.XPATH
+   ↓
+expressão XPath
+```
+
+Exemplo:
+
+```python
+driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+```python
+driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+```python
+driver.find_element(
+    By.CLASS_NAME,
+    "resultado"
+)
+```
+
+```python
+driver.find_element(
+    By.TAG_NAME,
+    "input"
+)
+```
+
+```python
+driver.find_element(
+    By.CSS_SELECTOR,
+    "input[name='q']"
+)
+```
+
+```python
+driver.find_element(
+    By.XPATH,
+    '//input[@name="q"]'
+)
+```
+
+---
+
+# Como escolher o locator?
+
+Uma regra prática é procurar primeiro por um identificador simples e confiável.
+
+Por exemplo:
+
+```text
+ID
+ ↓
+NAME
+ ↓
+CSS_SELECTOR
+ ↓
+XPATH
+```
+
+Mas isso não significa que exista uma ordem obrigatória.
+
+A escolha depende da estrutura do HTML.
+
+Se existe:
+
+```html
+<input id="email">
+```
+
+podemos simplesmente utilizar:
+
+```python
+By.ID
+```
+
+Se temos:
+
+```html
+<input name="q">
+```
+
+podemos utilizar:
+
+```python
+By.NAME
+```
+
+Se precisamos de uma estrutura mais específica:
+
+```python
+By.CSS_SELECTOR
+```
+
+ou:
+
+```python
+By.XPATH
+```
+
+podem ser melhores.
+
+---
+
+# O segundo argumento de `find_element()`
+
+Uma coisa importante é entender que:
+
+```python
+driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+possui dois argumentos relacionados à busca:
+
+```text
+(By.NAME, "q")
+   │       │
+   │       └── valor utilizado na busca
+   │
+   └────────── estratégia de localização
+```
+
+Isso é exatamente o que aparece no seu código:
+
+```python
+(By.NAME, "q")
+```
+
+e:
+
+```python
+(By.CSS_SELECTOR, "div.yuRUbf a")
+```
+
+Essas duas partes formam um **locator**.
+
+Podemos pensar:
+
+```text
+locator
+│
+├── estratégia
+│
+└── valor
+```
+
+Exemplo:
+
+```python
+(By.NAME, "q")
+```
+
+```text
+estratégia → By.NAME
+valor      → "q"
+```
+
+---
+
+# `By` não encontra o elemento sozinho
+
+Um ponto importante:
+
+```python
+By.NAME
+```
+
+sozinho não procura nada.
+
+Ele apenas informa **como a busca deve ser realizada**.
+
+Quem efetivamente realiza a busca é, por exemplo:
+
+```python
+driver.find_element(...)
+```
+
+ou:
+
+```python
+driver.find_elements(...)
+```
+
+Portanto:
+
+```text
+By
+ ↓
+define a estratégia
+
+find_element()
+ ↓
+realiza a busca
+```
+
+---
+
+# Estrutura mental
+
+Podemos representar:
+
+```text
+driver
+   │
+   ▼
+find_element()
+   │
+   ├── By.ID
+   ├── By.NAME
+   ├── By.CLASS_NAME
+   ├── By.TAG_NAME
+   ├── By.CSS_SELECTOR
+   └── By.XPATH
+```
+
+Na próxima etapa veremos a diferença entre:
+
+```python
+find_element()
+```
+
+e:
+
+```python
+find_elements()
+```
+
+Essa diferença é fundamental para entender por que seu código faz:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+```
+
+e depois:
+
+```python
+link = resultados[numero]
+```
+
+---
+
+# Resumo
+
+`By` define **como o Selenium deve localizar um elemento**.
+
+Principais estratégias:
+
+```python
+By.ID
+By.NAME
+By.CLASS_NAME
+By.TAG_NAME
+By.CSS_SELECTOR
+By.XPATH
+```
+
+Um locator possui:
+
+```python
+(By.NAME, "q")
+```
+
+onde:
+
+```text
+By.NAME
+   ↓
+estratégia
+
+"q"
+   ↓
+valor procurado
+```
+
+Exemplo:
+
+```python
+pesquisa = driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+significa:
+
+```text
+procure um elemento
+   ↓
+utilizando o atributo name
+   ↓
+com valor "q"
+```
+
+Enquanto:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+```
+
+significa:
+
+```text
+procure TODOS os elementos
+   ↓
+utilizando CSS Selector
+   ↓
+que correspondam a "div.yuRUbf a"
+```

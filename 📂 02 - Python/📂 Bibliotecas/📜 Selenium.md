@@ -4843,3 +4843,1423 @@ elemento/resultado disponível
       ↓
 continua a execução
 ```
+
+---
+
+
+# Esperas no Selenium
+
+## Por que o Selenium precisa esperar?
+
+Uma página web não necessariamente carrega tudo de uma vez.
+
+Quando fazemos:
+
+```python
+driver.get("https://www.google.com")
+```
+
+o navegador começa a carregar a página.
+
+Dependendo do site, alguns elementos podem aparecer imediatamente, enquanto outros podem ser criados depois por JavaScript.
+
+Por exemplo:
+
+```text
+driver.get()
+    ↓
+HTML começa a carregar
+    ↓
+JavaScript executa
+    ↓
+elementos são criados/modificados
+    ↓
+página fica pronta para interação
+```
+
+Se o código tentar localizar um elemento antes de ele existir, podemos receber uma exceção.
+
+Exemplo:
+
+```python
+pesquisa = driver.find_element(
+    By.NAME,
+    "q"
+)
+```
+
+Se o campo ainda não estiver disponível naquele momento, o Selenium pode falhar.
+
+É por isso que existem as **esperas**.
+
+---
+
+# Tipos de espera
+
+No Selenium existem diferentes formas de esperar.
+
+As duas ideias mais importantes são:
+
+```text
+Implicit Wait
+    ↓
+espera global
+
+Explicit Wait
+    ↓
+espera uma condição específica
+```
+
+Nesta anotação vamos focar principalmente em:
+
+```python
+WebDriverWait
+```
+
+e:
+
+```python
+EC
+```
+
+---
+
+# `WebDriverWait`
+
+## O que é?
+
+`WebDriverWait` permite criar uma **espera explícita**.
+
+Em vez de simplesmente falar:
+
+```text
+"espere 10 segundos"
+```
+
+podemos dizer:
+
+```text
+"espere no máximo 10 segundos
+até determinada condição acontecer"
+```
+
+Exemplo:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+Isso cria um objeto responsável por realizar esperas.
+
+---
+
+## Importação
+
+```python
+from selenium.webdriver.support.ui import WebDriverWait
+```
+
+---
+
+# Sintaxe
+
+A forma básica é:
+
+```python
+WebDriverWait(
+    driver,
+    timeout
+)
+```
+
+Os principais parâmetros são:
+
+| Parâmetro | Tipo        | Obrigatório | Padrão | Descrição                                 |
+| --------- | ----------- | ----------- | ------ | ----------------------------------------- |
+| `driver`  | `WebDriver` | Sim         | —      | Instância do navegador que será observada |
+| `timeout` | `float`     | Sim         | —      | Tempo máximo de espera em segundos        |
+
+Exemplo:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+Significa:
+
+```text
+utilize este navegador
+      ↓
+driver
+
+espere no máximo
+      ↓
+10 segundos
+```
+
+---
+
+# O `10` não significa necessariamente "durma por 10 segundos"
+
+Essa diferença é importante.
+
+Quando fazemos:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+não estamos dizendo:
+
+```text
+"pare o programa por 10 segundos"
+```
+
+Estamos dizendo:
+
+```text
+"quando eu pedir para você esperar uma condição,
+espere no máximo 10 segundos por ela"
+```
+
+Se a condição acontecer depois de 2 segundos, a espera termina.
+
+Exemplo:
+
+```text
+tempo: 0s
+   ↓
+elemento ainda não existe
+
+tempo: 1s
+   ↓
+ainda não existe
+
+tempo: 2s
+   ↓
+elemento apareceu
+
+   ↓
+continua imediatamente
+```
+
+Não precisa esperar os 10 segundos completos.
+
+---
+
+# `until()`
+
+## O que é?
+
+Depois de criar:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+utilizamos:
+
+```python
+wait.until(...)
+```
+
+para dizer **qual condição precisa acontecer**.
+
+---
+
+## Sintaxe
+
+```python
+wait.until(
+    condition
+)
+```
+
+O argumento principal é uma condição/função que será verificada até:
+
+```text
+condição verdadeira
+```
+
+ou até:
+
+```text
+timeout
+```
+
+---
+
+# Exemplo simples
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Podemos ler isso de dentro para fora:
+
+```text
+(By.NAME, "q")
+        ↓
+locator
+
+presence_of_element_located(...)
+        ↓
+condição
+
+wait.until(...)
+        ↓
+espere até a condição acontecer
+```
+
+Portanto:
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+significa aproximadamente:
+
+> Espere até existir na página um elemento localizado pelo `name="q"`.
+
+---
+
+# `EC`
+
+## O que é?
+
+`EC` é uma abreviação normalmente utilizada para:
+
+```text
+Expected Conditions
+```
+
+São condições prontas fornecidas pelo Selenium para serem usadas com `WebDriverWait`.
+
+Importação:
+
+```python
+from selenium.webdriver.support import expected_conditions as EC
+```
+
+Aqui:
+
+```python
+as EC
+```
+
+cria um apelido.
+
+Em vez de escrever:
+
+```python
+expected_conditions.presence_of_element_located(...)
+```
+
+podemos escrever:
+
+```python
+EC.presence_of_element_located(...)
+```
+
+---
+
+# O que é uma Expected Condition?
+
+É uma condição que o Selenium verifica repetidamente durante a espera.
+
+Por exemplo:
+
+```python
+EC.presence_of_element_located(...)
+```
+
+pergunta:
+
+```text
+"O elemento já está presente?"
+```
+
+Enquanto:
+
+```python
+EC.visibility_of_element_located(...)
+```
+
+pergunta:
+
+```text
+"O elemento está visível?"
+```
+
+E:
+
+```python
+EC.element_to_be_clickable(...)
+```
+
+verifica se o elemento pode ser clicado.
+
+---
+
+# Estrutura geral
+
+Podemos pensar em:
+
+```text
+WebDriverWait
+      │
+      ▼
+    until()
+      │
+      ▼
+     EC
+      │
+      └── condição
+```
+
+Exemplo:
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+---
+
+# `presence_of_element_located()`
+
+## O que é?
+
+Essa condição espera até que um elemento esteja **presente no DOM**.
+
+Importação através de:
+
+```python
+from selenium.webdriver.support import expected_conditions as EC
+```
+
+Uso:
+
+```python
+EC.presence_of_element_located(
+    locator
+)
+```
+
+---
+
+## Parâmetro
+
+| Parâmetro | Tipo    | Obrigatório | Descrição                        |
+| --------- | ------- | ----------- | -------------------------------- |
+| `locator` | `tuple` | Sim         | Define como localizar o elemento |
+
+Exemplo:
+
+```python
+(By.NAME, "q")
+```
+
+---
+
+# O que significa DOM?
+
+DOM significa:
+
+```text
+Document Object Model
+```
+
+É a representação da estrutura HTML da página que o navegador mantém.
+
+Imagine:
+
+```html
+<html>
+    <body>
+        <input name="q">
+    </body>
+</html>
+```
+
+O navegador transforma isso em uma estrutura que pode ser manipulada pelo JavaScript e acessada pelo Selenium.
+
+De forma simplificada:
+
+```text
+HTML
+ │
+ ▼
+DOM
+ │
+ ├── html
+ │    └── body
+ │         └── input
+ │
+ ▼
+Selenium pode localizar elementos
+```
+
+---
+
+# Presença não significa visibilidade
+
+Essa diferença é muito importante.
+
+`presence_of_element_located()` verifica se o elemento **existe no DOM**.
+
+Não significa necessariamente que ele:
+
+* está visível;
+* está na área visível da tela;
+* pode ser clicado.
+
+Por exemplo, um elemento pode existir no DOM mas estar escondido:
+
+```html
+<div style="display: none;">
+    Conteúdo
+</div>
+```
+
+O elemento existe, mas não está visível.
+
+Nesse caso, `presence_of_element_located()` pode considerar a condição satisfeita.
+
+---
+
+# Exemplo do Google no seu código
+
+Você utiliza:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Vamos desmontar completamente.
+
+### Primeiro:
+
+```python
+(By.NAME, "q")
+```
+
+é o locator.
+
+Significa:
+
+```text
+procure pelo atributo
+name="q"
+```
+
+---
+
+### Depois:
+
+```python
+EC.presence_of_element_located(
+    (By.NAME, "q")
+)
+```
+
+cria uma condição que significa:
+
+```text
+espere o elemento com name="q"
+estar presente no DOM
+```
+
+---
+
+### Finalmente:
+
+```python
+wait.until(
+    ...
+)
+```
+
+manda o `WebDriverWait` aguardar essa condição.
+
+---
+
+### Tudo junto:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Significa:
+
+```text
+WebDriverWait
+     ↓
+até que...
+     ↓
+exista um elemento
+     ↓
+localizado por NAME
+     ↓
+com valor "q"
+     ↓
+retorne esse elemento
+```
+
+Por isso você consegue fazer imediatamente:
+
+```python
+pesquisa.send_keys(
+    docs
+)
+```
+
+Porque `pesquisa` recebe o `WebElement` encontrado.
+
+---
+
+# O retorno de `presence_of_element_located()`
+
+Quando a condição é satisfeita, ela retorna o elemento encontrado.
+
+Conceitualmente:
+
+```text
+presence_of_element_located()
+          ↓
+      WebElement
+```
+
+Então:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+faz com que:
+
+```text
+pesquisa
+   ↓
+WebElement
+```
+
+Por isso:
+
+```python
+pesquisa.send_keys(docs)
+```
+
+funciona.
+
+---
+
+# `visibility_of_element_located()`
+
+## O que é?
+
+Essa condição espera até que o elemento esteja **presente e visível**.
+
+Uso:
+
+```python
+wait.until(
+    EC.visibility_of_element_located(
+        (By.ID, "login")
+    )
+)
+```
+
+A diferença conceitual:
+
+```text
+presence
+    ↓
+existe no DOM
+
+visibility
+    ↓
+existe no DOM
++
+está visível
+```
+
+---
+
+## Parâmetro
+
+| Parâmetro | Tipo    | Obrigatório | Descrição           |
+| --------- | ------- | ----------- | ------------------- |
+| `locator` | `tuple` | Sim         | Locator do elemento |
+
+Exemplo:
+
+```python
+(By.ID, "login")
+```
+
+---
+
+# `presence` x `visibility`
+
+Imagine:
+
+```html
+<button id="entrar" style="display:none;">
+    Entrar
+</button>
+```
+
+O elemento existe.
+
+Então:
+
+```python
+EC.presence_of_element_located(
+    (By.ID, "entrar")
+)
+```
+
+pode considerar a condição satisfeita.
+
+Mas:
+
+```python
+EC.visibility_of_element_located(
+    (By.ID, "entrar")
+)
+```
+
+não será satisfeita enquanto o botão continuar invisível.
+
+---
+
+# `element_to_be_clickable()`
+
+## O que é?
+
+Essa condição espera até que o elemento esteja em uma situação em que possa ser clicado.
+
+Uso:
+
+```python
+botao = wait.until(
+    EC.element_to_be_clickable(
+        (By.ID, "entrar")
+    )
+)
+```
+
+Depois:
+
+```python
+botao.click()
+```
+
+---
+
+## Parâmetro
+
+| Parâmetro | Tipo    | Obrigatório | Descrição           |
+| --------- | ------- | ----------- | ------------------- |
+| `locator` | `tuple` | Sim         | Locator do elemento |
+
+Exemplo:
+
+```python
+(By.ID, "entrar")
+```
+
+---
+
+# Comparando as três
+
+```text
+presence_of_element_located()
+        ↓
+elemento existe no DOM
+
+
+visibility_of_element_located()
+        ↓
+elemento existe
++
+está visível
+
+
+element_to_be_clickable()
+        ↓
+elemento está visível
++
+habilitado para interação/click
+```
+
+---
+
+# Qual usar?
+
+Não existe uma condição universalmente melhor.
+
+Depende do que você pretende fazer.
+
+Se apenas precisa que o elemento exista:
+
+```python
+EC.presence_of_element_located(...)
+```
+
+Se precisa que esteja visível:
+
+```python
+EC.visibility_of_element_located(...)
+```
+
+Se pretende clicar:
+
+```python
+EC.element_to_be_clickable(...)
+```
+
+---
+
+# `WebDriverWait` + `EC` no seu código
+
+Você possui:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+Depois:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Depois:
+
+```python
+wait.until(
+    EC.presence_of_all_elements_located(
+        (By.CSS_SELECTOR, "div.yuRUbf a")
+    )
+)
+```
+
+Ou seja, você criou uma espera reutilizável:
+
+```text
+wait
+ ↓
+WebDriverWait(driver, 10)
+```
+
+e pode utilizar várias vezes:
+
+```python
+wait.until(...)
+wait.until(...)
+wait.until(...)
+```
+
+Isso evita criar um novo `WebDriverWait` toda vez.
+
+---
+
+# `presence_of_all_elements_located()`
+
+Você também utiliza:
+
+```python
+wait.until(
+    EC.presence_of_all_elements_located(
+        (By.CSS_SELECTOR, "div.yuRUbf a")
+    )
+)
+```
+
+Essa condição é semelhante a:
+
+```python
+EC.presence_of_element_located()
+```
+
+mas trabalha com **todos os elementos que correspondem ao locator**.
+
+---
+
+## Parâmetro
+
+| Parâmetro | Tipo    | Obrigatório | Descrição                                  |
+| --------- | ------- | ----------- | ------------------------------------------ |
+| `locator` | `tuple` | Sim         | Define como os elementos serão localizados |
+
+Exemplo:
+
+```python
+(By.CSS_SELECTOR, "div.yuRUbf a")
+```
+
+---
+
+## Retorno
+
+Quando encontra os elementos, retorna uma lista:
+
+```text
+[
+    WebElement,
+    WebElement,
+    WebElement
+]
+```
+
+Isso é compatível com:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+```
+
+---
+
+# `presence_of_element_located()` x `presence_of_all_elements_located()`
+
+### Um elemento
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+Conceito:
+
+```text
+espere um elemento
+```
+
+### Vários elementos
+
+```python
+wait.until(
+    EC.presence_of_all_elements_located(
+        (By.CSS_SELECTOR, "div.yuRUbf a")
+    )
+)
+```
+
+Conceito:
+
+```text
+espere os elementos correspondentes
+```
+
+---
+
+# O que `until()` faz internamente?
+
+De forma simplificada, podemos imaginar:
+
+```text
+until(condição)
+      │
+      ▼
+verifica condição
+      │
+      ├── aconteceu?
+      │      │
+      │      └── SIM → retorna resultado
+      │
+      └── NÃO
+             │
+             ▼
+        espera um pouco
+             │
+             ▼
+        verifica novamente
+```
+
+Esse processo continua até:
+
+```text
+condição satisfeita
+```
+
+ou:
+
+```text
+tempo máximo atingido
+```
+
+---
+
+# O que acontece quando o timeout é atingido?
+
+Se a condição não acontecer dentro do tempo definido:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+e os 10 segundos forem ultrapassados, o Selenium lança:
+
+```text
+TimeoutException
+```
+
+Por isso podemos tratar:
+
+```python
+from selenium.common.exceptions import TimeoutException
+```
+
+Exemplo:
+
+```python
+try:
+
+    elemento = wait.until(
+        EC.presence_of_element_located(
+            (By.ID, "login")
+        )
+    )
+
+except TimeoutException:
+
+    print(
+        "Elemento não apareceu dentro do tempo."
+    )
+```
+
+---
+
+# `lambda` com `until()`
+
+No seu código existe outra forma importante de usar `until()`:
+
+```python
+wait.until(
+    lambda d: d.execute_script(
+        "return document.readyState"
+    ) == "complete"
+)
+```
+
+Aqui não estamos utilizando uma condição pronta do `EC`.
+
+Estamos fornecendo nossa própria função:
+
+```python
+lambda d: ...
+```
+
+A ideia é:
+
+```text
+WebDriverWait
+      ↓
+until()
+      ↓
+executa a função
+      ↓
+verifica o resultado
+```
+
+Se a função retornar um valor considerado verdadeiro, a espera termina.
+
+No seu caso:
+
+```javascript
+document.readyState
+```
+
+é consultado.
+
+Quando retornar:
+
+```text
+"complete"
+```
+
+a condição:
+
+```python
+== "complete"
+```
+
+será verdadeira.
+
+---
+
+# `until()` pode esperar condições diferentes
+
+Exemplo com elemento:
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.ID, "login")
+    )
+)
+```
+
+Exemplo com visibilidade:
+
+```python
+wait.until(
+    EC.visibility_of_element_located(
+        (By.ID, "login")
+    )
+)
+```
+
+Exemplo com clique:
+
+```python
+wait.until(
+    EC.element_to_be_clickable(
+        (By.ID, "login")
+    )
+)
+```
+
+Exemplo com uma função própria:
+
+```python
+wait.until(
+    lambda d: d.title == "Google"
+)
+```
+
+---
+
+# `time.sleep()` x `WebDriverWait`
+
+No seu programa você também utiliza:
+
+```python
+time.sleep(2)
+```
+
+Isso é diferente de:
+
+```python
+wait.until(...)
+```
+
+### `time.sleep(2)`
+
+Significa:
+
+```text
+pare por 2 segundos
+```
+
+Não importa se a página terminou antes.
+
+```text
+0s ─────────────── 2s
+       espera
+```
+
+---
+
+### `WebDriverWait`
+
+Significa:
+
+```text
+espere até uma condição
+por no máximo X segundos
+```
+
+Se a condição acontecer rapidamente:
+
+```text
+0s ── condição satisfeita
+      ↓
+   continua
+```
+
+---
+
+# Por que `WebDriverWait` geralmente é melhor?
+
+Imagine:
+
+```python
+time.sleep(10)
+```
+
+mas o elemento aparece em:
+
+```text
+1 segundo
+```
+
+Você desperdiçou aproximadamente:
+
+```text
+9 segundos
+```
+
+Com:
+
+```python
+wait.until(...)
+```
+
+a execução continua assim que a condição é satisfeita.
+
+Por isso, para sincronizar a automação com uma página dinâmica, `WebDriverWait` costuma ser muito mais apropriado.
+
+---
+
+# Estrutura recomendada
+
+Um padrão bastante comum:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+
+elemento = wait.until(
+    EC.presence_of_element_located(
+        (By.ID, "elemento")
+    )
+)
+```
+
+Depois:
+
+```python
+elemento.click()
+```
+
+ou:
+
+```python
+elemento.send_keys(
+    "texto"
+)
+```
+
+---
+
+# Resumo mental
+
+Quando encontrar:
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+leia:
+
+```text
+wait
+ ↓
+espere
+ ↓
+until
+ ↓
+até que
+ ↓
+presence_of_element_located
+ ↓
+o elemento esteja presente
+ ↓
+(By.NAME, "q")
+ ↓
+usando NAME
+com valor "q"
+```
+
+E:
+
+```python
+wait.until(
+    EC.presence_of_all_elements_located(
+        (By.CSS_SELECTOR, "div.yuRUbf a")
+    )
+)
+```
+
+leia:
+
+```text
+espere até existirem
+os elementos correspondentes
+ao CSS Selector
+"div.yuRUbf a"
+```
+
+---
+
+# Estrutura das esperas
+
+```text
+Esperas
+│
+├── WebDriverWait
+│      │
+│      └── until()
+│
+└── EC
+       │
+       ├── presence_of_element_located()
+       │
+       ├── presence_of_all_elements_located()
+       │
+       ├── visibility_of_element_located()
+       │
+       └── element_to_be_clickable()
+```
+
+---
+
+# Resumo
+
+`WebDriverWait`:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+cria uma espera explícita com tempo máximo de 10 segundos.
+
+`until()`:
+
+```python
+wait.until(
+    condição
+)
+```
+
+espera até que uma condição seja satisfeita.
+
+`EC`:
+
+```python
+EC.presence_of_element_located(...)
+```
+
+fornece condições prontas para utilizar com `WebDriverWait`.
+
+`presence_of_element_located()`:
+
+```python
+EC.presence_of_element_located(
+    (By.NAME, "q")
+)
+```
+
+espera um elemento estar presente no DOM.
+
+`visibility_of_element_located()`:
+
+```python
+EC.visibility_of_element_located(
+    (By.ID, "login")
+)
+```
+
+espera o elemento estar presente e visível.
+
+`element_to_be_clickable()`:
+
+```python
+EC.element_to_be_clickable(
+    (By.ID, "entrar")
+)
+```
+
+espera o elemento estar em condição de ser clicado.
+
+`presence_of_all_elements_located()`:
+
+```python
+EC.presence_of_all_elements_located(
+    (By.CSS_SELECTOR, "div.yuRUbf a")
+)
+```
+
+espera os elementos correspondentes ao locator e retorna uma coleção/lista de elementos.
+
+A ideia principal é:
+
+```text
+WebDriverWait
+      ↓
+until()
+      ↓
+condição
+      ↓
+elemento/resultado disponível
+      ↓
+continua a execução
+```
+
+
+---
+
+

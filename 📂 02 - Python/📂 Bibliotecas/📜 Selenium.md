@@ -2126,3 +2126,1301 @@ utilizando CSS Selector
    ↓
 que correspondam a "div.yuRUbf a"
 ```
+
+---
+
+
+# Busca de elementos
+
+## O que é `find_element()`?
+
+`find_element()` é um método utilizado para **localizar um único elemento** dentro da página.
+
+Exemplo:
+
+```python
+elemento = driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+O Selenium procura um elemento que corresponda ao locator informado.
+
+Se encontrar, retorna um objeto:
+
+```text
+WebElement
+```
+
+Esse objeto representa o elemento HTML encontrado.
+
+---
+
+## Sintaxe
+
+```python
+driver.find_element(
+    by,
+    value
+)
+```
+
+Os principais argumentos são:
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Descrição|
+|---|---|---|---|---|
+|`by`|`str`|Sim|—|Estratégia utilizada para localizar o elemento|
+|`value`|`str`|Sim|—|Valor utilizado pela estratégia|
+
+Na prática, normalmente utilizamos constantes da classe `By`:
+
+```python
+driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+---
+
+## O que acontece quando usamos `find_element()`?
+
+Imagine:
+
+```html
+<input id="email">
+```
+
+Quando fazemos:
+
+```python
+email = driver.find_element(
+    By.ID,
+    "email"
+)
+```
+
+o Selenium:
+
+```text
+procura na página
+      ↓
+encontra <input id="email">
+      ↓
+cria/retorna uma referência ao elemento
+      ↓
+email
+```
+
+A variável:
+
+```python
+email
+```
+
+passa a representar aquele elemento.
+
+---
+
+## O retorno de `find_element()`
+
+Quando encontra o elemento, o retorno é um:
+
+```text
+WebElement
+```
+
+Por isso podemos fazer:
+
+```python
+email.click()
+```
+
+ou:
+
+```python
+email.send_keys(
+    "teste@example.com"
+)
+```
+
+ou:
+
+```python
+print(email.text)
+```
+
+O `WebElement` possui seus próprios métodos e propriedades.
+
+---
+
+# O que é `WebElement`?
+
+`WebElement` representa um elemento HTML que foi localizado pelo Selenium.
+
+Por exemplo:
+
+```html
+<button id="entrar">
+    Entrar
+</button>
+```
+
+Depois:
+
+```python
+botao = driver.find_element(
+    By.ID,
+    "entrar"
+)
+```
+
+Agora:
+
+```python
+botao
+```
+
+representa o elemento:
+
+```html
+<button id="entrar">
+    Entrar
+</button>
+```
+
+Podemos pensar:
+
+```text
+HTML
+ │
+ └── <button id="entrar">
+             │
+             ▼
+        find_element()
+             │
+             ▼
+         WebElement
+             │
+      ┌──────┼────────┐
+      ▼      ▼        ▼
+    click  text   get_attribute()
+```
+
+---
+
+# `find_elements()`
+
+## O que é?
+
+`find_elements()` é semelhante ao `find_element()`, mas em vez de procurar **um elemento**, procura **todos os elementos que correspondem ao locator**.
+
+Exemplo:
+
+```html
+<a href="https://example.com">
+    Example
+</a>
+
+<a href="https://example.org">
+    Example.org
+</a>
+
+<a href="https://example.net">
+    Example.net
+</a>
+```
+
+Podemos fazer:
+
+```python
+links = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+Agora:
+
+```python
+links
+```
+
+contém vários elementos.
+
+---
+
+## Sintaxe
+
+```python
+driver.find_elements(
+    by,
+    value
+)
+```
+
+Os parâmetros são:
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Descrição|
+|---|---|---|---|---|
+|`by`|`str`|Sim|—|Estratégia utilizada para localizar|
+|`value`|`str`|Sim|—|Valor utilizado na busca|
+
+---
+
+## Retorno de `find_elements()`
+
+Diferentemente de `find_element()`, o retorno é uma lista de `WebElement`.
+
+Conceitualmente:
+
+```python
+[
+    WebElement,
+    WebElement,
+    WebElement
+]
+```
+
+Por exemplo:
+
+```python
+links = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+Podemos percorrer:
+
+```python
+for link in links:
+    print(link.text)
+```
+
+---
+
+# Diferença entre `find_element()` e `find_elements()`
+
+Essa diferença é fundamental.
+
+### `find_element()`
+
+Retorna **um único `WebElement`**.
+
+```python
+elemento = driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+Resultado conceitual:
+
+```text
+WebElement
+```
+
+---
+
+### `find_elements()`
+
+Retorna **uma lista de `WebElement`**.
+
+```python
+elementos = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+Resultado conceitual:
+
+```text
+[
+    WebElement,
+    WebElement,
+    WebElement
+]
+```
+
+---
+
+# E se nenhum elemento for encontrado?
+
+Existe uma diferença importante.
+
+Com:
+
+```python
+driver.find_element(...)
+```
+
+se nenhum elemento for encontrado, o Selenium lança uma exceção:
+
+```text
+NoSuchElementException
+```
+
+Exemplo:
+
+```python
+try:
+
+    elemento = driver.find_element(
+        By.ID,
+        "elemento-inexistente"
+    )
+
+except Exception as erro:
+
+    print(erro)
+```
+
+---
+
+Com:
+
+```python
+driver.find_elements(...)
+```
+
+se nenhum elemento for encontrado, normalmente o retorno é uma lista vazia:
+
+```python
+[]
+```
+
+Exemplo:
+
+```python
+elementos = driver.find_elements(
+    By.ID,
+    "elemento-inexistente"
+)
+
+print(elementos)
+```
+
+Resultado:
+
+```text
+[]
+```
+
+Isso é uma diferença extremamente importante.
+
+---
+
+# Índices de `find_elements()`
+
+Como `find_elements()` retorna uma lista, podemos utilizar índices.
+
+Exemplo:
+
+```python
+links = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+Primeiro elemento:
+
+```python
+links[0]
+```
+
+Segundo:
+
+```python
+links[1]
+```
+
+Terceiro:
+
+```python
+links[2]
+```
+
+Exemplo:
+
+```python
+link = links[0]
+
+print(link.text)
+```
+
+---
+
+# Exemplo do seu código
+
+Você possui:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+```
+
+O Selenium procura todos os elementos que correspondem a:
+
+```css
+div.yuRUbf a
+```
+
+O resultado é uma lista:
+
+```text
+resultados
+│
+├── WebElement
+├── WebElement
+├── WebElement
+├── WebElement
+└── ...
+```
+
+Depois seu código faz:
+
+```python
+link = resultados[numero]
+```
+
+Por exemplo, se:
+
+```python
+numero = 0
+```
+
+então:
+
+```python
+link = resultados[0]
+```
+
+pega o primeiro resultado.
+
+Se:
+
+```python
+numero = 1
+```
+
+então:
+
+```python
+link = resultados[1]
+```
+
+pega o segundo.
+
+---
+
+# `len()`
+
+Como `find_elements()` retorna uma lista, podemos utilizar:
+
+```python
+len(resultados)
+```
+
+para descobrir quantos elementos foram encontrados.
+
+Exemplo:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+
+print(
+    len(resultados)
+)
+```
+
+Se foram encontrados 10 elementos:
+
+```text
+10
+```
+
+---
+
+# A lógica do seu `if`
+
+Seu código possui:
+
+```python
+if numero >= len(resultados):
+    print("Não existem mais resultados disponíveis.")
+    break
+```
+
+Imagine que:
+
+```text
+len(resultados) = 5
+```
+
+Os índices válidos são:
+
+```text
+0
+1
+2
+3
+4
+```
+
+Quando:
+
+```python
+numero = 5
+```
+
+temos:
+
+```python
+5 >= 5
+```
+
+que é:
+
+```text
+True
+```
+
+Então o código executa:
+
+```python
+break
+```
+
+Isso evita tentar:
+
+```python
+resultados[5]
+```
+
+porque o índice `5` não existe nessa lista.
+
+---
+
+# `WebElement.click()`
+
+## O que é?
+
+Depois que encontramos um elemento, podemos utilizar:
+
+```python
+elemento.click()
+```
+
+para clicar nele.
+
+Exemplo:
+
+```python
+botao = driver.find_element(
+    By.ID,
+    "entrar"
+)
+
+botao.click()
+```
+
+---
+
+## Sintaxe
+
+```python
+elemento.click()
+```
+
+Não possui parâmetros obrigatórios.
+
+O elemento já foi definido através do objeto `WebElement`.
+
+---
+
+# `send_keys()`
+
+## O que é?
+
+`send_keys()` envia teclas/caracteres para um elemento.
+
+É muito utilizado para preencher campos.
+
+Exemplo:
+
+```html
+<input name="q">
+```
+
+Python:
+
+```python
+pesquisa = driver.find_element(
+    By.NAME,
+    "q"
+)
+
+pesquisa.send_keys(
+    "Selenium Python"
+)
+```
+
+O resultado será semelhante a digitar manualmente:
+
+```text
+Selenium Python
+```
+
+no campo.
+
+---
+
+## Sintaxe
+
+```python
+elemento.send_keys(*value)
+```
+
+O argumento recebe os caracteres/teclas que devem ser enviados.
+
+Exemplo:
+
+```python
+pesquisa.send_keys(
+    "Selenium"
+)
+```
+
+---
+
+## Tipo
+
+O texto normalmente é uma:
+
+```python
+str
+```
+
+Exemplo:
+
+```python
+pesquisa.send_keys(
+    "Cyber Security"
+)
+```
+
+---
+
+# `send_keys()` também pode enviar teclas especiais
+
+O Selenium possui teclas especiais através de:
+
+```python
+from selenium.webdriver.common.keys import Keys
+```
+
+Por exemplo:
+
+```python
+campo.send_keys(
+    Keys.ENTER
+)
+```
+
+Isso envia a tecla Enter.
+
+Outro exemplo:
+
+```python
+campo.send_keys(
+    "texto",
+    Keys.ENTER
+)
+```
+
+Conceitualmente:
+
+```text
+digita "texto"
+      ↓
+pressiona ENTER
+```
+
+---
+
+# `clear()`
+
+## O que é?
+
+`clear()` limpa o conteúdo de um campo de entrada.
+
+Imagine:
+
+```text
++----------------------+
+| Selenium Python      |
++----------------------+
+```
+
+Depois:
+
+```python
+campo.clear()
+```
+
+fica:
+
+```text
++----------------------+
+|                      |
++----------------------+
+```
+
+---
+
+## Sintaxe
+
+```python
+campo.clear()
+```
+
+Não possui parâmetros obrigatórios.
+
+---
+
+## Exemplo
+
+```python
+campo = driver.find_element(
+    By.NAME,
+    "q"
+)
+
+campo.send_keys(
+    "primeira pesquisa"
+)
+
+campo.clear()
+
+campo.send_keys(
+    "segunda pesquisa"
+)
+```
+
+---
+
+# `WebElement.text`
+
+## O que é?
+
+`text` é uma propriedade que permite obter o texto visível associado ao elemento.
+
+HTML:
+
+```html
+<h1>
+    Página inicial
+</h1>
+```
+
+Python:
+
+```python
+titulo = driver.find_element(
+    By.TAG_NAME,
+    "h1"
+)
+
+print(titulo.text)
+```
+
+Resultado:
+
+```text
+Página inicial
+```
+
+---
+
+## É método ou propriedade?
+
+`text` é uma propriedade.
+
+Por isso utilizamos:
+
+```python
+elemento.text
+```
+
+e não:
+
+```python
+elemento.text()
+```
+
+---
+
+## Tipo do retorno
+
+Normalmente retorna:
+
+```python
+str
+```
+
+---
+
+# `get_attribute()`
+
+## O que é?
+
+`get_attribute()` permite obter o valor de um atributo HTML de um `WebElement`.
+
+Imagine:
+
+```html
+<a
+    href="https://example.com"
+    class="link"
+>
+    Example
+</a>
+```
+
+Podemos obter o `href`:
+
+```python
+link = driver.find_element(
+    By.TAG_NAME,
+    "a"
+)
+
+url = link.get_attribute(
+    "href"
+)
+
+print(url)
+```
+
+Resultado:
+
+```text
+https://example.com
+```
+
+---
+
+## Sintaxe
+
+```python
+elemento.get_attribute(name)
+```
+
+### Parâmetros
+
+|Parâmetro|Tipo|Obrigatório|Descrição|
+|---|---|---|---|
+|`name`|`str`|Sim|Nome do atributo HTML que será obtido|
+
+Exemplo:
+
+```python
+link.get_attribute(
+    "href"
+)
+```
+
+Aqui:
+
+```text
+"href"
+   ↓
+nome do atributo
+```
+
+---
+
+# Exemplos de atributos
+
+HTML:
+
+```html
+<input
+    id="email"
+    name="email"
+    type="text"
+    placeholder="Digite seu email"
+>
+```
+
+Podemos obter:
+
+```python
+elemento.get_attribute(
+    "id"
+)
+```
+
+```python
+elemento.get_attribute(
+    "name"
+)
+```
+
+```python
+elemento.get_attribute(
+    "type"
+)
+```
+
+```python
+elemento.get_attribute(
+    "placeholder"
+)
+```
+
+---
+
+# O `get_attribute("href")` do seu código
+
+Você utiliza:
+
+```python
+url = link.get_attribute(
+    "href"
+)
+```
+
+Imagine que `link` represente:
+
+```html
+<a href="https://example.com">
+    Example
+</a>
+```
+
+Então:
+
+```python
+link.get_attribute("href")
+```
+
+retorna:
+
+```text
+https://example.com
+```
+
+Isso permite obter o endereço do link **sem precisar clicar nele primeiro**.
+
+---
+
+# `click()` x `get_attribute()`
+
+São operações diferentes.
+
+```python
+link.click()
+```
+
+interage com o elemento.
+
+Enquanto:
+
+```python
+link.get_attribute(
+    "href"
+)
+```
+
+consulta uma informação do elemento.
+
+Podemos fazer ambos:
+
+```python
+link = driver.find_element(
+    By.TAG_NAME,
+    "a"
+)
+
+url = link.get_attribute(
+    "href"
+)
+
+link.click()
+```
+
+Primeiro obtemos a URL e depois clicamos.
+
+---
+
+# `WebElement` no seu programa
+
+No seu código:
+
+```python
+link = resultados[numero]
+```
+
+`link` é um:
+
+```text
+WebElement
+```
+
+Por isso você consegue fazer:
+
+```python
+link.get_attribute(
+    "href"
+)
+```
+
+e:
+
+```python
+link.click()
+```
+
+O objeto `link` possui métodos e propriedades próprios.
+
+---
+
+# Estrutura do `WebElement`
+
+Podemos organizar:
+
+```text
+WebElement
+│
+├── click()
+│
+├── send_keys()
+│
+├── clear()
+│
+├── text
+│
+└── get_attribute()
+```
+
+### `click()`
+
+Interage clicando no elemento.
+
+```python
+elemento.click()
+```
+
+### `send_keys()`
+
+Envia texto/teclas.
+
+```python
+elemento.send_keys(
+    "texto"
+)
+```
+
+### `clear()`
+
+Limpa o conteúdo de um campo.
+
+```python
+elemento.clear()
+```
+
+### `text`
+
+Obtém o texto do elemento.
+
+```python
+elemento.text
+```
+
+### `get_attribute()`
+
+Obtém o valor de um atributo HTML.
+
+```python
+elemento.get_attribute(
+    "href"
+)
+```
+
+---
+
+# Exemplo completo
+
+HTML hipotético:
+
+```html
+<input
+    id="pesquisa"
+    name="q"
+    type="text"
+    placeholder="Pesquisar"
+>
+
+<a
+    href="https://example.com"
+    class="resultado"
+>
+    Example
+</a>
+```
+
+Python:
+
+```python
+campo = driver.find_element(
+    By.ID,
+    "pesquisa"
+)
+
+campo.clear()
+
+campo.send_keys(
+    "Selenium Python"
+)
+
+link = driver.find_element(
+    By.CLASS_NAME,
+    "resultado"
+)
+
+print(
+    link.text
+)
+
+print(
+    link.get_attribute(
+        "href"
+    )
+)
+
+link.click()
+```
+
+Fluxo:
+
+```text
+find_element()
+      ↓
+WebElement
+      ↓
+clear()
+      ↓
+send_keys()
+      ↓
+find_element()
+      ↓
+WebElement
+      ↓
+text
+      ↓
+get_attribute()
+      ↓
+click()
+```
+
+---
+
+# Resumo
+
+```text
+driver
+│
+├── find_element()
+│      ↓
+│   WebElement
+│
+└── find_elements()
+       ↓
+   list[WebElement]
+```
+
+`find_element()`:
+
+```python
+elemento = driver.find_element(
+    By.ID,
+    "login"
+)
+```
+
+Retorna um `WebElement`.
+
+`find_elements()`:
+
+```python
+elementos = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+```
+
+Retorna uma lista de `WebElement`.
+
+Depois que temos um `WebElement`, podemos utilizar:
+
+```python
+elemento.click()
+```
+
+```python
+elemento.send_keys(
+    "texto"
+)
+```
+
+```python
+elemento.clear()
+```
+
+```python
+elemento.text
+```
+
+```python
+elemento.get_attribute(
+    "href"
+)
+```
+
+A diferença entre:
+
+```python
+find_element()
+```
+
+e:
+
+```python
+find_elements()
+```
+
+é uma das partes mais importantes para dominar o Selenium:
+
+```text
+find_element()
+      ↓
+1 elemento
+      ↓
+WebElement
+
+find_elements()
+      ↓
+vários elementos
+      ↓
+lista de WebElement
+```

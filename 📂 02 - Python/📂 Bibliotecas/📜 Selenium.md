@@ -6263,3 +6263,1601 @@ continua a execução
 ---
 
 
+# `undetected_chromedriver`
+
+## O que é?
+
+`undetected_chromedriver` é uma biblioteca baseada no Selenium que fornece uma forma alternativa de iniciar e controlar o Chrome.
+
+Importação:
+
+```python
+import undetected_chromedriver as uc
+```
+
+O:
+
+```python
+as uc
+```
+
+é apenas um **apelido**.
+
+Em vez de escrever:
+
+```python
+undetected_chromedriver.Chrome()
+```
+
+podemos escrever:
+
+```python
+uc.Chrome()
+```
+
+---
+
+# Selenium x `undetected_chromedriver`
+
+O Selenium fornece a API para controlar o navegador.
+
+Por exemplo:
+
+```python
+driver.get(...)
+driver.find_element(...)
+driver.execute_script(...)
+```
+
+Já o `undetected_chromedriver` fornece uma implementação para iniciar o Chrome de uma maneira que tenta reduzir alguns sinais de automação.
+
+Podemos visualizar:
+
+```text
+Selenium
+   │
+   ├── API de automação
+   ├── find_element()
+   ├── WebDriverWait
+   ├── WebElement
+   └── execute_script()
+          │
+          ▼
+undetected_chromedriver
+          │
+          ▼
+      ChromeDriver
+          │
+          ▼
+        Chrome
+```
+
+O `undetected_chromedriver` **não substitui todo o Selenium**.
+
+Você continua utilizando várias classes do Selenium normalmente:
+
+```python
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+```
+
+---
+
+# Importante sobre "undetected"
+
+O nome `undetected` pode dar a impressão de que o navegador se torna impossível de detectar.
+
+Não é isso.
+
+A biblioteca tenta reduzir determinados sinais que podem identificar automação, mas:
+
+```text
+undetected ≠ impossível de detectar
+```
+
+Sites podem utilizar diversas técnicas diferentes para identificar automação, e nenhuma biblioteca garante anonimato ou invisibilidade.
+
+Para estudar Selenium, o mais importante é entender a automação em si.
+
+---
+
+# `uc.Chrome()`
+
+Para iniciar o navegador:
+
+```python
+driver = uc.Chrome()
+```
+
+Isso cria o WebDriver baseado no Chrome.
+
+Depois:
+
+```python
+driver
+```
+
+é utilizado da mesma maneira que um driver Selenium convencional.
+
+Exemplo:
+
+```python
+driver.get(
+    "https://example.com"
+)
+
+print(driver.title)
+
+driver.quit()
+```
+
+---
+
+# `version_main`
+
+No seu código:
+
+```python
+driver = uc.Chrome(
+    version_main=151
+)
+```
+
+O argumento:
+
+```python
+version_main
+```
+
+permite informar a versão principal do Chrome que deve ser considerada pelo `undetected_chromedriver`.
+
+Exemplo:
+
+```python
+version_main=151
+```
+
+significa a versão principal:
+
+```text
+151
+```
+
+---
+
+## Parâmetro
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Descrição|
+|---|---|---|---|---|
+|`version_main`|`int`|Não|automático|Versão principal do Chrome a ser utilizada|
+
+Portanto:
+
+```python
+uc.Chrome()
+```
+
+pode ser suficiente em muitos ambientes.
+
+Você pode especificar:
+
+```python
+uc.Chrome(
+    version_main=151
+)
+```
+
+quando precisa trabalhar com uma versão específica.
+
+---
+
+# Por que a versão do Chrome importa?
+
+O navegador Chrome e o ChromeDriver precisam ser compatíveis.
+
+Conceitualmente:
+
+```text
+Chrome
+  ↕
+ChromeDriver
+  ↕
+Selenium
+```
+
+Se houver incompatibilidade de versões, podem aparecer problemas ao iniciar o navegador ou durante a automação.
+
+Por isso, quando você utiliza:
+
+```python
+version_main=151
+```
+
+está informando a versão principal esperada.
+
+---
+
+# `uc.Chrome()` possui vários parâmetros
+
+O construtor do `undetected_chromedriver` possui diversos parâmetros além de:
+
+```python
+version_main
+```
+
+Você não precisa memorizar todos inicialmente.
+
+Os mais importantes para começar são:
+
+```python
+uc.Chrome()
+```
+
+e:
+
+```python
+uc.Chrome(
+    version_main=151
+)
+```
+
+Outras configurações podem ser adicionadas conforme surgir necessidade específica, como opções do navegador, argumentos do Chrome, perfil, porta etc.
+
+A ideia inicial é:
+
+```text
+uc.Chrome()
+    ↓
+inicia Chrome
+
+uc.Chrome(version_main=151)
+    ↓
+inicia Chrome considerando versão principal 151
+```
+
+---
+
+# Imports do seu projeto
+
+Seu código começa com:
+
+```python
+import argparse
+import time
+
+import undetected_chromedriver as uc
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+```
+
+Cada import possui uma função diferente.
+
+Podemos separar:
+
+```text
+Python
+│
+├── argparse
+└── time
+
+Biblioteca externa
+│
+├── undetected_chromedriver
+└── selenium
+```
+
+---
+
+# `argparse`
+
+## O que é?
+
+`argparse` é uma biblioteca padrão do Python utilizada para criar argumentos de linha de comando.
+
+Seu programa pode ser executado assim:
+
+```bash
+python3 main.py -q 10 -d "python selenium"
+```
+
+Em vez de deixar os valores fixos no código, o usuário fornece os valores pelo terminal.
+
+---
+
+# `ArgumentParser`
+
+Você utiliza:
+
+```python
+parser = argparse.ArgumentParser(
+    description="Navega pelos resultados de uma pesquisa."
+)
+```
+
+`ArgumentParser` cria o objeto responsável por interpretar os argumentos.
+
+O parâmetro:
+
+```python
+description
+```
+
+é opcional.
+
+Ele serve para explicar o programa quando o usuário executa:
+
+```bash
+python3 main.py --help
+```
+
+---
+
+# `add_argument()`
+
+Você utiliza:
+
+```python
+parser.add_argument(
+    "-q",
+    "--quantidade",
+    type=int,
+    default=5,
+    help="Quantidade de sites para visitar. Padrão: 5"
+)
+```
+
+Isso cria um argumento de linha de comando.
+
+---
+
+## Parâmetros
+
+|Parâmetro|Tipo|Obrigatório|Função|
+|---|---|---|---|
+|`"-q"`|`str`|Não|Forma curta|
+|`"--quantidade"`|`str`|Não|Forma longa|
+|`type=int`|função|Não|Converte o valor para `int`|
+|`default=5`|qualquer|Não|Valor usado se argumento não for fornecido|
+|`help`|`str`|Não|Descrição exibida no `--help`|
+
+Então:
+
+```bash
+python3 main.py -q 10
+```
+
+produz:
+
+```python
+args.quantidade
+```
+
+com:
+
+```text
+10
+```
+
+como `int`.
+
+---
+
+# Argumento obrigatório
+
+Você utiliza:
+
+```python
+parser.add_argument(
+    "-d",
+    "--docs",
+    required=True,
+    help="Termo que será pesquisado no Google."
+)
+```
+
+O:
+
+```python
+required=True
+```
+
+significa que o usuário **precisa fornecer esse argumento**.
+
+Portanto:
+
+```bash
+python3 main.py
+```
+
+não é suficiente.
+
+Precisamos fornecer:
+
+```bash
+python3 main.py -d "selenium python"
+```
+
+---
+
+# `args`
+
+Depois:
+
+```python
+args = parser.parse_args()
+```
+
+o `argparse` interpreta os argumentos enviados pelo terminal.
+
+Por exemplo:
+
+```bash
+python3 main.py -q 10 -d "selenium"
+```
+
+resultará conceitualmente em:
+
+```python
+args.quantidade
+# 10
+
+args.docs
+# "selenium"
+```
+
+---
+
+# `parse_args()`
+
+```python
+args = parser.parse_args()
+```
+
+é o momento em que o Python lê os argumentos fornecidos pelo usuário.
+
+Fluxo:
+
+```text
+Terminal
+   ↓
+python3 main.py -q 10 -d "selenium"
+   ↓
+argparse
+   ↓
+parse_args()
+   ↓
+args
+   ├── quantidade = 10
+   └── docs = "selenium"
+```
+
+---
+
+# Validação da quantidade
+
+Seu código possui:
+
+```python
+if args.quantidade <= 0:
+    print("A quantidade deve ser maior que 0.")
+    return
+```
+
+Isso impede valores como:
+
+```bash
+-q 0
+```
+
+ou:
+
+```bash
+-q -5
+```
+
+A lógica é:
+
+```text
+quantidade <= 0?
+      │
+   ┌──┴──┐
+  SIM   NÃO
+   │      │
+   ▼      ▼
+erro    continua
+```
+
+---
+
+# A função `search()`
+
+Seu programa possui:
+
+```python
+def search(quantidade, docs):
+```
+
+Ela recebe dois valores:
+
+```text
+quantidade
+docs
+```
+
+A responsabilidade dela é executar a automação.
+
+Podemos visualizar:
+
+```text
+main()
+ │
+ ├── lê argumentos
+ │
+ └── search(
+       quantidade,
+       docs
+    )
+          │
+          ▼
+      Selenium
+          │
+          ▼
+      pesquisa
+          │
+          ▼
+      resultados
+          │
+          ▼
+      visita sites
+```
+
+---
+
+# Fluxo completo do seu programa
+
+Seu programa pode ser entendido como várias etapas.
+
+```text
+1. Importações
+      ↓
+2. Criar argumentos CLI
+      ↓
+3. Ler argumentos
+      ↓
+4. Validar quantidade
+      ↓
+5. Chamar search()
+      ↓
+6. Criar navegador
+      ↓
+7. Criar WebDriverWait
+      ↓
+8. Abrir Google
+      ↓
+9. Encontrar campo de pesquisa
+      ↓
+10. Digitar pesquisa
+      ↓
+11. Enviar pesquisa
+      ↓
+12. Encontrar resultados
+      ↓
+13. Selecionar resultado
+      ↓
+14. Obter href
+      ↓
+15. Clicar
+      ↓
+16. Esperar página
+      ↓
+17. Obter título
+      ↓
+18. Obter URL
+      ↓
+19. Salvar dados
+      ↓
+20. Voltar
+      ↓
+21. Repetir
+      ↓
+22. Exibir resultados
+      ↓
+23. Fechar navegador
+```
+
+---
+
+# Analisando o início do `search()`
+
+Você faz:
+
+```python
+driver = uc.Chrome(
+    version_main=151
+)
+```
+
+Aqui:
+
+```text
+uc.Chrome()
+      ↓
+cria navegador
+      ↓
+driver
+```
+
+Depois:
+
+```python
+wait = WebDriverWait(
+    driver,
+    10
+)
+```
+
+Agora temos:
+
+```text
+driver
+  ↓
+navegador
+
+wait
+  ↓
+sistema de espera
+```
+
+---
+
+# Abrindo o Google
+
+```python
+driver.get(
+    "https://www.google.com"
+)
+```
+
+O navegador navega para o Google.
+
+Depois:
+
+```python
+pesquisa = wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+O programa espera o campo de pesquisa existir.
+
+Depois:
+
+```python
+pesquisa.send_keys(
+    docs
+)
+```
+
+digita o termo.
+
+E:
+
+```python
+pesquisa.submit()
+```
+
+envia o formulário.
+
+---
+
+# `submit()`
+
+`submit()` é um método do `WebElement`.
+
+Exemplo:
+
+```python
+pesquisa.submit()
+```
+
+Ele tenta enviar o formulário associado ao elemento.
+
+No contexto do seu código:
+
+```text
+campo de pesquisa
+      ↓
+send_keys()
+      ↓
+digita termo
+      ↓
+submit()
+      ↓
+envia pesquisa
+```
+
+---
+
+# Encontrando resultados
+
+Depois da pesquisa:
+
+```python
+wait.until(
+    EC.presence_of_all_elements_located(
+        (By.CSS_SELECTOR, "div.yuRUbf a")
+    )
+)
+```
+
+O Selenium espera os elementos correspondentes ao seletor aparecerem.
+
+Depois:
+
+```python
+resultados = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.yuRUbf a"
+)
+```
+
+obtém os elementos.
+
+A variável:
+
+```python
+resultados
+```
+
+é uma coleção de `WebElement`.
+
+---
+
+# Selecionando um resultado
+
+Você possui:
+
+```python
+link = resultados[numero]
+```
+
+Se:
+
+```text
+numero = 0
+```
+
+então:
+
+```python
+link = resultados[0]
+```
+
+é o primeiro elemento.
+
+Se:
+
+```text
+numero = 1
+```
+
+então:
+
+```python
+link = resultados[1]
+```
+
+é o segundo.
+
+Isso funciona porque listas Python utilizam índice iniciado em `0`.
+
+```text
+índice
+  0 → primeiro
+  1 → segundo
+  2 → terceiro
+  3 → quarto
+```
+
+---
+
+# Obtendo o `href`
+
+Você faz:
+
+```python
+url = link.get_attribute(
+    "href"
+)
+```
+
+`get_attribute()` lê um atributo HTML do elemento.
+
+Se o HTML fosse:
+
+```html
+<a href="https://example.com">
+    Example
+</a>
+```
+
+então:
+
+```python
+link.get_attribute(
+    "href"
+)
+```
+
+retornaria:
+
+```text
+https://example.com
+```
+
+---
+
+# Clicando
+
+Depois:
+
+```python
+driver.execute_script(
+    "arguments[0].click();",
+    link
+)
+```
+
+Como vimos anteriormente:
+
+```text
+arguments[0]
+      ↓
+link
+
+.click()
+      ↓
+executa clique
+```
+
+---
+
+# Esperando a navegação
+
+Depois você utiliza:
+
+```python
+wait.until(
+    lambda d: d.execute_script(
+        "return document.readyState"
+    ) == "complete"
+)
+```
+
+A função verifica:
+
+```text
+document.readyState
+       ↓
+   "complete"?
+       ↓
+      SIM
+       ↓
+ continua
+```
+
+---
+
+# Coletando informações
+
+Depois:
+
+```python
+titulo = driver.title
+```
+
+obtém o título.
+
+E:
+
+```python
+driver.current_url
+```
+
+obtém a URL atual.
+
+Então você salva:
+
+```python
+sites_visitados.append({
+    "title": titulo,
+    "url": driver.current_url
+})
+```
+
+O resultado fica semelhante a:
+
+```python
+[
+    {
+        "title": "Site 1",
+        "url": "https://site1.com"
+    },
+    {
+        "title": "Site 2",
+        "url": "https://site2.com"
+    }
+]
+```
+
+---
+
+# `append()`
+
+Aqui:
+
+```python
+sites_visitados.append(...)
+```
+
+`append()` é um método de listas Python.
+
+Ele adiciona um novo elemento ao final da lista.
+
+Começamos:
+
+```python
+sites_visitados = []
+```
+
+Depois:
+
+```python
+sites_visitados.append(
+    {
+        "title": "Site 1",
+        "url": "https://site1.com"
+    }
+)
+```
+
+Agora:
+
+```python
+sites_visitados
+```
+
+contém:
+
+```python
+[
+    {
+        "title": "Site 1",
+        "url": "https://site1.com"
+    }
+]
+```
+
+---
+
+# Voltando para a pesquisa
+
+Depois de visitar:
+
+```python
+driver.back()
+```
+
+O navegador volta para a página anterior.
+
+Depois:
+
+```python
+wait.until(
+    EC.presence_of_element_located(
+        (By.NAME, "q")
+    )
+)
+```
+
+espera novamente o campo de pesquisa existir.
+
+Então o loop continua.
+
+---
+
+# O `for`
+
+Seu código:
+
+```python
+for numero in range(quantidade):
+```
+
+controla quantos resultados serão processados.
+
+Se:
+
+```text
+quantidade = 5
+```
+
+então:
+
+```python
+range(5)
+```
+
+produz:
+
+```text
+0
+1
+2
+3
+4
+```
+
+Portanto são cinco iterações.
+
+---
+
+# Por que `numero + 1`?
+
+Você exibe:
+
+```python
+print(
+    f"[{numero + 1}/{quantidade}]"
+)
+```
+
+O índice começa em `0`, mas para o usuário queremos mostrar:
+
+```text
+[1/5]
+[2/5]
+[3/5]
+[4/5]
+[5/5]
+```
+
+Por isso:
+
+```python
+numero + 1
+```
+
+---
+
+# Tratamento de exceções
+
+Você utiliza:
+
+```python
+try:
+
+    # automação
+
+except Exception as erro:
+
+    print(erro)
+```
+
+Isso permite capturar exceções que aconteçam durante aquela tentativa.
+
+Depois:
+
+```python
+try:
+    driver.get(...)
+except:
+    pass
+```
+
+tenta voltar para a pesquisa caso alguma operação tenha falhado.
+
+---
+
+# Uma observação importante sobre `except Exception`
+
+Seu código usa:
+
+```python
+except Exception as erro:
+```
+
+Isso captura praticamente todas as exceções comuns derivadas de `Exception`.
+
+É útil durante desenvolvimento para evitar que um erro em um resultado encerre imediatamente todo o programa.
+
+Porém, em programas maiores, é melhor capturar exceções específicas quando você sabe quais podem acontecer.
+
+Por exemplo:
+
+```python
+from selenium.common.exceptions import TimeoutException
+```
+
+e:
+
+```python
+except TimeoutException:
+    ...
+```
+
+Isso deixa o tratamento mais preciso.
+
+---
+
+# `KeyboardInterrupt`
+
+Você também pode tratar:
+
+```python
+except KeyboardInterrupt:
+```
+
+Esse erro acontece normalmente quando o usuário pressiona:
+
+```text
+Ctrl + C
+```
+
+No seu código:
+
+```python
+except KeyboardInterrupt:
+    print("\nPrograma encerrado.")
+```
+
+permite apresentar uma mensagem antes do encerramento.
+
+---
+
+# `finally`
+
+No final:
+
+```python
+finally:
+    driver.quit()
+```
+
+Isso garante que o navegador seja encerrado ao sair da função `search()`.
+
+A estrutura:
+
+```python
+try:
+    ...
+finally:
+    driver.quit()
+```
+
+é muito útil para recursos que precisam ser liberados.
+
+---
+
+# `if __name__ == "__main__"`
+
+No final do seu arquivo:
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+Essa estrutura verifica se o arquivo está sendo executado diretamente.
+
+Quando fazemos:
+
+```bash
+python3 main.py
+```
+
+temos:
+
+```text
+__name__
+   ↓
+"__main__"
+```
+
+Então:
+
+```python
+main()
+```
+
+é executado.
+
+---
+
+# Por que isso é útil?
+
+Imagine que seu arquivo se chama:
+
+```text
+main.py
+```
+
+Executando diretamente:
+
+```bash
+python3 main.py
+```
+
+temos:
+
+```python
+__name__ == "__main__"
+```
+
+Mas se outro arquivo fizer:
+
+```python
+import main
+```
+
+o código do módulo é carregado como módulo, e:
+
+```python
+__name__
+```
+
+não será `"__main__"`.
+
+Assim:
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+impede que `main()` seja executada automaticamente apenas porque o arquivo foi importado.
+
+---
+
+# Estrutura final do projeto
+
+Seu programa possui uma arquitetura simples e já bastante organizada:
+
+```text
+main.py
+│
+├── imports
+│
+├── search()
+│   │
+│   ├── cria Chrome
+│   ├── cria WebDriverWait
+│   ├── abre Google
+│   ├── encontra pesquisa
+│   ├── pesquisa
+│   ├── encontra resultados
+│   ├── visita resultados
+│   ├── coleta title/url
+│   └── salva informações
+│
+└── main()
+    │
+    ├── configura argparse
+    ├── lê argumentos
+    ├── valida quantidade
+    └── chama search()
+```
+
+---
+
+# Fluxo conceitual de todas as peças
+
+Agora podemos juntar tudo que foi estudado:
+
+```text
+Python
+ │
+ ├── argparse
+ │      ↓
+ │   argumentos do terminal
+ │
+ └── Selenium
+        │
+        ├── uc.Chrome()
+        │      ↓
+        │   navegador
+        │
+        ├── driver
+        │      │
+        │      ├── get()
+        │      ├── back()
+        │      ├── find_element()
+        │      ├── find_elements()
+        │      ├── execute_script()
+        │      ├── title
+        │      ├── current_url
+        │      └── quit()
+        │
+        ├── By
+        │      ↓
+        │   como localizar
+        │
+        ├── WebElement
+        │      ↓
+        │   elemento encontrado
+        │
+        └── WebDriverWait
+               │
+               └── EC
+                    ↓
+                 espera condições
+```
+
+---
+
+# Exemplo mínimo juntando os conceitos
+
+Um exemplo reduzido seria:
+
+```python
+import undetected_chromedriver as uc
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+driver = uc.Chrome()
+
+wait = WebDriverWait(
+    driver,
+    10
+)
+
+try:
+
+    driver.get(
+        "https://www.google.com"
+    )
+
+    pesquisa = wait.until(
+        EC.presence_of_element_located(
+            (By.NAME, "q")
+        )
+    )
+
+    pesquisa.send_keys(
+        "Python Selenium"
+    )
+
+    pesquisa.submit()
+
+finally:
+
+    driver.quit()
+```
+
+Esse pequeno programa já reúne vários conceitos:
+
+```text
+uc.Chrome()
+     ↓
+cria navegador
+
+driver.get()
+     ↓
+abre página
+
+WebDriverWait
+     ↓
+espera
+
+EC.presence_of_element_located()
+     ↓
+localiza condição
+
+By.NAME
+     ↓
+estratégia de localização
+
+WebElement
+     ↓
+elemento encontrado
+
+send_keys()
+     ↓
+digita
+
+submit()
+     ↓
+envia
+
+driver.quit()
+     ↓
+encerra
+```
+
+---
+
+# Mapa geral do Selenium estudado
+
+```text
+Selenium
+│
+├── WebDriver
+│   │
+│   ├── get()
+│   ├── back()
+│   ├── forward()
+│   ├── refresh()
+│   ├── quit()
+│   ├── execute_script()
+│   ├── current_url
+│   └── title
+│
+├── By
+│   │
+│   ├── ID
+│   ├── NAME
+│   ├── CLASS_NAME
+│   ├── TAG_NAME
+│   ├── CSS_SELECTOR
+│   └── XPATH
+│
+├── Busca
+│   │
+│   ├── find_element()
+│   └── find_elements()
+│
+├── WebElement
+│   │
+│   ├── click()
+│   ├── send_keys()
+│   ├── clear()
+│   ├── text
+│   ├── get_attribute()
+│   └── submit()
+│
+└── Esperas
+    │
+    ├── WebDriverWait
+    │   └── until()
+    │
+    └── EC
+        ├── presence_of_element_located()
+        ├── presence_of_all_elements_located()
+        ├── visibility_of_element_located()
+        └── element_to_be_clickable()
+```
+
+---
+
+# Mapa do `undetected_chromedriver`
+
+```text
+undetected_chromedriver
+│
+├── import
+│   └── import undetected_chromedriver as uc
+│
+└── Chrome
+    │
+    ├── uc.Chrome()
+    │
+    └── uc.Chrome(
+            version_main=151
+        )
+```
+
+---
+
+# O mais importante para memorizar
+
+Não é necessário decorar todas as classes e métodos imediatamente.
+
+Primeiro entenda estas relações:
+
+```text
+driver
+ ↓
+controla o navegador
+```
+
+```text
+By
+ ↓
+define como encontrar
+```
+
+```text
+find_element()
+ ↓
+encontra um elemento
+```
+
+```text
+find_elements()
+ ↓
+encontra vários
+```
+
+```text
+WebElement
+ ↓
+representa um elemento HTML
+```
+
+```text
+WebDriverWait
+ ↓
+espera
+```
+
+```text
+EC
+ ↓
+define o que esperar
+```
+
+```text
+execute_script()
+ ↓
+executa JavaScript
+```
+
+E:
+
+```text
+uc.Chrome()
+ ↓
+inicia o Chrome através do undetected_chromedriver
+```
+
+---
+
+# Conclusão
+
+O seu código combina corretamente vários componentes importantes da automação web:
+
+```text
+argparse
+   ↓
+entrada do usuário
+
+undetected_chromedriver
+   ↓
+inicialização do navegador
+
+Selenium
+   ↓
+controle do navegador
+
+By
+   ↓
+localização
+
+WebElement
+   ↓
+interação
+
+WebDriverWait + EC
+   ↓
+sincronização
+
+execute_script()
+   ↓
+JavaScript
+
+try / except / finally
+   ↓
+tratamento de erros e encerramento
+```
+
+Esse fluxo é uma boa base para começar a construir automações maiores com Selenium.
+
+A partir daqui, os próximos assuntos naturais para aprofundar são **seletores CSS e XPath**, **iframes**, **abas/janelas**, **cookies**, **JavaScript**, **ações de mouse/teclado**, **download/upload de arquivos** e **tratamento mais avançado de exceções e waits**.

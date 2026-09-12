@@ -1,3 +1,6 @@
+
+---
+
 # Matemática para Computação
 
 > Conteúdos complementares para expandir conhecimentos matemáticos relacionados à Computação.

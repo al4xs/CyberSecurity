@@ -476,3 +476,8 @@ Não é necessário dominar toda a matemática existente para programar, trabalh
 Entretanto, estudar determinados fundamentos matemáticos pode permitir compreender melhor **como os algoritmos e tecnologias funcionam internamente**, em vez de apenas utilizá-los.
 
 > **Aprender quando houver motivo para aprender.**
+
+
+
+---
+

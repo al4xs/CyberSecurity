@@ -41992,3 +41992,1266 @@ Mais performance
 A performance correta depende do **gargalo real da aplicação**.
 
 ---
+# 37. Monitoramento e observabilidade de servidores socket
+
+Construir um servidor que funciona é apenas uma parte do problema.
+
+Quando o servidor estiver rodando por horas, atendendo vários clientes, precisamos conseguir responder perguntas como:
+
+- Quantos clientes estão conectados?
+    
+- Quantas requisições estão sendo processadas?
+    
+- Quantas falharam?
+    
+- Quanto tempo cada requisição demora?
+    
+- Quantos bytes foram recebidos?
+    
+- Quantos bytes foram enviados?
+    
+- O servidor está consumindo muita memória?
+    
+- A CPU está sobrecarregada?
+    
+- Existem conexões presas?
+    
+- Existem muitos timeouts?
+    
+- O servidor está recusando conexões?
+    
+- Algum cliente está enviando dados inválidos?
+    
+
+É aí que entra a **observabilidade**.
+
+---
+
+## 37.1 O que é observabilidade?
+
+Observabilidade é a capacidade de entender o estado interno de um sistema através das informações que ele produz.
+
+Em uma aplicação de sockets:
+
+```text
+                    SERVIDOR
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+        ▼              ▼              ▼
+      Logs           Métricas       Traces
+        │              │              │
+        └──────────────┼──────────────┘
+                       │
+                       ▼
+                  Observabilidade
+```
+
+As três categorias mais importantes são:
+
+```text
+Logs
+Métricas
+Traces
+```
+
+---
+
+# 37.2 Logs
+
+Logs são registros de acontecimentos.
+
+Por exemplo:
+
+```text
+2026-10-04 18:30:01 INFO  servidor iniciado
+2026-10-04 18:30:15 INFO  cliente conectado
+2026-10-04 18:30:16 INFO  requisição recebida
+2026-10-04 18:30:16 INFO  resposta enviada
+2026-10-04 18:30:17 INFO  cliente desconectado
+```
+
+Eles ajudam a responder:
+
+> O que aconteceu?
+
+---
+
+# 37.3 Usando `logging`
+
+Em Python, não precisamos fazer:
+
+```python
+print("Cliente conectado")
+```
+
+para tudo.
+
+Podemos utilizar:
+
+```python
+import logging
+```
+
+Configuração básica:
+
+```python
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+```
+
+Depois:
+
+```python
+logging.info("Servidor iniciado")
+```
+
+Podemos também utilizar níveis diferentes:
+
+```python
+logging.debug("Detalhes internos")
+logging.info("Cliente conectado")
+logging.warning("Cliente enviou dados inesperados")
+logging.error("Falha ao processar cliente")
+logging.critical("Falha crítica")
+```
+
+---
+
+# 37.4 Níveis de log
+
+Os principais níveis são:
+
+|Nível|Uso|
+|---|---|
+|`DEBUG`|informações detalhadas para desenvolvimento|
+|`INFO`|acontecimentos normais|
+|`WARNING`|situação anormal, mas não necessariamente fatal|
+|`ERROR`|erro que impediu uma operação|
+|`CRITICAL`|problema grave que pode comprometer o sistema|
+
+Exemplo:
+
+```python
+logging.info("Servidor escutando na porta 4444")
+```
+
+Se um cliente enviar um comando inválido:
+
+```python
+logging.warning("Comando inválido recebido")
+```
+
+Se ocorrer uma exceção:
+
+```python
+logging.error("Falha ao processar cliente")
+```
+
+---
+
+# 37.5 Não registre informações sensíveis
+
+Um erro grave seria fazer:
+
+```python
+logging.info(f"Senha recebida: {password}")
+```
+
+Isso pode colocar credenciais em arquivos de log.
+
+O mesmo vale para:
+
+```text
+tokens
+senhas
+chaves privadas
+cookies
+sessões
+dados pessoais desnecessários
+```
+
+Devemos registrar informações suficientes para diagnosticar o problema, mas não expor segredos.
+
+Por exemplo:
+
+```python
+logging.info(
+    "Autenticação realizada para usuário %s",
+    username
+)
+```
+
+pode ser aceitável dependendo da aplicação.
+
+Já:
+
+```python
+logging.info(
+    "Senha do usuário: %s",
+    password
+)
+```
+
+não é.
+
+---
+
+# 37.6 Identificando clientes
+
+Quando vários clientes estão conectados, apenas:
+
+```text
+Cliente conectado
+```
+
+pode ser pouco útil.
+
+Podemos registrar o endereço:
+
+```python
+logging.info(
+    "Cliente conectado: %s:%s",
+    address[0],
+    address[1]
+)
+```
+
+Resultado:
+
+```text
+INFO Cliente conectado: 127.0.0.1:53142
+```
+
+Isso ajuda a identificar qual conexão gerou determinado evento.
+
+---
+
+# 37.7 Um identificador de conexão
+
+Também podemos criar um identificador próprio:
+
+```python
+connection_id = 42
+```
+
+E registrar:
+
+```text
+[conn=42] cliente conectado
+[conn=42] requisição recebida
+[conn=42] resposta enviada
+[conn=42] cliente desconectado
+```
+
+Isso é especialmente útil quando existem muitos clientes simultaneamente.
+
+Modelo:
+
+```text
+[conn=41] conectado
+[conn=42] conectado
+[conn=41] PING
+[conn=43] conectado
+[conn=42] ECHO hello
+[conn=41] desconectado
+```
+
+Podemos acompanhar cada conexão individualmente.
+
+---
+
+# 37.8 Métricas
+
+Logs mostram acontecimentos individuais.
+
+Métricas mostram **valores agregados**.
+
+Por exemplo:
+
+```text
+conexões ativas:       57
+requisições:           12.430
+erros:                 31
+bytes recebidos:       2.4 GB
+bytes enviados:        8.1 GB
+```
+
+Podemos acompanhar esses valores ao longo do tempo.
+
+---
+
+# 37.9 Contadores
+
+Um contador pode representar quantas vezes determinado evento ocorreu.
+
+Por exemplo:
+
+```python
+connections_total += 1
+```
+
+Sempre que um cliente conectar:
+
+```text
+connections_total
+    0
+    1
+    2
+    3
+    ...
+```
+
+Outros exemplos:
+
+```text
+requests_total
+errors_total
+timeouts_total
+files_uploaded_total
+files_downloaded_total
+```
+
+---
+
+# 37.10 Conexões ativas
+
+Diferente de um contador total, conexões ativas representam o estado atual.
+
+Por exemplo:
+
+```text
+conexões aceitas: 10.000
+conexões encerradas: 9.950
+```
+
+Então:
+
+```text
+conexões ativas ≈ 50
+```
+
+Dependendo da arquitetura.
+
+Em um servidor concorrente, podemos manter um contador protegido:
+
+```python
+active_connections += 1
+```
+
+quando conecta e:
+
+```python
+active_connections -= 1
+```
+
+quando desconecta.
+
+Se várias threads modificarem essa variável, precisamos considerar sincronização.
+
+---
+
+# 37.11 Métricas de erros
+
+Imagine:
+
+```text
+requests_total = 100000
+errors_total = 2
+```
+
+Temos uma taxa de erro relativamente baixa.
+
+Mas imagine:
+
+```text
+requests_total = 100000
+errors_total = 30000
+```
+
+Agora temos um problema evidente.
+
+Podemos acompanhar:
+
+```text
+taxa de erro
+```
+
+conceitualmente:
+
+```text
+erros / requisições × 100
+```
+
+Por exemplo:
+
+```text
+300 / 10.000 × 100
+= 3%
+```
+
+---
+
+# 37.12 Latência como métrica
+
+Também podemos medir quanto tempo uma operação leva.
+
+Por exemplo:
+
+```python
+import time
+
+start = time.monotonic()
+
+process_request()
+
+elapsed = time.monotonic() - start
+```
+
+`time.monotonic()` é apropriado para medir duração porque é destinado a medições de tempo decorrido.
+
+Depois podemos registrar:
+
+```python
+logging.info(
+    "requisição processada em %.3f s",
+    elapsed
+)
+```
+
+---
+
+# 37.13 Por que não usar `time.time()` para duração?
+
+`time.time()` representa o horário do sistema.
+
+Esse horário pode ser ajustado.
+
+Por exemplo:
+
+```text
+18:00:00
+   ↓
+ajuste do relógio
+   ↓
+17:59:50
+```
+
+Se estivermos calculando duração, isso pode produzir resultados inesperados.
+
+Para medir intervalos:
+
+```python
+time.monotonic()
+```
+
+é a escolha apropriada.
+
+---
+
+# 37.14 Medindo throughput
+
+Podemos acompanhar quantos bytes foram processados:
+
+```python
+bytes_received += len(data)
+```
+
+Depois podemos calcular:
+
+```text
+bytes por segundo
+```
+
+Por exemplo:
+
+```text
+10 MB recebidos
+em 2 segundos
+
+≈ 5 MB/s
+```
+
+Isso pode ajudar a identificar degradação de performance.
+
+---
+
+# 37.15 Estado das conexões
+
+Também podemos registrar o estado lógico da aplicação:
+
+```text
+CONNECTED
+AUTHENTICATING
+AUTHENTICATED
+TRANSFERRING
+CLOSING
+CLOSED
+```
+
+Isso é diferente do estado interno do TCP.
+
+Por exemplo:
+
+```text
+TCP:
+ESTABLISHED
+```
+
+enquanto nossa aplicação pode estar:
+
+```text
+WAITING_AUTH
+```
+
+São conceitos diferentes.
+
+---
+
+# 37.16 Logs de aplicação versus estado TCP
+
+Podemos ter:
+
+```text
+TCP:
+ESTABLISHED
+```
+
+mas:
+
+```text
+Aplicação:
+aguardando autenticação
+```
+
+Ou:
+
+```text
+TCP:
+ESTABLISHED
+```
+
+e:
+
+```text
+Aplicação:
+transferindo arquivo
+```
+
+Portanto, monitorar apenas `ss` não mostra tudo que está acontecendo dentro do protocolo da aplicação.
+
+Precisamos combinar informações.
+
+---
+
+# 37.17 `ss` como ferramenta de observabilidade
+
+No Linux:
+
+```bash
+ss -tanp
+```
+
+podemos observar conexões TCP.
+
+Por exemplo:
+
+```text
+LISTEN
+ESTABLISHED
+TIME-WAIT
+CLOSE-WAIT
+```
+
+Isso permite responder:
+
+> O kernel possui conexões abertas?
+
+Mas não necessariamente:
+
+> O que minha aplicação está fazendo com cada conexão?
+
+Para isso precisamos dos próprios logs e métricas.
+
+---
+
+# 37.18 `CLOSE-WAIT` como sinal de atenção
+
+Imagine:
+
+```text
+CLOSE-WAIT
+CLOSE-WAIT
+CLOSE-WAIT
+CLOSE-WAIT
+...
+```
+
+Muitas conexões em `CLOSE-WAIT` podem indicar que o peer encerrou a conexão, mas a aplicação local ainda não fechou o socket adequadamente.
+
+Isso pode ser um indício de:
+
+```text
+vazamento de recursos
+```
+
+Não devemos concluir automaticamente que existe um bug apenas olhando um estado isolado, mas uma quantidade anormal e persistente merece investigação.
+
+---
+
+# 37.19 `TIME-WAIT`
+
+Também podemos observar:
+
+```text
+TIME-WAIT
+```
+
+Após determinadas conexões TCP serem encerradas, o sistema pode manter estado temporariamente.
+
+Isso é comportamento normal do TCP.
+
+Uma quantidade grande pode ocorrer em aplicações que criam e fecham muitas conexões.
+
+O importante é distinguir:
+
+```text
+comportamento normal
+```
+
+de:
+
+```text
+crescimento anormal e persistente
+```
+
+---
+
+# 37.20 File descriptors
+
+Sockets são associados a recursos do sistema operacional.
+
+No Linux, processos possuem **file descriptors**.
+
+Podemos observar:
+
+```bash
+ls /proc/<PID>/fd
+```
+
+ou:
+
+```bash
+lsof -p <PID>
+```
+
+Isso pode ajudar a descobrir se o processo possui uma quantidade inesperada de arquivos ou sockets abertos.
+
+---
+
+# 37.21 Vazamento de sockets
+
+Imagine:
+
+```python
+client = socket.socket()
+client.connect(...)
+```
+
+mas nunca fazemos:
+
+```python
+client.close()
+```
+
+Se isso acontecer repetidamente:
+
+```text
+socket 1
+socket 2
+socket 3
+socket 4
+...
+```
+
+os recursos podem se acumular.
+
+Em aplicações de longa duração isso é especialmente perigoso.
+
+Por isso usamos:
+
+```python
+with socket.socket(...) as sock:
+    ...
+```
+
+quando apropriado.
+
+---
+
+# 37.22 Observabilidade ajuda a encontrar vazamentos
+
+Imagine que observamos:
+
+```text
+10:00 → 100 sockets
+10:10 → 500 sockets
+10:20 → 1000 sockets
+10:30 → 2000 sockets
+```
+
+mas o número de clientes reais permanece:
+
+```text
+20
+```
+
+Isso é um sinal de que alguma coisa pode estar acumulando recursos.
+
+A observabilidade transforma:
+
+```text
+"parece que o servidor está ficando estranho"
+```
+
+em:
+
+```text
+"o número de sockets abertos está crescendo continuamente"
+```
+
+Isso facilita muito o diagnóstico.
+
+---
+
+# 37.23 Health check
+
+Um servidor também pode possuir um mecanismo simples para informar:
+
+> Estou funcionando?
+
+Por exemplo:
+
+```text
+PING
+```
+
+responde:
+
+```text
+PONG
+```
+
+Esse conceito pode ser usado como **health check**.
+
+Um sistema externo pode testar:
+
+```text
+conecta
+   ↓
+PING
+   ↓
+PONG
+```
+
+Se não houver resposta dentro do tempo esperado, pode existir um problema.
+
+---
+
+# 37.24 Health check não deve testar tudo
+
+Um `PING/PONG` simples verifica apenas uma parte do sistema.
+
+Por exemplo:
+
+```text
+TCP funciona
++
+servidor responde
+```
+
+Mas talvez:
+
+```text
+banco de dados esteja indisponível
+```
+
+ou:
+
+```text
+disco esteja cheio
+```
+
+Então podemos ter diferentes níveis:
+
+```text
+Liveness
+    ↓
+processo está vivo?
+
+Readiness
+    ↓
+processo está pronto para atender?
+
+Dependências
+    ↓
+banco/rede/disco funcionando?
+```
+
+Esses conceitos aparecem muito em sistemas distribuídos.
+
+---
+
+# 37.25 Graceful shutdown e observabilidade
+
+Quando o servidor recebe um sinal de encerramento:
+
+```text
+SIGTERM
+```
+
+por exemplo, ele pode:
+
+```text
+parar de aceitar novas conexões
+        ↓
+finalizar operações existentes
+        ↓
+fechar sockets
+        ↓
+registrar encerramento
+        ↓
+terminar processo
+```
+
+O log poderia registrar:
+
+```text
+INFO shutdown iniciado
+INFO novas conexões desabilitadas
+INFO conexões ativas: 5
+INFO conexões encerradas
+INFO servidor finalizado
+```
+
+Isso torna o comportamento muito mais fácil de investigar.
+
+---
+
+# 37.26 Logs estruturados
+
+Em sistemas maiores, logs podem ser estruturados.
+
+Em vez de:
+
+```text
+Cliente 127.0.0.1 enviou arquivo teste.pdf
+```
+
+podemos ter algo conceitualmente semelhante a:
+
+```text
+{
+    "event": "file_upload",
+    "client": "127.0.0.1",
+    "filename": "teste.pdf",
+    "size": 1048576
+}
+```
+
+Uma estrutura assim facilita a análise automática.
+
+É importante, novamente, não registrar dados sensíveis desnecessários.
+
+---
+
+# 37.27 Correlação de eventos
+
+Imagine uma requisição passando por várias etapas:
+
+```text
+conexão
+   ↓
+autenticação
+   ↓
+upload
+   ↓
+validação
+   ↓
+armazenamento
+   ↓
+resposta
+```
+
+Podemos atribuir um identificador:
+
+```text
+request_id = abc123
+```
+
+Então os logs podem indicar:
+
+```text
+[request=abc123] conexão recebida
+[request=abc123] autenticação concluída
+[request=abc123] upload iniciado
+[request=abc123] upload concluído
+[request=abc123] resposta enviada
+```
+
+Isso é extremamente útil quando existem muitas operações simultâneas.
+
+---
+
+# 37.28 Tracing
+
+Tracing acompanha o caminho de uma operação através de diferentes componentes.
+
+Imagine:
+
+```text
+Cliente
+   ↓
+Servidor Socket
+   ↓
+Serviço de autenticação
+   ↓
+Banco de dados
+   ↓
+Armazenamento
+```
+
+Um trace permite visualizar a duração de cada etapa:
+
+```text
+request
+├── socket receive      2 ms
+├── autenticação        5 ms
+├── banco              30 ms
+├── armazenamento      10 ms
+└── resposta             2 ms
+
+total                   49 ms
+```
+
+Isso ajuda a encontrar o componente responsável pela latência.
+
+---
+
+# 37.29 Logs, métricas e traces
+
+Podemos resumir:
+
+|Recurso|Pergunta|
+|---|---|
+|Logs|O que aconteceu?|
+|Métricas|Quanto / quantas vezes?|
+|Traces|Onde o tempo foi gasto?|
+
+Exemplo:
+
+```text
+LOG:
+"upload falhou"
+
+MÉTRICA:
+upload_errors = 153
+
+TRACE:
+armazenamento demorou 8 segundos
+```
+
+As três informações juntas são muito mais poderosas.
+
+---
+
+# 37.30 Observabilidade não é apenas produção
+
+É tentador pensar:
+
+> "Só preciso disso quando meu sistema estiver em produção."
+
+Não.
+
+Durante o desenvolvimento, logs e métricas ajudam a entender:
+
+```text
+o que o código está fazendo
+```
+
+Durante testes:
+
+```text
+se o comportamento está correto
+```
+
+Em produção:
+
+```text
+se o sistema continua saudável
+```
+
+Portanto, observabilidade deve fazer parte da arquitetura desde cedo.
+
+---
+
+# 37.31 Um servidor observável
+
+Podemos imaginar nossa arquitetura assim:
+
+```text
+                    SERVIDOR
+                       │
+       ┌───────────────┼───────────────┐
+       │               │               │
+       ▼               ▼               ▼
+     SOCKET          PROTOCOLO      RECURSOS
+       │               │               │
+       ▼               ▼               ▼
+   conexões         requisições      CPU
+   bytes            erros            RAM
+   estados          latência         disco
+       │               │               │
+       └───────────────┼───────────────┘
+                       ▼
+                OBSERVABILIDADE
+                       │
+             ┌─────────┼─────────┐
+             ▼         ▼         ▼
+           LOGS     MÉTRICAS    TRACES
+```
+
+---
+
+# 37.32 Exemplo de servidor com logging
+
+Um exemplo simples:
+
+```python
+import logging
+import socket
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
+HOST = "127.0.0.1"
+PORT = 4444
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((HOST, PORT))
+    server.listen()
+
+    logging.info("Servidor iniciado em %s:%d", HOST, PORT)
+
+    while True:
+        client, address = server.accept()
+
+        logging.info(
+            "Cliente conectado: %s:%d",
+            address[0],
+            address[1]
+        )
+
+        with client:
+            try:
+                data = client.recv(1024)
+
+                if not data:
+                    logging.info(
+                        "Cliente desconectou: %s:%d",
+                        address[0],
+                        address[1]
+                    )
+                    continue
+
+                logging.info(
+                    "Recebidos %d bytes de %s:%d",
+                    len(data),
+                    address[0],
+                    address[1]
+                )
+
+                client.sendall(data)
+
+            except ConnectionResetError:
+                logging.warning(
+                    "Conexão resetada: %s:%d",
+                    address[0],
+                    address[1]
+                )
+
+            except OSError:
+                logging.exception(
+                    "Erro de socket com %s:%d",
+                    address[0],
+                    address[1]
+                )
+```
+
+Observe que não estamos registrando o conteúdo inteiro da mensagem.
+
+Estamos registrando informações úteis:
+
+```text
+cliente
+quantidade de bytes
+evento
+erro
+```
+
+---
+
+# 37.33 `logging.exception()`
+
+Existe uma diferença importante entre:
+
+```python
+logging.error("Erro")
+```
+
+e:
+
+```python
+logging.exception("Erro")
+```
+
+Quando utilizado dentro de um `except`, `logging.exception()` registra também o traceback da exceção.
+
+Exemplo:
+
+```python
+try:
+    process_request()
+
+except Exception:
+    logging.exception("Falha ao processar requisição")
+```
+
+Isso é muito útil para diagnóstico.
+
+Mas devemos tomar cuidado para que informações sensíveis não apareçam nos tracebacks ou mensagens de erro.
+
+---
+
+# 37.34 O objetivo final da observabilidade
+
+Um servidor sem observabilidade pode apresentar:
+
+```text
+"Está lento."
+```
+
+Com observabilidade podemos descobrir:
+
+```text
+CPU: 35%
+RAM: normal
+conexões: 8.000
+erros: 2%
+latência p99: 2,4 s
+CLOSE-WAIT: 3.500
+```
+
+Agora temos pistas concretas.
+
+Talvez o problema seja:
+
+```text
+conexões não sendo encerradas corretamente
+```
+
+Em vez de simplesmente:
+
+```text
+"Python está lento."
+```
+
+Esse é o verdadeiro valor da observabilidade.
+
+---
+
+# 37.35 Resumo da Parte
+
+Nesta parte aprendemos como acompanhar o comportamento de um servidor socket depois que ele começa a funcionar.
+
+Aprendemos:
+
+- observabilidade;
+    
+- logs;
+    
+- `logging`;
+    
+- níveis de log;
+    
+- informações sensíveis;
+    
+- identificadores de conexão;
+    
+- métricas;
+    
+- contadores;
+    
+- conexões ativas;
+    
+- taxa de erro;
+    
+- latência;
+    
+- `time.monotonic()`;
+    
+- throughput;
+    
+- estados da aplicação;
+    
+- `ss`;
+    
+- `lsof`;
+    
+- file descriptors;
+    
+- vazamento de sockets;
+    
+- health checks;
+    
+- graceful shutdown;
+    
+- logs estruturados;
+    
+- correlação de eventos;
+    
+- tracing;
+    
+- diferença entre logs, métricas e traces.
+    
+
+O principal modelo mental é:
+
+```text
+                    SERVIDOR
+                       │
+                       ▼
+                eventos e estado
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+        LOGS        MÉTRICAS      TRACES
+          │            │            │
+          └────────────┼────────────┘
+                       ▼
+                  DIAGNÓSTICO
+                       │
+                       ▼
+                melhoria do sistema
+```
+
+Um servidor não deve apenas **funcionar**.
+
+Precisamos conseguir **enxergar o que ele está fazendo**, identificar problemas e entender por que eles acontecem.
+
+---

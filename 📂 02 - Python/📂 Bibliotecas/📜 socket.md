@@ -17390,3 +17390,1145 @@ TCP → fluxo confiável de bytes
 UDP → datagramas independentes
 ```
 
+---
+
+# 17. Opções de socket com `setsockopt()`
+
+## 17.1 O que são opções de socket?
+
+Até agora criamos sockets utilizando:
+
+```python
+socket.socket()
+```
+
+e utilizamos métodos como:
+
+```python
+bind()
+listen()
+accept()
+connect()
+send()
+recv()
+```
+
+Porém, o sistema operacional oferece diversas configurações que permitem alterar o comportamento de um socket.
+
+Essas configurações são chamadas de **opções de socket**.
+
+Em Python, o principal método utilizado para configurá-las é:
+
+```python
+setsockopt()
+```
+
+---
+
+## 17.2 Sintaxe
+
+A forma geral é:
+
+```python
+socket.setsockopt(level, optname, value)
+```
+
+Exemplo:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+A estrutura é:
+
+```text
+setsockopt(
+    nível,
+    opção,
+    valor
+)
+```
+
+---
+
+## 17.3 Parâmetros
+
+| Parâmetro | Tipo                | Obrigatório | Descrição                        |
+| --------- | ------------------- | ----------: | -------------------------------- |
+| `level`   | `int`               |         Sim | Nível onde a opção está definida |
+| `optname` | `int`               |         Sim | Nome da opção                    |
+| `value`   | `int`, `bytes` etc. |         Sim | Valor atribuído à opção          |
+
+A opção mais comum para começar é:
+
+```python
+socket.SOL_SOCKET
+```
+
+Ela indica que estamos configurando uma opção relacionada ao próprio socket.
+
+---
+
+## 17.4 `SOL_SOCKET`
+
+Exemplo:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+Aqui:
+
+```python
+socket.SOL_SOCKET
+```
+
+é o nível da opção.
+
+Podemos pensar:
+
+```text
+SOL_SOCKET
+     ↓
+opções gerais do socket
+```
+
+Existem outros níveis relacionados a protocolos específicos.
+
+Por exemplo:
+
+```python
+socket.IPPROTO_TCP
+```
+
+representa opções relacionadas ao TCP.
+
+Assim:
+
+```text
+SOL_SOCKET
+    ↓
+opções gerais do socket
+
+IPPROTO_TCP
+    ↓
+opções específicas do TCP
+```
+
+---
+
+# 17.5 `SO_REUSEADDR`
+
+Uma das opções mais conhecidas em servidores TCP é:
+
+```python
+socket.SO_REUSEADDR
+```
+
+Ela pode ser configurada assim:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+Normalmente ela aparece **antes do `bind()`**:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+```
+
+A ordem é importante:
+
+```text
+socket()
+   ↓
+setsockopt()
+   ↓
+bind()
+   ↓
+listen()
+```
+
+---
+
+## 17.6 Por que `SO_REUSEADDR` é útil?
+
+Você já encontrou anteriormente um erro como:
+
+```text
+OSError: [Errno 98] Address already in use
+```
+
+Isso significa que o endereço local que você tentou utilizar não estava disponível naquele momento.
+
+Um dos cenários comuns envolve o estado `TIME_WAIT` de conexões TCP anteriores.
+
+Por exemplo:
+
+```text
+Servidor
+127.0.0.1:4444
+```
+
+foi encerrado.
+
+Logo depois você tenta iniciar novamente:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Dependendo das condições e das regras do sistema operacional, o `bind()` pode falhar.
+
+`SO_REUSEADDR` pode permitir que o servidor reutilize o endereço local em situações apropriadas.
+
+---
+
+## 17.7 `SO_REUSEADDR` não significa "ignorar qualquer conflito"
+
+É importante não interpretar:
+
+```python
+SO_REUSEADDR
+```
+
+como:
+
+> "Pode usar a porta mesmo se outro processo estiver usando."
+
+Isso não é o objetivo.
+
+Por exemplo, se outro processo estiver realmente escutando:
+
+```text
+127.0.0.1:4444
+```
+
+simplesmente ativar:
+
+```python
+SO_REUSEADDR
+```
+
+não significa que dois servidores TCP poderão normalmente ocupar o mesmo endpoint.
+
+O objetivo está relacionado principalmente à **reutilização de endereços em determinadas condições**, especialmente após conexões anteriores.
+
+---
+
+## 17.8 Exemplo completo com `SO_REUSEADDR`
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+print("Cliente conectado:", address)
+
+client.close()
+server.close()
+```
+
+A configuração ocorre antes do `bind()`:
+
+```text
+socket()
+ ↓
+setsockopt()
+ ↓
+bind()
+ ↓
+listen()
+ ↓
+accept()
+```
+
+---
+
+# 17.9 `getsockopt()`
+
+Se `setsockopt()` serve para **configurar** uma opção, `getsockopt()` serve para **consultar** uma opção.
+
+Sintaxe básica:
+
+```python
+socket.getsockopt(level, optname)
+```
+
+Exemplo:
+
+```python
+value = server.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR
+)
+
+print(value)
+```
+
+Podemos verificar se a opção está habilitada.
+
+---
+
+## 17.10 Ativando e desativando opções booleanas
+
+Algumas opções funcionam como valores booleanos.
+
+Por exemplo:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+Ativa.
+
+Para desativar:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    0
+)
+```
+
+Conceitualmente:
+
+```text
+1 → habilitado
+0 → desabilitado
+```
+
+---
+
+# 17.11 `SO_KEEPALIVE`
+
+Outra opção importante é:
+
+```python
+socket.SO_KEEPALIVE
+```
+
+Ela pode ser habilitada:
+
+```python
+client.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_KEEPALIVE,
+    1
+)
+```
+
+O objetivo é permitir mecanismos de **keepalive TCP** para detectar determinadas situações em que uma conexão aparentemente estabelecida deixou de responder.
+
+---
+
+## 17.12 Por que keepalive existe?
+
+Imagine:
+
+```text
+Cliente
+   │
+   │ conexão TCP
+   │
+   ▼
+Servidor
+```
+
+A conexão fica estabelecida por muito tempo.
+
+Por algum motivo, o caminho de rede deixa de funcionar:
+
+```text
+Cliente
+   │
+   X
+   │
+Servidor
+```
+
+A aplicação pode não descobrir imediatamente que o outro lado não está mais acessível.
+
+O mecanismo TCP keepalive pode ajudar o sistema operacional a detectar esse tipo de situação.
+
+---
+
+## 17.13 Keepalive não é heartbeat da aplicação
+
+É importante diferenciar:
+
+```text
+TCP keepalive
+```
+
+de:
+
+```text
+heartbeat da aplicação
+```
+
+Um heartbeat pode ser implementado pelo próprio protocolo:
+
+```text
+CLIENTE → PING
+SERVIDOR → PONG
+```
+
+Nesse caso, a aplicação está conscientemente verificando se o serviço está respondendo.
+
+Já o TCP keepalive é um mecanismo da camada TCP/sistema operacional.
+
+São mecanismos diferentes.
+
+---
+
+# 17.14 `SO_RCVBUF`
+
+Outra opção interessante é:
+
+```python
+socket.SO_RCVBUF
+```
+
+Ela está relacionada ao **buffer de recebimento** do socket.
+
+Podemos consultar:
+
+```python
+size = client.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_RCVBUF
+)
+
+print(size)
+```
+
+Esse buffer é utilizado pelo sistema operacional para armazenar dados recebidos antes que a aplicação os processe.
+
+---
+
+## 17.15 Buffer de recebimento
+
+Imagine:
+
+```text
+Rede
+  │
+  ▼
+Kernel
+  │
+  │ dados recebidos
+  ▼
+Buffer do socket
+  │
+  ▼
+recv()
+  │
+  ▼
+Aplicação
+```
+
+O kernel pode receber dados antes que a aplicação execute:
+
+```python
+recv()
+```
+
+Esses dados podem permanecer temporariamente no buffer associado ao socket.
+
+---
+
+# 17.16 `SO_SNDBUF`
+
+Existe também:
+
+```python
+socket.SO_SNDBUF
+```
+
+relacionado ao buffer de envio.
+
+Podemos consultar:
+
+```python
+size = client.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_SNDBUF
+)
+
+print(size)
+```
+
+O modelo simplificado é:
+
+```text
+Aplicação
+   │
+   │ send()
+   ▼
+Buffer de envio
+   │
+   ▼
+TCP/IP
+   │
+   ▼
+Rede
+```
+
+Isso ajuda a entender por que:
+
+```python
+send()
+```
+
+não significa necessariamente que os dados já chegaram fisicamente ao destino.
+
+---
+
+# 17.17 `send()` e o kernel
+
+Quando fazemos:
+
+```python
+client.send(data)
+```
+
+existe uma interação com o sistema operacional.
+
+Simplificando:
+
+```text
+Python
+  │
+  │ send()
+  ▼
+Socket
+  │
+  ▼
+Kernel
+  │
+  ▼
+TCP
+  │
+  ▼
+IP
+  │
+  ▼
+Rede
+```
+
+A aplicação entrega os dados ao sistema operacional.
+
+O kernel passa a gerenciar o envio através da pilha de rede.
+
+---
+
+# 17.18 `SO_ERROR`
+
+Outra opção interessante é:
+
+```python
+socket.SO_ERROR
+```
+
+Ela pode ser consultada com:
+
+```python
+error = client.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_ERROR
+)
+
+print(error)
+```
+
+Ela permite consultar um erro pendente associado ao socket em determinadas situações.
+
+Se o valor for:
+
+```text
+0
+```
+
+isso normalmente indica ausência de erro pendente.
+
+Valores diferentes de zero representam um código de erro.
+
+---
+
+# 17.19 `SO_BROADCAST`
+
+Para determinados usos de UDP, existe:
+
+```python
+socket.SO_BROADCAST
+```
+
+Ela permite habilitar o envio de **broadcast** através do socket, quando suportado e apropriado.
+
+Exemplo:
+
+```python
+sock.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_BROADCAST,
+    1
+)
+```
+
+Depois, um programa pode utilizar um endereço de broadcast apropriado.
+
+Broadcast significa enviar um datagrama para múltiplos hosts de uma rede local que aceitem esse tipo de tráfego.
+
+---
+
+# 17.20 Unicast, broadcast e multicast
+
+É importante diferenciar:
+
+### Unicast
+
+Um remetente:
+
+```text
+A
+│
+└──────→ B
+```
+
+Um destino.
+
+---
+
+### Broadcast
+
+Um remetente:
+
+```text
+      ┌──→ B
+      │
+A ────┼──→ C
+      │
+      └──→ D
+```
+
+O objetivo é alcançar múltiplos hosts da rede local através de um endereço de broadcast.
+
+---
+
+### Multicast
+
+Um remetente envia para um **grupo multicast**:
+
+```text
+           ┌──→ B
+           │
+A ───→ grupo multicast
+           │
+           └──→ D
+```
+
+Somente os hosts participantes do grupo recebem o tráfego multicast.
+
+Esses conceitos aparecem principalmente em aplicações baseadas em UDP.
+
+---
+
+# 17.21 `SO_REUSEPORT`
+
+Alguns sistemas operacionais também oferecem:
+
+```python
+socket.SO_REUSEPORT
+```
+
+Ela possui uma finalidade diferente de `SO_REUSEADDR`.
+
+Dependendo do sistema operacional, pode permitir que múltiplos sockets façam `bind()` para o mesmo endereço/porta sob determinadas condições.
+
+Isso pode ser utilizado em arquiteturas específicas para distribuição de tráfego.
+
+Porém, não devemos assumir que:
+
+```python
+SO_REUSEPORT
+```
+
+possui exatamente o mesmo comportamento em todos os sistemas operacionais.
+
+Seu comportamento depende da implementação da plataforma.
+
+---
+
+# 17.22 Nem toda opção existe em todo sistema
+
+Um ponto importante:
+
+```python
+socket.SO_REUSEPORT
+```
+
+por exemplo, pode não estar disponível em todas as plataformas.
+
+Por isso, aplicações portáveis precisam considerar:
+
+```python
+hasattr(socket, "SO_REUSEPORT")
+```
+
+Exemplo:
+
+```python
+if hasattr(socket, "SO_REUSEPORT"):
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEPORT,
+        1
+    )
+```
+
+Isso verifica se a constante existe na implementação atual.
+
+---
+
+# 17.23 Opções específicas do TCP
+
+Nem todas as opções pertencem a:
+
+```python
+socket.SOL_SOCKET
+```
+
+Existem opções específicas do TCP.
+
+Por exemplo:
+
+```python
+socket.IPPROTO_TCP
+```
+
+pode ser utilizado como nível:
+
+```python
+client.setsockopt(
+    socket.IPPROTO_TCP,
+    opção,
+    valor
+)
+```
+
+Isso nos leva a uma ideia importante:
+
+```text
+nível
+  ↓
+protocolo ou subsistema
+  ↓
+opção
+```
+
+---
+
+# 17.24 Exemplo conceitual
+
+Imagine:
+
+```python
+client.setsockopt(
+    socket.IPPROTO_TCP,
+    socket.TCP_NODELAY,
+    1
+)
+```
+
+A estrutura é:
+
+```text
+IPPROTO_TCP
+      ↓
+opção específica do TCP
+      ↓
+TCP_NODELAY
+      ↓
+valor 1
+```
+
+`TCP_NODELAY` está relacionado ao comportamento de envio de pequenos segmentos TCP e ao algoritmo de Nagle.
+
+Não é necessário memorizar todos os detalhes dessa opção agora.
+
+O mais importante é entender a estrutura:
+
+```python
+setsockopt(level, option, value)
+```
+
+---
+
+# 17.25 Quando utilizar `setsockopt()`?
+
+Não devemos utilizar opções de socket simplesmente porque existem.
+
+Elas devem ser usadas quando existe uma necessidade específica.
+
+Exemplos:
+
+### Servidor TCP reiniciado frequentemente
+
+Pode ser útil:
+
+```python
+SO_REUSEADDR
+```
+
+### Conexão de longa duração
+
+Pode ser interessante estudar:
+
+```python
+SO_KEEPALIVE
+```
+
+### Aplicação específica com múltiplos workers
+
+Pode fazer sentido investigar:
+
+```python
+SO_REUSEPORT
+```
+
+### Aplicação UDP com broadcast
+
+Pode ser necessário:
+
+```python
+SO_BROADCAST
+```
+
+O importante é entender **por que** determinada opção está sendo utilizada.
+
+---
+
+# 17.26 Exemplo de configuração de servidor
+
+Um servidor TCP comum pode ficar:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Servidor iniciado.")
+
+client, address = server.accept()
+
+print("Cliente:", address)
+
+client.close()
+server.close()
+```
+
+Observe novamente a ordem:
+
+```text
+socket()
+   ↓
+setsockopt()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+---
+
+# 17.27 Consultando uma opção
+
+Podemos verificar:
+
+```python
+reuse = server.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR
+)
+
+print("SO_REUSEADDR:", reuse)
+```
+
+E consultar:
+
+```python
+keepalive = server.getsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_KEEPALIVE
+)
+
+print("SO_KEEPALIVE:", keepalive)
+```
+
+Assim conseguimos inspecionar determinadas configurações do socket.
+
+---
+
+# 17.28 `setsockopt()` não altera o protocolo inteiro
+
+É importante não pensar:
+
+```python
+setsockopt()
+```
+
+como algo que transforma:
+
+```text
+TCP → UDP
+```
+
+ou:
+
+```text
+UDP → TCP
+```
+
+O socket continua sendo do tipo criado originalmente.
+
+Por exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+continua sendo um socket orientado a fluxo.
+
+`setsockopt()` apenas configura determinadas propriedades suportadas pelo socket e pelo sistema operacional.
+
+---
+
+# 17.29 Relação com o kernel
+
+Quando fazemos:
+
+```python
+server.setsockopt(...)
+```
+
+não estamos simplesmente alterando uma variável Python.
+
+A configuração é repassada ao sistema operacional.
+
+Podemos visualizar:
+
+```text
+Python
+  │
+  │ setsockopt()
+  ▼
+Kernel
+  │
+  ├── configuração do socket
+  ├── TCP/UDP
+  └── pilha de rede
+```
+
+Isso reforça o conceito estudado anteriormente:
+
+```text
+Python socket API
+       ↓
+      syscall
+       ↓
+     kernel
+       ↓
+   rede / hardware
+```
+
+A API `socket` é uma interface para recursos de rede disponibilizados pelo sistema operacional.
+
+---
+
+# 17.30 Tabela das principais opções estudadas
+
+| Opção          | Nível comum   | Finalidade                                                   |
+| -------------- | ------------- | ------------------------------------------------------------ |
+| `SO_REUSEADDR` | `SOL_SOCKET`  | Permitir reutilização de endereço em determinadas condições  |
+| `SO_REUSEPORT` | `SOL_SOCKET`  | Reutilização de porta em condições específicas da plataforma |
+| `SO_KEEPALIVE` | `SOL_SOCKET`  | Habilitar TCP keepalive                                      |
+| `SO_RCVBUF`    | `SOL_SOCKET`  | Consultar/configurar buffer de recebimento                   |
+| `SO_SNDBUF`    | `SOL_SOCKET`  | Consultar/configurar buffer de envio                         |
+| `SO_ERROR`     | `SOL_SOCKET`  | Consultar erro pendente                                      |
+| `SO_BROADCAST` | `SOL_SOCKET`  | Permitir broadcast em sockets apropriados                    |
+| `TCP_NODELAY`  | `IPPROTO_TCP` | Configuração relacionada ao algoritmo de Nagle               |
+
+---
+
+# 17.31 Modelo mental
+
+Até agora temos:
+
+```text
+socket()
+   ↓
+cria o socket
+   ↓
+setsockopt()
+   ↓
+configura propriedades
+   ↓
+bind()
+   ↓
+associa endereço local
+   ↓
+listen()
+   ↓
+aguarda conexões TCP
+   ↓
+accept()
+   ↓
+obtém socket conectado
+   ↓
+send()/recv()
+   ↓
+comunicação
+```
+
+Para UDP:
+
+```text
+socket()
+   ↓
+setsockopt()
+   ↓
+configura propriedades
+   ↓
+bind()
+   ↓
+sendto()/recvfrom()
+```
+
+Assim, `setsockopt()` entra como uma etapa de **configuração do comportamento do socket**.
+
+---
+
+## Resumo da Parte
+
+* `setsockopt()` permite configurar opções de um socket.
+* A forma geral é:
+
+```python
+socket.setsockopt(level, optname, value)
+```
+
+* `getsockopt()` permite consultar determinadas opções:
+
+```python
+socket.getsockopt(level, optname)
+```
+
+* Uma das opções mais utilizadas em servidores é:
+
+```python
+socket.SO_REUSEADDR
+```
+
+* `SO_REUSEADDR` é especialmente útil em cenários de reinicialização de servidores e reutilização de endereços em determinadas condições.
+* `SO_KEEPALIVE` habilita mecanismos de keepalive TCP.
+* `SO_RCVBUF` está relacionado ao buffer de recebimento.
+* `SO_SNDBUF` está relacionado ao buffer de envio.
+* `SO_BROADCAST` permite broadcast em sockets apropriados.
+* `SO_REUSEPORT` possui comportamento dependente da plataforma e pode ser utilizado em arquiteturas específicas.
+* Algumas opções pertencem ao próprio socket:
+
+```python
+socket.SOL_SOCKET
+```
+
+enquanto outras são específicas do protocolo:
+
+```python
+socket.IPPROTO_TCP
+```
+
+* `setsockopt()` não transforma TCP em UDP nem altera o tipo fundamental do socket.
+* As configurações são repassadas ao sistema operacional e afetam o comportamento do socket no kernel.
+* O modelo mental é:
+
+```text
+socket()
+    ↓
+setsockopt()
+    ↓
+configuração
+    ↓
+bind()/connect()
+    ↓
+comunicação
+```
+
+---

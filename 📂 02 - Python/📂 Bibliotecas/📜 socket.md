@@ -29114,3 +29114,909 @@ socket → endereço → conexão/comunicação → dados → fechamento
 
 ---
 
+# 27. Unix Sockets (`AF_UNIX`)
+
+## 27.1 O que são Unix Sockets?
+
+Até agora, trabalhamos principalmente com sockets de rede:
+
+```python
+socket.AF_INET
+```
+
+e:
+
+```python
+socket.AF_INET6
+```
+
+Esses sockets são utilizados para comunicação através de **endereços IP**.
+
+Porém, nem toda comunicação precisa passar por uma rede.
+
+Quando dois processos estão rodando **na mesma máquina**, podemos utilizar **Unix Domain Sockets**, representados em Python por:
+
+```python
+socket.AF_UNIX
+```
+
+Eles permitem que processos locais se comuniquem utilizando um endereço associado normalmente a um **arquivo no sistema de arquivos**.
+
+A ideia é:
+
+```text
+Processo A
+    │
+    │ Unix Socket
+    ↓
+Sistema Operacional
+    ↓
+Unix Socket
+    │
+    │
+Processo B
+```
+
+Não precisamos utilizar:
+
+```text
+IP
+porta TCP
+roteamento IP
+```
+
+para estabelecer essa comunicação.
+
+---
+
+## 27.2 Unix Socket vs Socket de rede
+
+Podemos comparar:
+
+```text
+TCP/IPv4:
+
+Processo
+   ↓
+Socket
+   ↓
+TCP
+   ↓
+IPv4
+   ↓
+Interface de rede
+   ↓
+Rede
+   ↓
+Destino
+```
+
+Com:
+
+```text
+Unix Socket:
+
+Processo
+   ↓
+Socket
+   ↓
+Kernel
+   ↓
+Unix Domain Socket
+   ↓
+Outro processo local
+```
+
+Isso torna Unix sockets especialmente interessantes para **comunicação entre processos na mesma máquina (IPC — Inter-Process Communication)**.
+
+---
+
+## 27.3 Criando um Unix Socket
+
+Um socket Unix pode ser criado assim:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+```
+
+Observe a diferença:
+
+```text
+IPv4:
+AF_INET
+
+IPv6:
+AF_INET6
+
+Unix:
+AF_UNIX
+```
+
+Podemos combinar `AF_UNIX` com diferentes tipos de socket, como:
+
+```python
+socket.SOCK_STREAM
+```
+
+ou:
+
+```python
+socket.SOCK_DGRAM
+```
+
+Por exemplo:
+
+```python
+server = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+```
+
+significa:
+
+> Criar um Unix socket orientado a fluxo.
+
+---
+
+## 27.4 O endereço de um Unix Socket
+
+Em um socket TCP, utilizamos algo como:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Existe:
+
+```text
+IP + porta
+```
+
+No Unix socket, normalmente utilizamos um **caminho do sistema de arquivos**:
+
+```python
+server.bind("/tmp/meu_socket.sock")
+```
+
+Por exemplo:
+
+```text
+/tmp/meu_socket.sock
+```
+
+Esse caminho identifica o socket local.
+
+Portanto:
+
+```text
+TCP:
+
+127.0.0.1:4444
+
+
+Unix Socket:
+
+/tmp/meu_socket.sock
+```
+
+---
+
+## 27.5 Criando um servidor Unix Socket
+
+Um servidor básico:
+
+```python
+import socket
+
+socket_path = "/tmp/meu_socket.sock"
+
+server = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+
+server.bind(socket_path)
+server.listen()
+
+print("Aguardando conexão...")
+
+client, address = server.accept()
+
+data = client.recv(1024)
+
+print(f"Recebido: {data.decode()}")
+
+client.sendall(b"Mensagem recebida!")
+
+client.close()
+server.close()
+```
+
+O fluxo é muito parecido com TCP:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+recv()
+   ↓
+sendall()
+   ↓
+close()
+```
+
+A principal diferença está no endereço.
+
+No TCP:
+
+```python
+("127.0.0.1", 4444)
+```
+
+No Unix socket:
+
+```python
+"/tmp/meu_socket.sock"
+```
+
+---
+
+## 27.6 O arquivo `.sock`
+
+Quando fazemos:
+
+```python
+server.bind("/tmp/meu_socket.sock")
+```
+
+o sistema pode criar uma entrada no sistema de arquivos representando o Unix socket.
+
+Podemos verificar:
+
+```bash
+ls -l /tmp/meu_socket.sock
+```
+
+Ele não é um arquivo comum contendo os dados da comunicação.
+
+Esse ponto é importante.
+
+O caminho serve para **identificar e localizar o endpoint do socket**.
+
+Os dados continuam sendo tratados pelo kernel e pelo mecanismo de comunicação do Unix socket.
+
+Podemos pensar:
+
+```text
+/tmp/meu_socket.sock
+        │
+        │ identifica
+        ↓
+Unix Domain Socket
+        │
+        ↓
+Kernel
+        │
+        ↓
+Outro processo
+```
+
+---
+
+## 27.7 O cliente Unix Socket
+
+O cliente também utiliza `AF_UNIX`:
+
+```python
+import socket
+
+client = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+
+client.connect("/tmp/meu_socket.sock")
+
+client.sendall(b"Ola, servidor!")
+
+response = client.recv(1024)
+
+print(response.decode())
+
+client.close()
+```
+
+O fluxo é:
+
+```text
+Cliente
+   │
+   │ connect()
+   ↓
+/tmp/meu_socket.sock
+   │
+   ↓
+Servidor
+   │
+   │ accept()
+   ↓
+Socket de comunicação
+```
+
+---
+
+## 27.8 Servidor e cliente completos
+
+### Servidor
+
+```python
+import socket
+import os
+
+socket_path = "/tmp/meu_socket.sock"
+
+if os.path.exists(socket_path):
+    os.remove(socket_path)
+
+server = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+
+server.bind(socket_path)
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, _ = server.accept()
+
+data = client.recv(1024)
+
+print(f"Recebido: {data.decode()}")
+
+client.sendall(b"Resposta do servidor")
+
+client.close()
+server.close()
+
+os.remove(socket_path)
+```
+
+### Cliente
+
+```python
+import socket
+
+socket_path = "/tmp/meu_socket.sock"
+
+client = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_STREAM
+)
+
+client.connect(socket_path)
+
+client.sendall(b"Ola do cliente!")
+
+response = client.recv(1024)
+
+print(response.decode())
+
+client.close()
+```
+
+A ordem de execução é:
+
+```text
+1. Iniciar servidor
+2. Servidor cria /tmp/meu_socket.sock
+3. Servidor executa listen()
+4. Cliente executa connect()
+5. Servidor executa accept()
+6. Cliente envia dados
+7. Servidor recebe
+8. Servidor responde
+9. Cliente recebe
+10. Ambos fecham
+```
+
+---
+
+## 27.9 Por que remover o socket antes de `bind()`?
+
+Existe uma diferença importante em relação ao TCP.
+
+Quando fazemos:
+
+```python
+server.bind("/tmp/meu_socket.sock")
+```
+
+o caminho pode já existir devido a uma execução anterior.
+
+Por exemplo, o programa pode ter sido encerrado sem remover corretamente o socket.
+
+Então uma nova tentativa de:
+
+```python
+bind()
+```
+
+pode falhar.
+
+Por isso é comum encontrar:
+
+```python
+import os
+
+if os.path.exists(socket_path):
+    os.remove(socket_path)
+```
+
+antes do `bind()`.
+
+Porém, existe um cuidado importante:
+
+**não devemos remover cegamente qualquer arquivo existente naquele caminho.**
+
+Em uma aplicação real, devemos garantir que o caminho pertence ao socket que nossa aplicação pretende utilizar.
+
+---
+
+## 27.10 Unix Socket e permissões
+
+Uma vantagem importante dos Unix sockets é que eles podem utilizar as **permissões do sistema de arquivos**.
+
+Por exemplo:
+
+```bash
+ls -l /tmp/meu_socket.sock
+```
+
+pode mostrar algo semelhante a:
+
+```text
+srwxr-xr-x 1 usuario usuario ... /tmp/meu_socket.sock
+```
+
+O primeiro caractere:
+
+```text
+s
+```
+
+indica que se trata de um **socket**.
+
+As permissões:
+
+```text
+rwxr-xr-x
+```
+
+podem participar do controle de acesso ao socket.
+
+Isso permite que o sistema operacional controle quais usuários/processos podem acessar aquele endpoint.
+
+---
+
+## 27.11 Segurança: Unix Socket não significa automaticamente "seguro"
+
+É errado pensar:
+
+> "Se não existe IP, então não existe problema de segurança."
+
+Unix sockets ainda precisam de controle de acesso.
+
+Por exemplo:
+
+```text
+Aplicação A
+     │
+     │ acesso permitido
+     ↓
+/tmp/app.sock
+     ↑
+     │
+Aplicação B
+```
+
+Se as permissões forem configuradas incorretamente, outro processo local pode conseguir se conectar.
+
+Portanto, devemos considerar:
+
+- permissões;
+    
+- proprietário;
+    
+- grupo;
+    
+- diretório onde o socket está;
+    
+- autenticação da aplicação;
+    
+- autorização;
+    
+- usuários que podem acessar o endpoint.
+    
+
+---
+
+## 27.12 Onde colocar o Unix Socket?
+
+Um socket pode ficar em diferentes locais, mas devemos considerar as permissões e o ciclo de vida.
+
+Exemplo:
+
+```text
+/tmp/meu_socket.sock
+```
+
+é conveniente para testes.
+
+Aplicações de sistema podem utilizar locais específicos, como:
+
+```text
+/run/
+```
+
+ou diretórios próprios da aplicação.
+
+Em ambientes Linux, serviços frequentemente utilizam Unix sockets para disponibilizar APIs locais.
+
+---
+
+## 27.13 Unix Socket e APIs locais
+
+Um caso muito importante é utilizar Unix sockets como interface de comunicação entre:
+
+```text
+Aplicação
+     ↓
+Unix Socket
+     ↓
+Serviço local
+```
+
+Por exemplo:
+
+```text
+Aplicação web
+      ↓
+Unix Socket
+      ↓
+Servidor de aplicação
+```
+
+Isso permite que dois processos locais se comuniquem sem precisar abrir uma porta TCP acessível pela rede.
+
+Esse padrão aparece em diversos softwares e serviços Linux.
+
+---
+
+## 27.14 Unix Socket com `SOCK_DGRAM`
+
+Unix sockets também podem utilizar datagramas.
+
+Exemplo:
+
+```python
+server = socket.socket(
+    socket.AF_UNIX,
+    socket.SOCK_DGRAM
+)
+```
+
+Nesse caso, o modelo é baseado em datagramas em vez de stream.
+
+O servidor pode utilizar:
+
+```python
+data, address = server.recvfrom(1024)
+```
+
+e enviar:
+
+```python
+server.sendto(data, address)
+```
+
+A ideia é semelhante ao UDP:
+
+```text
+SOCK_STREAM
+    ↓
+fluxo de bytes
+
+SOCK_DGRAM
+    ↓
+datagramas
+```
+
+Porém, estamos falando de **Unix Domain Sockets**, e não de UDP/IP.
+
+---
+
+## 27.15 Unix Socket vs TCP localhost
+
+Uma dúvida comum é:
+
+> "Se ambos os processos estão na mesma máquina, por que não usar `127.0.0.1`?"
+
+Podemos usar TCP localhost:
+
+```text
+127.0.0.1:4444
+```
+
+mas um Unix socket pode ser mais apropriado quando a comunicação é estritamente local.
+
+Comparação:
+
+|Característica|TCP localhost|Unix Socket|
+|---|---|---|
+|Família|`AF_INET`|`AF_UNIX`|
+|Endereço|IP + porta|Caminho/socket local|
+|Rede IP|Sim|Não|
+|Comunicação remota|Possível|Não|
+|Permissões do filesystem|Não diretamente|Sim|
+|Uso típico|Serviços TCP|IPC local|
+|Identificação|IP + porta|Path/socket|
+
+---
+
+## 27.16 Unix Socket não possui porta TCP
+
+Isso é importante para diagnóstico.
+
+Se temos:
+
+```text
+/tmp/meu_socket.sock
+```
+
+não devemos procurar:
+
+```bash
+ss -lnt | grep 4444
+```
+
+esperando encontrar esse socket como uma porta TCP.
+
+Ele pertence a outra família:
+
+```text
+AF_UNIX
+```
+
+Podemos utilizar ferramentas como:
+
+```bash
+ss -lx
+```
+
+para listar Unix sockets.
+
+Por exemplo:
+
+```bash
+ss -lx
+```
+
+pode mostrar caminhos de sockets Unix em escuta.
+
+---
+
+## 27.17 Unix Socket abstrato no Linux
+
+No Linux existe ainda um recurso interessante chamado **abstract namespace** para Unix sockets.
+
+Em vez de utilizar um caminho real no filesystem, o endereço pode existir apenas dentro do namespace de sockets do kernel.
+
+Em Python, isso pode ser representado utilizando um endereço iniciado por `\0`.
+
+Exemplo conceitual:
+
+```python
+socket_path = "\0meu_socket"
+```
+
+e:
+
+```python
+server.bind(socket_path)
+```
+
+Nesse caso:
+
+```text
+não existe:
+/tmp/meu_socket.sock
+
+existe:
+um endereço mantido pelo kernel
+```
+
+Isso é específico do comportamento de sistemas Unix/Linux e não deve ser tratado como equivalente portátil a um pathname tradicional.
+
+Para aplicações portáveis, o caminho tradicional é geralmente mais simples.
+
+---
+
+## 27.18 Limitações dos Unix Sockets
+
+Unix sockets são excelentes para comunicação local, mas possuem limitações.
+
+### Não são para comunicação remota
+
+Não podemos fazer:
+
+```text
+Computador A
+     ↓
+/tmp/app.sock
+     ↓
+Computador B
+```
+
+O caminho pertence ao sistema local.
+
+Para comunicação entre máquinas, normalmente utilizamos:
+
+```text
+IPv4
+```
+
+ou:
+
+```text
+IPv6
+```
+
+---
+
+### Dependência do sistema operacional
+
+`AF_UNIX` é associado ao modelo Unix/POSIX e seu suporte e recursos específicos variam entre sistemas operacionais.
+
+Portanto, código baseado em Unix sockets não deve ser presumido como igualmente portátil em todos os ambientes.
+
+---
+
+### Gerenciamento do arquivo/socket
+
+É necessário considerar:
+
+- criação;
+    
+- permissões;
+    
+- existência anterior;
+    
+- remoção após encerramento;
+    
+- diretório utilizado;
+    
+- possíveis sockets abandonados.
+    
+
+---
+
+## 27.19 Modelo mental
+
+Agora temos três famílias importantes:
+
+```text
+                    SOCKET
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+     AF_INET        AF_INET6        AF_UNIX
+        │              │              │
+      IPv4           IPv6        Comunicação local
+        │              │              │
+  IP + porta       IP + porta     path/socket
+```
+
+E podemos pensar em:
+
+```text
+AF_INET
+    ↓
+Comunicação baseada em IPv4
+
+
+AF_INET6
+    ↓
+Comunicação baseada em IPv6
+
+
+AF_UNIX
+    ↓
+Comunicação entre processos locais
+```
+
+---
+
+## 27.20 Resumo da Parte
+
+- `AF_UNIX` representa Unix Domain Sockets.
+    
+- Unix sockets são utilizados principalmente para **comunicação entre processos locais**.
+    
+- Diferentemente de TCP/IP, não dependem de um endereço IP.
+    
+- Um Unix socket tradicional pode ser identificado por um caminho, como:
+    
+
+```text
+/tmp/meu_socket.sock
+```
+
+- Um servidor pode seguir:
+    
+
+```python
+socket()
+bind()
+listen()
+accept()
+recv()
+sendall()
+close()
+```
+
+- Um cliente pode seguir:
+    
+
+```python
+socket()
+connect()
+sendall()
+recv()
+close()
+```
+
+- `SOCK_STREAM` fornece comunicação orientada a fluxo.
+    
+- `SOCK_DGRAM` fornece comunicação baseada em datagramas.
+    
+- Unix sockets podem utilizar permissões do sistema de arquivos como parte do controle de acesso.
+    
+- A ausência de uma porta TCP não significa ausência de riscos de segurança.
+    
+- `ss -lx` pode ser utilizado para visualizar Unix sockets.
+    
+- Linux também possui o **abstract namespace** para Unix sockets.
+    
+- Unix sockets são apropriados quando a comunicação precisa permanecer na mesma máquina.
+    
+- Para comunicação entre máquinas, normalmente utilizamos IPv4 ou IPv6.
+    
+
+O modelo geral agora fica:
+
+```text
+                 SOCKETS
+                    │
+       ┌────────────┼────────────┐
+       │            │            │
+    AF_INET      AF_INET6     AF_UNIX
+       │            │            │
+     IPv4         IPv6       IPC local
+       │            │            │
+   IP + porta   IP + porta    socket/path
+```
+
+---
+

@@ -27058,3 +27058,1136 @@ Aplicação
 
 ---
 
+# 25. Certificados, autoridades certificadoras e validação TLS
+
+Na parte anterior vimos que o TLS pode fornecer **criptografia, integridade e autenticação**.
+
+Agora precisamos entender uma questão fundamental:
+
+> **Como o cliente sabe que o certificado apresentado pelo servidor realmente pertence ao servidor que ele está tentando acessar?**
+
+É aqui que entram conceitos como:
+
+- certificado digital;
+    
+- chave pública;
+    
+- chave privada;
+    
+- autoridade certificadora (CA);
+    
+- cadeia de confiança;
+    
+- hostname;
+    
+- validade;
+    
+- verificação de certificado.
+    
+
+---
+
+## 25.1 O problema da autenticação
+
+Imagine que você queira acessar:
+
+```text
+https://banco.example
+```
+
+Você estabelece uma conexão TLS.
+
+Mas existe um problema:
+
+```text
+"Como sei que o servidor do outro lado é realmente banco.example?"
+```
+
+Um atacante poderia tentar fazer:
+
+```text
+Cliente
+   │
+   ▼
+Atacante
+   │
+   ▼
+Servidor legítimo
+```
+
+Se o cliente simplesmente aceitasse qualquer certificado apresentado, o atacante poderia criar seu próprio certificado e dizer:
+
+```text
+"Eu sou banco.example"
+```
+
+Por isso, não basta existir criptografia.
+
+Precisamos verificar a **identidade do servidor**.
+
+---
+
+## 25.2 Certificado digital como identidade criptográfica
+
+Um certificado digital pode ser entendido, de forma simplificada, como uma declaração assinada que associa:
+
+```text
+identidade
+    +
+chave pública
+```
+
+Por exemplo:
+
+```text
+Certificado
+├── Nome: exemplo.com
+├── Chave pública: ...
+├── Validade: ...
+├── Emissor: CA X
+└── Assinatura da CA
+```
+
+A ideia é:
+
+```text
+"Esta chave pública está associada a este nome,
+e uma autoridade confiável assinou essa afirmação."
+```
+
+---
+
+## 25.3 Chave pública e chave privada
+
+O sistema utiliza um par de chaves:
+
+```text
+┌─────────────────────┐
+│ Par criptográfico   │
+├─────────────────────┤
+│ Chave pública       │
+│ Chave privada       │
+└─────────────────────┘
+```
+
+A chave pública pode ser distribuída.
+
+A chave privada deve ser protegida.
+
+Podemos representar:
+
+```text
+Servidor
+   │
+   ├── chave privada 🔒
+   │
+   └── chave pública
+            │
+            ▼
+        certificado
+```
+
+O certificado contém a chave pública do servidor, juntamente com informações sobre sua identidade e a assinatura da autoridade certificadora.
+
+---
+
+## 25.4 O que uma CA faz?
+
+Uma **CA (Certificate Authority)** é uma entidade responsável por emitir ou assinar certificados dentro de uma infraestrutura de confiança.
+
+O modelo simplificado é:
+
+```text
+              CA
+              │
+              │ assina
+              ▼
+       Certificado
+              │
+              ▼
+          Servidor
+```
+
+O cliente possui um conjunto de CAs consideradas confiáveis.
+
+Assim, quando recebe um certificado, pode perguntar:
+
+```text
+"Quem assinou este certificado?"
+```
+
+e depois:
+
+```text
+"Eu confio nessa autoridade?"
+```
+
+---
+
+## 25.5 Cadeia de confiança
+
+Na prática, a confiança pode envolver vários certificados.
+
+Podemos ter:
+
+```text
+Root CA
+   │
+   ▼
+Intermediate CA
+   │
+   ▼
+Certificado do servidor
+```
+
+Isso é chamado de **cadeia de certificação** ou **cadeia de confiança**.
+
+Por exemplo:
+
+```text
+Root CA
+  │
+  └── assina
+        │
+        ▼
+Intermediate CA
+  │
+  └── assina
+        │
+        ▼
+Certificado exemplo.com
+```
+
+O cliente verifica essa cadeia até chegar a uma autoridade raiz que esteja em seu conjunto de confiança.
+
+---
+
+## 25.6 Root CA
+
+A **Root CA** ocupa uma posição especial na cadeia.
+
+Ela normalmente é uma autoridade cuja confiança já está configurada no sistema operacional, navegador ou ambiente de execução.
+
+Podemos imaginar:
+
+```text
+Sistema operacional
+       │
+       ▼
+Trust Store
+       │
+       ├── Root CA A
+       ├── Root CA B
+       ├── Root CA C
+       └── ...
+```
+
+O cliente pode utilizar essa base de confiança para validar certificados.
+
+---
+
+## 25.7 Trust Store
+
+O **trust store** é o conjunto de certificados de autoridades consideradas confiáveis por determinado ambiente.
+
+Dependendo do sistema, ele pode estar localizado em diferentes arquivos ou diretórios.
+
+No Linux, por exemplo, existem mecanismos do sistema para disponibilizar certificados CA confiáveis.
+
+No Python, o contexto TLS pode utilizar as autoridades confiáveis disponibilizadas pelo sistema ou pela configuração do ambiente.
+
+A ideia principal é:
+
+```text
+Servidor
+   │
+   ▼
+certificado
+   │
+   ▼
+cadeia
+   │
+   ▼
+CA confiável?
+   │
+   ├── sim → pode continuar
+   │
+   └── não → falha de validação
+```
+
+---
+
+## 25.8 Verificação do hostname
+
+Mesmo que o certificado seja assinado por uma CA confiável, ainda existe outra pergunta:
+
+> **O certificado foi emitido para o servidor que estou tentando acessar?**
+
+Imagine:
+
+```text
+Cliente quer:
+api.exemplo.com
+```
+
+Mas o certificado apresenta:
+
+```text
+outro-site.com
+```
+
+Mesmo que esse certificado seja válido e assinado por uma CA confiável, ele não corresponde ao hostname desejado.
+
+Por isso, a validação também verifica o nome.
+
+---
+
+## 25.9 SAN — Subject Alternative Name
+
+Nos certificados modernos, os nomes dos hosts são normalmente encontrados no campo:
+
+```text
+Subject Alternative Name
+```
+
+ou simplesmente:
+
+```text
+SAN
+```
+
+Um certificado pode conter vários nomes:
+
+```text
+SAN:
+    exemplo.com
+    www.exemplo.com
+    api.exemplo.com
+```
+
+Assim, o mesmo certificado pode ser válido para diferentes nomes, desde que estejam adequadamente incluídos.
+
+---
+
+## 25.10 Wildcards
+
+Certificados também podem utilizar nomes com wildcard em determinadas posições.
+
+Por exemplo:
+
+```text
+*.example.com
+```
+
+Pode representar nomes como:
+
+```text
+www.example.com
+api.example.com
+mail.example.com
+```
+
+Mas não significa automaticamente:
+
+```text
+example.com
+```
+
+O comportamento de correspondência de nomes possui regras específicas.
+
+Por isso, não devemos simplesmente pensar:
+
+```text
+*.example.com = qualquer coisa
+```
+
+---
+
+## 25.11 Validade temporal
+
+Um certificado possui um período de validade.
+
+Podemos imaginar:
+
+```text
+Not Before
+     │
+     ▼
+┌─────────────────────┐
+│ certificado válido  │
+└─────────────────────┘
+     │
+     ▼
+Not After
+```
+
+Se o certificado estiver:
+
+```text
+ainda não válido
+```
+
+ou:
+
+```text
+expirado
+```
+
+a validação pode falhar.
+
+Por isso, certificados possuem datas de início e término.
+
+---
+
+## 25.12 Assinatura digital do certificado
+
+A CA utiliza sua chave privada para assinar o certificado.
+
+De maneira simplificada:
+
+```text
+Informações do certificado
+          │
+          ▼
+       assinatura
+          │
+          ▼
+     Certificado
+```
+
+O cliente possui a chave pública correspondente da CA através de sua cadeia de confiança.
+
+Assim, consegue verificar se o certificado foi realmente assinado pela autoridade correspondente e se não foi alterado.
+
+---
+
+## 25.13 Não confunda assinatura com criptografia do certificado
+
+Um certificado assinado não significa:
+
+```text
+"o certificado inteiro está criptografado."
+```
+
+A assinatura digital tem como objetivo permitir verificar:
+
+- autenticidade da assinatura;
+    
+- integridade dos dados assinados.
+    
+
+A criptografia da comunicação TLS é outra questão.
+
+Portanto:
+
+```text
+Assinatura digital
+        ↓
+autenticidade/integridade
+
+Criptografia TLS
+        ↓
+confidencialidade da comunicação
+```
+
+São conceitos relacionados, mas diferentes.
+
+---
+
+## 25.14 Processo simplificado de validação
+
+Quando um cliente recebe um certificado, podemos imaginar:
+
+```text
+                 Certificado
+                      │
+                      ▼
+             ┌─────────────────┐
+             │ Está dentro da  │
+             │ validade?       │
+             └───────┬─────────┘
+                     │
+                sim  │  não
+                     │
+                     ▼
+             ┌─────────────────┐
+             │ Hostname        │
+             │ corresponde?    │
+             └───────┬─────────┘
+                     │
+                sim  │  não
+                     │
+                     ▼
+             ┌─────────────────┐
+             │ Cadeia confiável│
+             │ até uma CA?     │
+             └───────┬─────────┘
+                     │
+                sim  │  não
+                     │
+                     ▼
+               Certificado
+                  aceito
+```
+
+A implementação real possui mais detalhes, mas esse modelo é excelente para entender o conceito.
+
+---
+
+## 25.15 O que acontece se a validação falhar?
+
+O Python pode gerar exceções relacionadas ao TLS, como:
+
+```python
+ssl.SSLCertVerificationError
+```
+
+Por exemplo, se o certificado apresentado não puder ser validado corretamente.
+
+Conceitualmente:
+
+```python
+try:
+    ...
+except ssl.SSLCertVerificationError as e:
+    print(f"Certificado inválido: {e}")
+```
+
+Isso é muito melhor do que simplesmente desabilitar a validação.
+
+---
+
+## 25.16 Exemplo de cliente corretamente configurado
+
+Podemos utilizar:
+
+```python
+import socket
+import ssl
+
+context = ssl.create_default_context()
+
+with socket.create_connection(
+    ("example.com", 443)
+) as sock:
+
+    with context.wrap_socket(
+        sock,
+        server_hostname="example.com"
+    ) as secure_sock:
+
+        print(secure_sock.version())
+
+        secure_sock.sendall(
+            b"GET / HTTP/1.1\r\n"
+            b"Host: example.com\r\n"
+            b"Connection: close\r\n"
+            b"\r\n"
+        )
+
+        while True:
+            data = secure_sock.recv(4096)
+
+            if not data:
+                break
+
+            print(data)
+```
+
+Aqui:
+
+```text
+create_default_context()
+        │
+        ▼
+configuração TLS segura
+        │
+        ▼
+wrap_socket()
+        │
+        ▼
+server_hostname
+        │
+        ▼
+handshake + validação
+        │
+        ▼
+comunicação protegida
+```
+
+---
+
+## 25.17 Obtendo informações do certificado
+
+Depois de estabelecer uma conexão TLS, podemos consultar informações:
+
+```python
+certificate = secure_sock.getpeercert()
+```
+
+Exemplo:
+
+```python
+print(certificate)
+```
+
+O retorno pode conter informações estruturadas sobre o certificado do peer.
+
+Também podemos consultar:
+
+```python
+secure_sock.version()
+```
+
+para descobrir a versão do TLS negociada.
+
+Por exemplo, dependendo da configuração:
+
+```text
+TLSv1.3
+```
+
+---
+
+## 25.18 `cipher()`
+
+Também podemos consultar o conjunto criptográfico negociado:
+
+```python
+secure_sock.cipher()
+```
+
+Por exemplo:
+
+```python
+print(secure_sock.cipher())
+```
+
+Isso retorna informações sobre o cipher suite utilizado na sessão.
+
+Não é necessário decorar nomes de cipher suites agora.
+
+O importante é entender que durante o handshake o cliente e o servidor negociam parâmetros criptográficos compatíveis.
+
+---
+
+## 25.19 Negociação TLS
+
+O cliente e o servidor precisam encontrar parâmetros que ambos suportem.
+
+Conceitualmente:
+
+```text
+Cliente
+ ├── versões suportadas
+ ├── algoritmos suportados
+ └── extensões
+          │
+          ▼
+       Handshake
+          │
+          ▼
+Servidor
+ ├── versões suportadas
+ ├── algoritmos suportados
+ └── extensões
+```
+
+O protocolo negocia uma configuração compatível.
+
+TLS moderno possui mecanismos para fazer essa negociação de maneira segura.
+
+---
+
+## 25.20 TLS não usa apenas "uma chave"
+
+Uma simplificação comum é pensar:
+
+```text
+"TLS pega uma senha e criptografa tudo com ela."
+```
+
+A realidade é mais sofisticada.
+
+Durante o handshake são estabelecidos segredos que serão utilizados para proteger a sessão.
+
+Podemos simplificar:
+
+```text
+Handshake
+    │
+    ▼
+estabelecimento de segredos
+    │
+    ▼
+chaves de sessão
+    │
+    ▼
+dados protegidos
+```
+
+As técnicas criptográficas utilizadas no handshake e na proteção dos dados possuem papéis diferentes.
+
+---
+
+## 25.21 Criptografia assimétrica e simétrica
+
+TLS utiliza conceitos de criptografia assimétrica e simétrica.
+
+### Assimétrica
+
+Utiliza um par:
+
+```text
+chave pública
+chave privada
+```
+
+Ela é útil para autenticação e estabelecimento seguro de parâmetros.
+
+### Simétrica
+
+Utiliza uma chave secreta compartilhada para proteger os dados da sessão.
+
+De forma simplificada:
+
+```text
+Handshake
+   │
+   ├── autenticação
+   └── estabelecimento de segredos
+             │
+             ▼
+       chave(s) de sessão
+             │
+             ▼
+      dados da aplicação
+```
+
+A criptografia simétrica é muito mais adequada para proteger grandes volumes de dados durante a sessão.
+
+---
+
+## 25.22 Por que não usar somente criptografia assimétrica?
+
+Criptografia assimétrica possui custos computacionais diferentes da criptografia simétrica.
+
+Por isso, não é eficiente imaginar:
+
+```text
+cada byte da comunicação
+        ↓
+criptografia assimétrica
+```
+
+Em vez disso, TLS utiliza mecanismos criptográficos diferentes para diferentes etapas da comunicação.
+
+O resultado é uma combinação eficiente de:
+
+```text
+autenticação
++
+estabelecimento seguro de chaves
++
+criptografia simétrica da sessão
+```
+
+---
+
+## 25.23 Forward Secrecy
+
+Outro conceito importante é **Forward Secrecy**, também chamado de Perfect Forward Secrecy em determinados contextos.
+
+A ideia simplificada é:
+
+> O comprometimento posterior de uma chave de longo prazo não deve permitir automaticamente a descriptografia de sessões passadas que utilizaram segredos efêmeros apropriados.
+
+Podemos imaginar:
+
+```text
+Sessão A → segredo A
+Sessão B → segredo B
+Sessão C → segredo C
+```
+
+Em vez de:
+
+```text
+todas as sessões
+       │
+       ▼
+uma única chave de sessão permanente
+```
+
+Esse conceito ajuda a limitar o impacto de determinados comprometimentos futuros.
+
+TLS moderno utiliza mecanismos de estabelecimento de chaves que fornecem essa propriedade em configurações apropriadas.
+
+---
+
+## 25.24 O perigo do "TLS sem validação"
+
+Considere:
+
+```python
+context = ssl.create_default_context()
+
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+```
+
+Agora imagine:
+
+```text
+Cliente
+   │
+   ▼
+Atacante
+   │
+   ▼
+Servidor legítimo
+```
+
+O cliente pode estabelecer uma conexão TLS com o atacante.
+
+A conexão pode estar criptografada.
+
+Mas o cliente não verificou corretamente a identidade do servidor.
+
+Portanto:
+
+```text
+TLS
++
+sem autenticação adequada
+=
+criptografia sem garantia de identidade
+```
+
+Esse é um erro muito importante em aplicações de segurança.
+
+---
+
+## 25.25 TLS e ataques Man-in-the-Middle
+
+O ataque clássico relacionado a esse problema é o:
+
+**Man-in-the-Middle (MITM)**.
+
+Visualmente:
+
+```text
+Cliente
+   │
+   │ pensa que está falando com servidor
+   ▼
+Atacante
+   │
+   │ fala com servidor real
+   ▼
+Servidor
+```
+
+Sem autenticação adequada, o atacante pode tentar interceptar e intermediar a comunicação.
+
+Com TLS corretamente validado:
+
+```text
+Cliente
+   │
+   │ verifica certificado
+   ▼
+Servidor legítimo
+```
+
+O atacante não consegue simplesmente apresentar qualquer certificado e ser aceito como o servidor legítimo.
+
+---
+
+## 25.26 Certificados autoassinados
+
+Um certificado também pode ser **autoassinado**.
+
+Nesse caso:
+
+```text
+Certificado
+    │
+    └── assinado pela própria chave associada
+```
+
+Isso não significa automaticamente:
+
+```text
+"certificado malicioso"
+```
+
+Certificados autoassinados podem ser úteis em:
+
+- laboratórios;
+    
+- desenvolvimento;
+    
+- ambientes internos;
+    
+- testes;
+    
+- infraestrutura controlada.
+    
+
+O problema é que o cliente precisa ter uma forma explícita de confiar nessa autoridade/certificado.
+
+Por isso, ao utilizar um certificado autoassinado em um ambiente de teste, podemos configurar o cliente para confiar explicitamente nele.
+
+---
+
+## 25.27 Desenvolvimento versus produção
+
+Em laboratório, podemos utilizar:
+
+```text
+certificado autoassinado
+```
+
+Mas em produção precisamos pensar em:
+
+```text
+certificado válido
+        +
+cadeia de confiança
+        +
+hostname correto
+        +
+chave privada protegida
+        +
+renovação
+        +
+configuração TLS adequada
+```
+
+Não devemos transformar uma configuração de laboratório em configuração de produção simplesmente copiando o código.
+
+---
+
+## 25.28 TLS e portas
+
+TLS não possui necessariamente uma porta própria.
+
+Por exemplo:
+
+```text
+HTTPS → normalmente TCP 443
+```
+
+Mas podemos utilizar TLS sobre outras portas.
+
+Por exemplo:
+
+```text
+Aplicação própria
+      │
+      ▼
+TLS
+      │
+      ▼
+TCP 4444
+```
+
+O número da porta é apenas parte do endereçamento.
+
+O que importa é a configuração do protocolo em cada lado.
+
+---
+
+## 25.29 TLS sobre nosso servidor TCP
+
+Podemos atualizar o modelo que estudamos anteriormente:
+
+### TCP simples
+
+```text
+Servidor
+   │
+socket()
+   │
+bind()
+   │
+listen()
+   │
+accept()
+   │
+recv()/send()
+```
+
+### TCP + TLS
+
+```text
+Servidor
+   │
+socket()
+   │
+bind()
+   │
+listen()
+   │
+TLS
+   │
+handshake
+   │
+recv()/send()
+```
+
+A aplicação continua trabalhando com dados, mas agora existe uma camada criptográfica entre a aplicação e o transporte.
+
+---
+
+## 25.30 Arquitetura completa
+
+Podemos finalmente juntar vários conceitos estudados:
+
+```text
+┌─────────────────────────────────────┐
+│ Aplicação                           │
+│ protocolo / autenticação / comandos │
+├─────────────────────────────────────┤
+│ TLS                                 │
+│ criptografia / integridade / auth  │
+├─────────────────────────────────────┤
+│ TCP                                 │
+│ stream confiável de bytes           │
+├─────────────────────────────────────┤
+│ IP                                  │
+│ endereçamento e roteamento          │
+├─────────────────────────────────────┤
+│ Rede                                │
+└─────────────────────────────────────┘
+```
+
+E no lado do servidor:
+
+```text
+Aplicação
+    │
+    ▼
+TLS
+    │
+    ▼
+Socket TCP
+    │
+    ▼
+Kernel
+    │
+    ▼
+TCP/IP
+    │
+    ▼
+Rede
+```
+
+---
+
+## 25.31 O que realmente precisamos validar?
+
+Ao construir um cliente TLS, podemos pensar em uma lista mental:
+
+```text
+[✓] Certificado apresentado
+[✓] Cadeia de confiança
+[✓] CA confiável
+[✓] Certificado dentro da validade
+[✓] Hostname corresponde
+[✓] Versão TLS adequada
+[✓] Configuração criptográfica adequada
+[✓] Chave privada protegida no servidor
+```
+
+Essa mentalidade é muito mais importante do que simplesmente memorizar funções da biblioteca.
+
+---
+
+## 25.32 Resumo da Parte
+
+- Certificados digitais associam uma identidade a uma chave pública.
+    
+- A **CA** é responsável por assinar/emitir certificados dentro de uma cadeia de confiança.
+    
+- O cliente possui uma base de autoridades confiáveis chamada **trust store**.
+    
+- A validação envolve mais do que verificar se uma CA assinou o certificado.
+    
+- Também precisamos verificar:
+    
+    - validade temporal;
+        
+    - cadeia de confiança;
+        
+    - hostname;
+        
+    - assinatura;
+        
+    - políticas relevantes.
+        
+- O **SAN (Subject Alternative Name)** contém os nomes para os quais o certificado é válido.
+    
+- Certificados podem conter vários nomes.
+    
+- Wildcards possuem regras específicas de correspondência.
+    
+- A chave privada do servidor deve ser protegida.
+    
+- Certificado e chave privada são coisas diferentes.
+    
+- `ssl.create_default_context()` fornece uma configuração apropriada para clientes em cenários comuns.
+    
+- `ssl.SSLCertVerificationError` pode ocorrer quando a validação do certificado falha.
+    
+- `getpeercert()` permite consultar informações do certificado apresentado pelo peer.
+    
+- `version()` permite consultar a versão TLS negociada.
+    
+- `cipher()` permite consultar informações sobre o cipher suite utilizado.
+    
+- TLS utiliza criptografia assimétrica e simétrica em diferentes partes do processo.
+    
+- Mecanismos de estabelecimento de chaves podem fornecer **Forward Secrecy**.
+    
+- Desabilitar `CERT_NONE` e `check_hostname` pode remover proteções fundamentais.
+    
+- TLS corretamente configurado ajuda a impedir ataques **Man-in-the-Middle**.
+    
+- Certificados autoassinados podem ser úteis em laboratórios, mas exigem uma configuração explícita de confiança.
+    
+- TLS protege o canal, mas não corrige vulnerabilidades da aplicação.
+    
+
+**Modelo mental final:**
+
+```text
+Cliente
+   │
+   │ 1. conecta
+   ▼
+Servidor
+   │
+   │ 2. apresenta certificado
+   ▼
+Cliente
+   │
+   ├── CA confiável?
+   ├── cadeia válida?
+   ├── certificado dentro da validade?
+   ├── hostname correto?
+   └── assinatura válida?
+          │
+          ▼
+     identidade validada
+          │
+          ▼
+    sessão TLS protegida
+          │
+          ▼
+    protocolo da aplicação
+```
+
+---
+

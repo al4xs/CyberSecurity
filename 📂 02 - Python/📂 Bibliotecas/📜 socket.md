@@ -25924,3 +25924,1134 @@ programação assíncrona
 ```
 
 
+---
+
+# 24. TLS/SSL com sockets e a biblioteca `ssl`
+
+Até agora trabalhamos principalmente com sockets TCP diretamente.
+
+O TCP fornece:
+
+- conexão;
+    
+- entrega confiável;
+    
+- ordenação dos bytes;
+    
+- retransmissão;
+    
+- controle de fluxo;
+    
+- controle de congestionamento.
+    
+
+Mas existe um problema fundamental:
+
+> **TCP não criptografa os dados.**
+
+Se fizermos:
+
+```python
+client.sendall(b"senha=123456")
+```
+
+os bytes são transportados pelo TCP, mas o TCP não fornece confidencialidade.
+
+Para proteger a comunicação, podemos utilizar **TLS**.
+
+---
+
+## 24.1 O que é TLS?
+
+**TLS (Transport Layer Security)** é um protocolo criptográfico utilizado para proteger comunicações através de uma rede.
+
+Ele fornece principalmente:
+
+```text
+Confidencialidade
+Integridade
+Autenticação
+```
+
+Podemos imaginar:
+
+```text
+Sem TLS:
+
+Aplicação
+   │
+   ▼
+TCP
+   │
+   ▼
+Rede
+   │
+   ▼
+Servidor
+
+Dados podem ser observados/modificados
+por alguém que consiga interceptar a comunicação.
+```
+
+Com TLS:
+
+```text
+Aplicação
+   │
+   ▼
+TLS
+   │
+   ▼
+TCP
+   │
+   ▼
+Rede
+   │
+   ▼
+TCP
+   │
+   ▼
+TLS
+   │
+   ▼
+Aplicação
+```
+
+O TLS cria uma camada de segurança sobre o transporte.
+
+---
+
+## 24.2 TLS não substitui TCP
+
+Uma confusão comum é pensar:
+
+```text
+TLS = protocolo de transporte
+```
+
+Não é essa a ideia.
+
+Normalmente temos:
+
+```text
+Aplicação
+     │
+     ▼
+    TLS
+     │
+     ▼
+    TCP
+     │
+     ▼
+     IP
+     │
+     ▼
+    Rede
+```
+
+Por exemplo, no HTTPS:
+
+```text
+HTTP
+ │
+ ▼
+TLS
+ │
+ ▼
+TCP
+ │
+ ▼
+IP
+```
+
+O HTTP continua sendo responsável pelo protocolo da aplicação.
+
+O TLS protege a comunicação.
+
+O TCP continua fornecendo o transporte confiável.
+
+---
+
+## 24.3 O que o TLS protege?
+
+Imagine que um cliente envie:
+
+```text
+LOGIN allan
+PASSWORD minha_senha
+```
+
+Sem criptografia, os dados da aplicação são enviados diretamente ao TCP.
+
+Com TLS:
+
+```text
+Aplicação
+    │
+    ▼
+dados originais
+    │
+    ▼
+TLS
+    │
+    ▼
+dados protegidos
+    │
+    ▼
+TCP
+    │
+    ▼
+Rede
+```
+
+Quem interceptar os pacotes não deverá conseguir simplesmente ler o conteúdo da aplicação.
+
+---
+
+## 24.4 Confidencialidade
+
+A confidencialidade significa que o conteúdo da comunicação é protegido contra leitura por terceiros.
+
+Por exemplo:
+
+```text
+Original:
+
+senha=123456
+```
+
+O conteúdo transmitido através do TLS não aparece simplesmente como:
+
+```text
+senha=123456
+```
+
+para um observador da rede.
+
+A criptografia transforma os dados em uma representação protegida.
+
+Conceitualmente:
+
+```text
+plaintext
+    │
+    ▼
+  TLS
+    │
+    ▼
+ciphertext
+    │
+    ▼
+  rede
+```
+
+No destino:
+
+```text
+ciphertext
+    │
+    ▼
+  TLS
+    │
+    ▼
+plaintext
+```
+
+---
+
+## 24.5 Integridade
+
+TLS também ajuda a detectar alterações indevidas nos dados durante o transporte.
+
+Imagine:
+
+```text
+Cliente
+   │
+   │ "transferir=100"
+   ▼
+Rede
+   │
+   X alguém tenta alterar
+   │
+   ▼
+Servidor
+```
+
+O mecanismo criptográfico do TLS permite detectar alterações que não foram produzidas legitimamente pela comunicação.
+
+Isso protege contra modificações silenciosas dos dados.
+
+---
+
+## 24.6 Autenticação
+
+TLS também pode fornecer autenticação.
+
+No caso mais comum de HTTPS:
+
+```text
+Cliente
+   │
+   │ "Estou conectado ao servidor?"
+   ▼
+Servidor
+   │
+   ▼
+certificado
+```
+
+O certificado permite ao cliente verificar a identidade apresentada pelo servidor, desde que a cadeia de confiança seja válida e o nome esperado corresponda.
+
+Isso é fundamental para evitar que um atacante simplesmente se apresente como o servidor legítimo.
+
+---
+
+## 24.7 O certificado digital
+
+Um certificado TLS normalmente contém informações como:
+
+```text
+Identidade do servidor
+Nome(s) para os quais o certificado é válido
+Chave pública
+Autoridade certificadora
+Período de validade
+Assinatura da autoridade certificadora
+```
+
+Podemos visualizar:
+
+```text
+Certificado
+├── Identidade
+├── Domínios
+├── Chave pública
+├── Validade
+├── CA
+└── Assinatura
+```
+
+A assinatura permite que o cliente valide a origem do certificado dentro da cadeia de confiança.
+
+---
+
+## 24.8 CA — Certificate Authority
+
+**CA (Certificate Authority)** é uma autoridade certificadora.
+
+Exemplos conhecidos no ecossistema TLS incluem organizações que emitem certificados para servidores.
+
+O modelo é aproximadamente:
+
+```text
+                 CA confiável
+                     │
+                     │ assina
+                     ▼
+              Certificado
+                     │
+                     ▼
+                  Servidor
+                     │
+                     ▼
+                  Cliente
+```
+
+O cliente possui um conjunto de autoridades confiáveis.
+
+Quando recebe um certificado, pode verificar sua cadeia de confiança.
+
+---
+
+## 24.9 O handshake TLS
+
+Antes de a aplicação utilizar a conexão protegida, cliente e servidor precisam estabelecer parâmetros criptográficos.
+
+Isso acontece durante o **TLS handshake**.
+
+Uma visão simplificada:
+
+```text
+Cliente                         Servidor
+   │                                │
+   │──── informações iniciais ─────►│
+   │                                │
+   │◄──── certificado/configuração ─│
+   │                                │
+   │──── informações necessárias ──►│
+   │                                │
+   │◄──── confirmação ──────────────│
+   │                                │
+   │════ comunicação protegida ═════│
+```
+
+O handshake real é mais complexo e depende da versão e da configuração do TLS.
+
+O objetivo é estabelecer uma sessão criptograficamente protegida.
+
+---
+
+## 24.10 TLS 1.2 e TLS 1.3
+
+Existem diferentes versões do TLS.
+
+Atualmente, as versões modernas relevantes são principalmente:
+
+```text
+TLS 1.2
+TLS 1.3
+```
+
+O TLS 1.3 simplificou e melhorou partes do protocolo de handshake e removeu mecanismos criptográficos considerados inadequados.
+
+Ao desenvolver uma aplicação moderna, devemos utilizar configurações seguras fornecidas pela biblioteca e pelo sistema, em vez de tentar construir manualmente os mecanismos criptográficos.
+
+---
+
+## 24.11 A biblioteca `ssl` do Python
+
+Python fornece o módulo:
+
+```python
+import ssl
+```
+
+A biblioteca `ssl` permite utilizar TLS sobre sockets.
+
+Podemos imaginar:
+
+```text
+socket.socket()
+      │
+      ▼
+socket TCP
+      │
+      ▼
+ssl.SSLContext
+      │
+      ▼
+TLS
+```
+
+O objeto mais importante para começar é:
+
+```python
+ssl.SSLContext
+```
+
+---
+
+## 24.12 Por que utilizar `SSLContext`?
+
+Em vez de configurar cada detalhe criptográfico diretamente em cada conexão, utilizamos um contexto.
+
+Exemplo:
+
+```python
+context = ssl.create_default_context()
+```
+
+Esse contexto representa uma configuração TLS.
+
+Podemos então utilizá-lo para criar uma conexão segura.
+
+---
+
+## 24.13 Cliente TLS
+
+Um cliente pode criar um socket TCP:
+
+```python
+import socket
+import ssl
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Depois podemos criar um contexto:
+
+```python
+context = ssl.create_default_context()
+```
+
+E envolver o socket:
+
+```python
+secure_sock = context.wrap_socket(
+    sock,
+    server_hostname="example.com"
+)
+```
+
+Depois:
+
+```python
+secure_sock.connect(
+    ("example.com", 443)
+)
+```
+
+A ideia é:
+
+```text
+socket TCP
+    │
+    ▼
+wrap_socket()
+    │
+    ▼
+socket TLS
+    │
+    ▼
+connect()
+```
+
+---
+
+## 24.14 Por que `server_hostname` é importante?
+
+Observe:
+
+```python
+server_hostname="example.com"
+```
+
+Esse parâmetro é importante para a autenticação do servidor.
+
+Em conexões TLS modernas, o servidor pode hospedar vários domínios no mesmo endereço IP.
+
+Por exemplo:
+
+```text
+IP: 203.0.113.10
+
+    ├── exemplo.com
+    ├── site.com
+    └── api.com
+```
+
+O cliente precisa indicar qual nome está tentando acessar.
+
+Esse mecanismo está relacionado ao **SNI (Server Name Indication)**.
+
+Além disso, o nome é utilizado na verificação da identidade do certificado quando a validação está habilitada.
+
+---
+
+## 24.15 Forma mais simples para clientes
+
+Para clientes, geralmente é melhor utilizar:
+
+```python
+ssl.create_default_context()
+```
+
+em vez de criar manualmente uma configuração insegura.
+
+Exemplo:
+
+```python
+import socket
+import ssl
+
+context = ssl.create_default_context()
+
+with socket.create_connection(
+    ("example.com", 443)
+) as sock:
+
+    with context.wrap_socket(
+        sock,
+        server_hostname="example.com"
+    ) as secure_sock:
+
+        secure_sock.sendall(
+            b"GET / HTTP/1.1\r\n"
+            b"Host: example.com\r\n"
+            b"Connection: close\r\n"
+            b"\r\n"
+        )
+
+        response = secure_sock.recv(4096)
+
+        print(response)
+```
+
+Aqui temos:
+
+```text
+socket.create_connection()
+        │
+        ▼
+TCP
+        │
+        ▼
+wrap_socket()
+        │
+        ▼
+TLS handshake
+        │
+        ▼
+comunicação protegida
+```
+
+---
+
+## 24.16 `create_default_context()`
+
+A função:
+
+```python
+ssl.create_default_context()
+```
+
+é uma maneira recomendada de obter uma configuração padrão apropriada para uso como cliente TLS.
+
+Exemplo:
+
+```python
+context = ssl.create_default_context()
+```
+
+Ela configura o contexto para realizar verificações apropriadas de certificados em cenários comuns de cliente.
+
+Isso é muito diferente de simplesmente desabilitar a verificação.
+
+---
+
+## 24.17 O erro perigoso: desabilitar a verificação
+
+Podemos encontrar códigos como:
+
+```python
+context.check_hostname = False
+```
+
+ou:
+
+```python
+context.verify_mode = ssl.CERT_NONE
+```
+
+Essas configurações podem ser úteis em cenários muito específicos de laboratório, mas são perigosas para uma aplicação que precisa autenticar o servidor.
+
+Por exemplo:
+
+```text
+Cliente
+   │
+   ▼
+Atacante
+   │
+   ▼
+Servidor falso
+```
+
+Se o cliente não verificar adequadamente o certificado e o nome do servidor, pode acabar estabelecendo uma conexão criptografada com o **atacante**, em vez do servidor legítimo.
+
+Portanto:
+
+> **Criptografia sem autenticação não garante que você esteja falando com o servidor correto.**
+
+---
+
+## 24.18 TLS não significa automaticamente "servidor confiável"
+
+Imagine:
+
+```text
+Cliente ─── TLS ─── Atacante
+```
+
+A conexão pode estar criptografada.
+
+Mas isso não significa que:
+
+```text
+Atacante = servidor legítimo
+```
+
+Por isso existem dois conceitos diferentes:
+
+```text
+Criptografia
+    ↓
+protege o conteúdo
+
+Autenticação
+    ↓
+verifica a identidade
+```
+
+Uma conexão TLS corretamente configurada busca fornecer ambos.
+
+---
+
+## 24.19 Servidor TLS
+
+No lado do servidor, precisamos de um certificado e da chave privada correspondente.
+
+Conceitualmente:
+
+```text
+Servidor
+├── certificado
+└── chave privada
+```
+
+Criamos um contexto:
+
+```python
+context = ssl.SSLContext(
+    ssl.PROTOCOL_TLS_SERVER
+)
+```
+
+Depois carregamos o certificado:
+
+```python
+context.load_cert_chain(
+    certfile="server.crt",
+    keyfile="server.key"
+)
+```
+
+E podemos envolver o socket de escuta:
+
+```python
+secure_server = context.wrap_socket(
+    server,
+    server_side=True
+)
+```
+
+---
+
+## 24.20 Exemplo de servidor TLS
+
+Um exemplo didático:
+
+```python
+import socket
+import ssl
+
+context = ssl.SSLContext(
+    ssl.PROTOCOL_TLS_SERVER
+)
+
+context.load_cert_chain(
+    certfile="server.crt",
+    keyfile="server.key"
+)
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+secure_server = context.wrap_socket(
+    server,
+    server_side=True
+)
+
+while True:
+    client, address = secure_server.accept()
+
+    print(f"Cliente conectado: {address}")
+
+    data = client.recv(1024)
+
+    if data:
+        print(data)
+
+        client.sendall(data)
+
+    client.close()
+```
+
+Agora o fluxo é:
+
+```text
+Cliente
+   │
+   ▼
+TLS
+   │
+   ▼
+TCP
+   │
+   ▼
+Servidor TLS
+   │
+   ▼
+Aplicação
+```
+
+---
+
+## 24.21 Onde ficam os certificados?
+
+No servidor temos:
+
+```text
+server.crt
+server.key
+```
+
+O certificado pode ser distribuído.
+
+A chave privada **não deve ser distribuída**.
+
+Podemos visualizar:
+
+```text
+server.crt
+   │
+   └── pode ser enviado aos clientes
+
+server.key
+   │
+   └── permanece protegida no servidor
+```
+
+A chave privada é uma informação extremamente sensível.
+
+Se um atacante obtiver a chave privada utilizada pelo servidor, as consequências podem ser graves, dependendo do cenário e da configuração.
+
+---
+
+## 24.22 Certificado não é a chave privada
+
+É importante não confundir:
+
+```text
+Certificado
+```
+
+com:
+
+```text
+Chave privada
+```
+
+O certificado contém, entre outras informações, uma **chave pública**.
+
+A chave privada correspondente deve permanecer protegida.
+
+Conceitualmente:
+
+```text
+             Par de chaves
+          ┌─────────────────┐
+          │                 │
+          ▼                 ▼
+      Pública            Privada
+          │                 │
+          │                 └── protegida
+          │
+          ▼
+      certificado
+```
+
+---
+
+## 24.23 TLS e autenticação mútua
+
+Até agora falamos do cenário:
+
+```text
+Cliente ── verifica ──► Servidor
+```
+
+Mas TLS também pode ser configurado para autenticação mútua.
+
+Nesse cenário:
+
+```text
+Cliente ── autentica ──► Servidor
+Cliente ◄─ autentica ─── Servidor
+```
+
+Isso é chamado de **mTLS (mutual TLS)**.
+
+É utilizado em alguns ambientes onde tanto o servidor quanto o cliente precisam apresentar credenciais baseadas em certificados.
+
+Exemplo conceitual:
+
+```text
+Cliente
+  │
+  │ certificado do cliente
+  ▼
+Servidor
+  │
+  │ certificado do servidor
+  ▼
+Cliente
+```
+
+Esse assunto é mais avançado, mas é importante conhecer o conceito.
+
+---
+
+## 24.24 TLS não resolve todos os problemas de segurança
+
+Adicionar TLS não significa que a aplicação ficou automaticamente segura.
+
+TLS protege principalmente o canal de comunicação.
+
+Ainda podemos ter:
+
+```text
+TLS ✓
+mas
+
+SQL Injection
+    ✗
+
+Path Traversal
+    ✗
+
+Autenticação fraca
+    ✗
+
+Autorização incorreta
+    ✗
+
+RCE
+    ✗
+
+Validação de entrada ruim
+    ✗
+```
+
+Por exemplo:
+
+```text
+Cliente
+   │
+   │ conexão TLS segura
+   ▼
+Servidor
+   │
+   ▼
+"DELETE /todos_os_usuarios"
+```
+
+Se o servidor aceitar comandos perigosos sem autorização adequada, o TLS não impedirá isso.
+
+TLS protege a comunicação.
+
+A segurança da aplicação continua sendo responsabilidade do software.
+
+---
+
+## 24.25 TLS e o modelo das camadas
+
+Agora podemos atualizar nosso modelo:
+
+```text
+┌──────────────────────────────┐
+│ Aplicação                   │
+│ HTTP / protocolo próprio    │
+├──────────────────────────────┤
+│ TLS                         │
+│ criptografia/autenticação   │
+├──────────────────────────────┤
+│ TCP                         │
+│ transporte confiável        │
+├──────────────────────────────┤
+│ IP                          │
+│ endereçamento/roteamento    │
+├──────────────────────────────┤
+│ Link físico/rede local      │
+└──────────────────────────────┘
+```
+
+Cada camada possui uma responsabilidade diferente.
+
+---
+
+## 24.26 TCP versus TLS
+
+|Característica|TCP|TLS|
+|---|---|---|
+|Transporte confiável|Sim|Utiliza o transporte subjacente|
+|Ordenação dos bytes|Sim|Utiliza o stream fornecido pelo TCP|
+|Criptografia|Não|Sim|
+|Integridade criptográfica|Não|Sim|
+|Autenticação do servidor|Não|Sim, quando configurado/verificado|
+|Protocolo de aplicação|Não|Também não|
+|Porta própria|Não|Não necessariamente|
+|Proteção contra espionagem|Não|Sim|
+
+Portanto:
+
+```text
+TCP
++
+TLS
++
+protocolo de aplicação
+```
+
+formam uma pilha de comunicação muito comum.
+
+---
+
+## 24.27 HTTPS
+
+O exemplo mais conhecido é o HTTPS:
+
+```text
+HTTP
+  │
+  ▼
+TLS
+  │
+  ▼
+TCP
+  │
+  ▼
+IP
+```
+
+Quando acessamos:
+
+```text
+https://exemplo.com
+```
+
+o navegador normalmente estabelece uma conexão protegida por TLS antes de trocar os dados HTTP protegidos.
+
+Assim:
+
+```text
+GET /login
+```
+
+é transportado dentro da sessão TLS.
+
+---
+
+## 24.28 O que um atacante na rede consegue observar?
+
+Mesmo com TLS, alguns metadados podem continuar visíveis dependendo da versão, configuração e infraestrutura.
+
+Por exemplo, um observador pode conseguir inferir informações como:
+
+```text
+IP de origem
+IP de destino
+porta
+volume aproximado de tráfego
+momento da comunicação
+duração da conexão
+```
+
+TLS não significa:
+
+```text
+"nada sobre a comunicação é observável."
+```
+
+Significa principalmente que o **conteúdo protegido da sessão** não fica disponível em texto simples para um observador externo.
+
+---
+
+## 24.29 Modelo mental definitivo
+
+A evolução do nosso socket é:
+
+```text
+Socket TCP
+     │
+     ▼
+conexão confiável
+     │
+     ▼
+TLS
+     │
+     ├── confidencialidade
+     ├── integridade
+     └── autenticação
+     │
+     ▼
+Protocolo da aplicação
+     │
+     ├── HTTP
+     ├── protocolo próprio
+     └── outro protocolo
+```
+
+Podemos resumir assim:
+
+```text
+TCP  → transporta bytes de forma confiável
+TLS  → protege esses bytes
+App  → define o significado desses bytes
+```
+
+---
+
+## 24.30 Resumo da Parte
+
+- **TCP não criptografa os dados.**
+    
+- **TLS** fornece proteção criptográfica sobre o transporte.
+    
+- TLS oferece principalmente **confidencialidade, integridade e autenticação**.
+    
+- TLS normalmente funciona sobre TCP.
+    
+- HTTPS é essencialmente **HTTP sobre TLS sobre TCP**.
+    
+- Python fornece o módulo `ssl` para trabalhar com TLS.
+    
+- `ssl.SSLContext` representa uma configuração TLS.
+    
+- `ssl.create_default_context()` é uma forma adequada de criar um contexto padrão para clientes.
+    
+- `server_hostname` é importante para autenticação do servidor e está relacionado ao SNI.
+    
+- Servidores TLS precisam de certificado e chave privada.
+    
+- A chave privada deve permanecer protegida no servidor.
+    
+- Certificado e chave privada são coisas diferentes.
+    
+- Desabilitar `CERT_NONE` ou a verificação de hostname pode remover uma proteção essencial contra servidores falsos.
+    
+- **Criptografia não é a mesma coisa que autenticação.**
+    
+- TLS protege o canal, mas não corrige vulnerabilidades da aplicação.
+    
+- TLS também pode ser utilizado para autenticação mútua através de **mTLS**.
+    
+- `asyncio` e TLS podem ser combinados para construir servidores assíncronos seguros.
+    
+- O modelo geral fica:
+    
+
+```text
+Aplicação
+    │
+    ▼
+   TLS
+    │
+    ▼
+   TCP
+    │
+    ▼
+    IP
+    │
+    ▼
+   Rede
+```

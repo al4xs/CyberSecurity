@@ -34079,3 +34079,1263 @@ erro/desconexão?
 ```
 
 ---
+# 31. Arquitetura de um servidor TCP completo
+
+Até agora estudamos cada peça de um servidor TCP separadamente:
+
+- `socket()`
+    
+- `setsockopt()`
+    
+- `bind()`
+    
+- `listen()`
+    
+- `accept()`
+    
+- `recv()`
+    
+- `send()` / `sendall()`
+    
+- `shutdown()`
+    
+- `close()`
+    
+- tratamento de erros
+    
+- timeouts
+    
+- framing
+    
+- concorrência
+    
+- `selectors`
+    
+- `asyncio`
+    
+- TLS
+    
+- IPv4 e IPv6
+    
+
+Agora vamos juntar esses conceitos para entender **como um servidor TCP real é estruturado**.
+
+A principal ideia desta parte é:
+
+> Um servidor TCP não é apenas um `while True` com `accept()`. Ele possui várias responsabilidades diferentes, e separá-las torna o sistema mais fácil de entender, testar, manter e proteger.
+
+---
+
+## 31.1 O ciclo de vida de um servidor TCP
+
+Um servidor TCP normalmente segue este fluxo:
+
+```text
+                    INICIALIZAÇÃO
+                         │
+                         ▼
+                    socket()
+                         │
+                         ▼
+                  setsockopt()
+                         │
+                         ▼
+                      bind()
+                         │
+                         ▼
+                     listen()
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │  SERVIDOR    │
+                  │   ONLINE     │
+                  └──────┬───────┘
+                         │
+                         ▼
+                      accept()
+                         │
+                         ▼
+                ┌─────────────────┐
+                │ Cliente conectado│
+                └────────┬────────┘
+                         │
+                         ▼
+                  receber dados
+                         │
+                         ▼
+                 interpretar protocolo
+                         │
+                         ▼
+                  executar lógica
+                         │
+                         ▼
+                   enviar resposta
+                         │
+                         ▼
+                  continuar sessão
+                         │
+                         ▼
+                   desconexão
+                         │
+                         ▼
+                  fechar conexão
+                         │
+                         └──────────────► accept()
+```
+
+O ponto importante é que existem **dois ciclos diferentes**:
+
+```text
+Ciclo do servidor
+    └── aceita novos clientes
+
+Ciclo da conexão
+    └── conversa com um cliente específico
+```
+
+Isso é fundamental.
+
+---
+
+## 31.2 O socket de escuta não é o socket do cliente
+
+Um servidor TCP normalmente possui pelo menos dois tipos de socket.
+
+### Listening socket
+
+É criado para receber novas conexões:
+
+```python
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+```
+
+Depois:
+
+```python
+client, address = server.accept()
+```
+
+O `server` continua sendo o socket responsável por aceitar novos clientes.
+
+---
+
+### Client socket
+
+O socket retornado pelo `accept()` representa uma conexão específica:
+
+```python
+client, address = server.accept()
+```
+
+Por exemplo:
+
+```text
+server
+127.0.0.1:4444
+     │
+     ├── client A
+     │     127.0.0.1:52131
+     │
+     ├── client B
+     │     127.0.0.1:52132
+     │
+     └── client C
+           127.0.0.1:52133
+```
+
+O servidor pode continuar escutando na porta `4444` enquanto conversa simultaneamente com vários clientes.
+
+---
+
+## 31.3 Separando as responsabilidades
+
+Um servidor bem estruturado pode ser dividido conceitualmente em camadas:
+
+```text
+┌─────────────────────────────────────┐
+│        Aplicação / Negócio          │
+│                                     │
+│  O que fazer com a informação?      │
+└──────────────────┬──────────────────┘
+                   │
+┌──────────────────▼──────────────────┐
+│       Protocolo da aplicação        │
+│                                     │
+│  Como interpretar as mensagens?     │
+└──────────────────┬──────────────────┘
+                   │
+┌──────────────────▼──────────────────┐
+│       Transporte / Socket            │
+│                                     │
+│ recv(), sendall(), close()          │
+└──────────────────┬──────────────────┘
+                   │
+┌──────────────────▼──────────────────┐
+│             TCP/IP                  │
+└─────────────────────────────────────┘
+```
+
+Essa separação é extremamente importante.
+
+Por exemplo:
+
+```text
+TCP
+↓
+recebe bytes
+
+Protocolo
+↓
+transforma bytes em mensagem
+
+Aplicação
+↓
+decide o que fazer com a mensagem
+
+Protocolo
+↓
+transforma resposta em bytes
+
+TCP
+↓
+envia bytes
+```
+
+---
+
+## 31.4 O servidor não deveria misturar tudo
+
+Um exemplo ruim seria:
+
+```python
+while True:
+    client, address = server.accept()
+
+    data = client.recv(1024)
+
+    if data == b"PING":
+        client.sendall(b"PONG")
+
+    elif data == b"LOGIN":
+        ...
+
+    elif data == b"DOWNLOAD":
+        ...
+
+    elif data == b"UPLOAD":
+        ...
+
+    ...
+```
+
+Esse modelo pode funcionar em um exemplo pequeno.
+
+Porém, conforme o sistema cresce, tudo começa a ficar misturado:
+
+```text
+socket
+protocolo
+autenticação
+validação
+banco de dados
+arquivos
+permissões
+logs
+erros
+respostas
+```
+
+Isso torna o código difícil de manter.
+
+---
+
+# 31.5 Uma arquitetura mais organizada
+
+Podemos separar as responsabilidades:
+
+```text
+Servidor
+   │
+   ├── aceita conexão
+   │
+   ▼
+Connection Handler
+   │
+   ├── recebe bytes
+   │
+   ▼
+Protocol Parser
+   │
+   ├── interpreta mensagem
+   │
+   ▼
+Application Logic
+   │
+   ├── executa operação
+   │
+   ▼
+Response Builder
+   │
+   ├── cria resposta
+   │
+   ▼
+Connection Handler
+   │
+   └── envia bytes
+```
+
+Por exemplo, imagine um protocolo:
+
+```text
+PING
+LOGIN usuario senha
+GET arquivo.txt
+```
+
+O socket não precisa saber o significado dessas mensagens.
+
+Ele apenas transporta bytes.
+
+Quem interpreta é a camada de protocolo.
+
+---
+
+## 31.6 Um exemplo de organização de arquivos
+
+Um projeto maior poderia ser organizado assim:
+
+```text
+servidor_tcp/
+│
+├── server.py
+├── protocol.py
+├── handler.py
+├── config.py
+└── main.py
+```
+
+Cada arquivo possui uma responsabilidade.
+
+### `server.py`
+
+Responsável pela infraestrutura do servidor:
+
+```text
+socket
+bind
+listen
+accept
+shutdown
+```
+
+---
+
+### `handler.py`
+
+Responsável por uma conexão:
+
+```text
+recv
+framing
+tratamento da sessão
+send
+close
+```
+
+---
+
+### `protocol.py`
+
+Responsável por interpretar mensagens:
+
+```text
+PING
+LOGIN
+GET
+UPLOAD
+...
+```
+
+---
+
+### `config.py`
+
+Responsável por configurações:
+
+```text
+HOST
+PORT
+TIMEOUT
+MAX_CLIENTS
+TAMANHO_MÁXIMO
+```
+
+---
+
+### `main.py`
+
+Responsável por iniciar o sistema:
+
+```text
+carregar configuração
+configurar logging
+criar servidor
+iniciar execução
+```
+
+Não existe uma única arquitetura obrigatória. O objetivo é evitar que todas as responsabilidades fiquem concentradas em uma função gigantesca.
+
+---
+
+# 31.7 O fluxo completo de uma requisição
+
+Imagine um cliente enviando:
+
+```text
+PING
+```
+
+O fluxo poderia ser:
+
+```text
+Cliente
+   │
+   │ b"PING\n"
+   ▼
+TCP
+   │
+   ▼
+recv()
+   │
+   ▼
+buffer
+   │
+   ▼
+parser
+   │
+   ▼
+"PING"
+   │
+   ▼
+application logic
+   │
+   ▼
+"PONG"
+   │
+   ▼
+encoder
+   │
+   ▼
+sendall()
+   │
+   ▼
+TCP
+   │
+   ▼
+Cliente
+```
+
+Perceba que o TCP não sabe que existe um `PING`.
+
+Para o TCP existem apenas bytes:
+
+```text
+50 49 4E 47 0A
+```
+
+O significado é criado pela aplicação.
+
+---
+
+# 31.8 O buffer pertence à conexão
+
+Como já vimos, TCP é um fluxo de bytes.
+
+Portanto, não podemos assumir:
+
+```python
+data = client.recv(1024)
+```
+
+e pensar:
+
+```text
+recv()
+=
+uma mensagem
+```
+
+Isso está errado.
+
+Podemos receber:
+
+```text
+PING\nPONG\n
+```
+
+em uma única chamada.
+
+Ou:
+
+```text
+PI
+```
+
+e depois:
+
+```text
+NG\n
+```
+
+Por isso cada conexão pode possuir seu próprio buffer:
+
+```python
+buffer = b""
+```
+
+Recebemos novos bytes:
+
+```python
+buffer += data
+```
+
+E extraímos mensagens completas:
+
+```python
+while b"\n" in buffer:
+    message, buffer = buffer.split(b"\n", 1)
+
+    process(message)
+```
+
+O restante permanece no buffer para a próxima mensagem.
+
+---
+
+# 31.9 Estado da conexão
+
+Um servidor real muitas vezes precisa saber em qual estado o cliente está.
+
+Por exemplo:
+
+```text
+CONNECTED
+    │
+    ▼
+WAITING_AUTH
+    │
+    ▼
+AUTHENTICATED
+    │
+    ▼
+ACTIVE
+    │
+    ▼
+CLOSING
+```
+
+Imagine um protocolo de autenticação:
+
+```text
+Cliente → LOGIN allan senha123
+Servidor → OK
+```
+
+Depois disso:
+
+```text
+Cliente → GET arquivo.txt
+```
+
+O servidor pode permitir porque o cliente está autenticado.
+
+Mas se alguém enviar:
+
+```text
+GET arquivo.txt
+```
+
+antes do login:
+
+```text
+Servidor → AUTH_REQUIRED
+```
+
+Portanto, uma conexão pode possuir informações como:
+
+```python
+client_state = {
+    "authenticated": False,
+    "username": None,
+}
+```
+
+Em um projeto maior, isso pode ser representado por uma classe.
+
+---
+
+# 31.10 Exemplo de um handler simples
+
+Podemos encapsular o estado de uma conexão:
+
+```python
+class ClientHandler:
+    def __init__(self, client, address):
+        self.client = client
+        self.address = address
+        self.buffer = b""
+        self.authenticated = False
+
+    def run(self):
+        while True:
+            data = self.client.recv(4096)
+
+            if not data:
+                break
+
+            self.buffer += data
+
+            while b"\n" in self.buffer:
+                message, self.buffer = self.buffer.split(b"\n", 1)
+
+                self.handle_message(message)
+
+    def handle_message(self, message):
+        if message == b"PING":
+            self.client.sendall(b"PONG\n")
+```
+
+Aqui já temos uma separação interessante:
+
+```text
+ClientHandler
+│
+├── socket
+├── endereço
+├── buffer
+├── estado
+├── recebimento
+└── processamento
+```
+
+---
+
+# 31.11 Tratando erros no limite da conexão
+
+Um erro importante de arquitetura é deixar uma exceção destruir o servidor inteiro.
+
+Por exemplo:
+
+```python
+while True:
+    client, address = server.accept()
+
+    handle_client(client)
+```
+
+Se `handle_client()` gerar uma exceção não tratada:
+
+```text
+cliente malformado
+       ↓
+exceção
+       ↓
+servidor inteiro encerra
+```
+
+O ideal é criar uma fronteira de erro:
+
+```python
+while True:
+    client, address = server.accept()
+
+    try:
+        handle_client(client)
+
+    except Exception:
+        logging.exception("Erro no cliente")
+
+    finally:
+        client.close()
+```
+
+Assim:
+
+```text
+Cliente A
+   ↓
+erro
+   ↓
+conexão A encerrada
+
+Servidor
+   ↓
+continua funcionando
+
+Cliente B
+   ↓
+aceito normalmente
+```
+
+---
+
+# 31.12 Concorrência entra nesse ponto
+
+Em um servidor sequencial:
+
+```text
+accept()
+   ↓
+cliente A
+   ↓
+handle A
+   ↓
+fim
+   ↓
+accept()
+   ↓
+cliente B
+```
+
+Se A ficar parado por muito tempo:
+
+```text
+Cliente A
+   │
+   └── recv() bloqueado
+          │
+          X
+     servidor não processa B
+```
+
+Com threads:
+
+```text
+             ┌── Thread A → Cliente A
+             │
+Servidor ────┼── Thread B → Cliente B
+             │
+             └── Thread C → Cliente C
+```
+
+Com `selectors`:
+
+```text
+              ┌── Cliente A
+              │
+Selector ─────┼── Cliente B
+              │
+              └── Cliente C
+```
+
+Com `asyncio`:
+
+```text
+             Event Loop
+                 │
+       ┌─────────┼─────────┐
+       ▼         ▼         ▼
+     Task A    Task B    Task C
+```
+
+A arquitetura da aplicação pode continuar semelhante.
+
+O que muda principalmente é **como as conexões são atendidas**.
+
+---
+
+# 31.13 Uma arquitetura funcional simples
+
+Para um servidor pequeno, podemos começar com:
+
+```python
+import socket
+import logging
+
+
+HOST = "127.0.0.1"
+PORT = 4444
+
+
+def handle_client(client, address):
+    try:
+        client.settimeout(30)
+
+        while True:
+            data = client.recv(4096)
+
+            if not data:
+                break
+
+            if data == b"PING\n":
+                client.sendall(b"PONG\n")
+
+            else:
+                client.sendall(b"UNKNOWN\n")
+
+    except socket.timeout:
+        logging.info("Timeout: %s", address)
+
+    except ConnectionResetError:
+        logging.info("Conexão resetada: %s", address)
+
+    except OSError:
+        logging.exception("Erro de socket: %s", address)
+
+    finally:
+        client.close()
+
+
+def run_server():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1,
+    )
+
+    server.bind((HOST, PORT))
+    server.listen()
+
+    logging.info("Servidor ouvindo em %s:%s", HOST, PORT)
+
+    try:
+        while True:
+            client, address = server.accept()
+
+            logging.info("Cliente conectado: %s", address)
+
+            handle_client(client, address)
+
+    except KeyboardInterrupt:
+        logging.info("Servidor encerrado")
+
+    finally:
+        server.close()
+
+
+logging.basicConfig(
+    level=logging.INFO,
+)
+
+run_server()
+```
+
+Esse servidor ainda é sequencial, mas sua estrutura já está organizada:
+
+```text
+run_server()
+│
+├── cria socket
+├── configura socket
+├── bind
+├── listen
+│
+└── loop
+    │
+    ├── accept
+    │
+    └── handle_client
+        │
+        ├── recv
+        ├── protocolo
+        ├── sendall
+        └── close
+```
+
+---
+
+# 31.14 Evoluindo para múltiplos clientes
+
+Podemos alterar somente a parte responsável pela concorrência.
+
+Por exemplo:
+
+```python
+import threading
+
+while True:
+    client, address = server.accept()
+
+    thread = threading.Thread(
+        target=handle_client,
+        args=(client, address),
+        daemon=True,
+    )
+
+    thread.start()
+```
+
+Agora:
+
+```text
+                 Server
+                   │
+                accept()
+                   │
+        ┌──────────┼──────────┐
+        ▼          ▼          ▼
+    Thread A   Thread B   Thread C
+        │          │          │
+    Cliente A  Cliente B  Cliente C
+```
+
+A função `handle_client()` pode continuar sendo praticamente a mesma.
+
+Isso demonstra uma vantagem de separar responsabilidades:
+
+> A lógica de uma conexão não precisa conhecer todos os detalhes de como o servidor distribui as conexões.
+
+---
+
+# 31.15 Limites de recursos
+
+Um servidor real precisa pensar em recursos.
+
+Por exemplo:
+
+```text
+Quantidade de clientes
+Tamanho máximo de mensagem
+Tamanho máximo de arquivo
+Quantidade de threads
+Tempo máximo de conexão
+Tempo máximo sem atividade
+Memória utilizada
+Número de requisições
+```
+
+Sem limites, um cliente malicioso pode tentar:
+
+```text
+enviar mensagem gigantesca
+        ↓
+buffer cresce
+        ↓
+memória cresce
+        ↓
+servidor pode sofrer DoS
+```
+
+Por isso:
+
+```python
+MAX_MESSAGE_SIZE = 1024 * 1024
+```
+
+Podemos verificar:
+
+```python
+if len(buffer) > MAX_MESSAGE_SIZE:
+    raise ValueError("Mensagem muito grande")
+```
+
+O valor correto depende da aplicação.
+
+---
+
+# 31.16 Graceful shutdown
+
+Um servidor também precisa saber como encerrar corretamente.
+
+Um encerramento organizado pode ser:
+
+```text
+Receber sinal de encerramento
+          │
+          ▼
+Parar de aceitar novos clientes
+          │
+          ▼
+Finalizar conexões existentes
+          │
+          ▼
+Fechar sockets
+          │
+          ▼
+Liberar recursos
+          │
+          ▼
+Encerrar processo
+```
+
+Isso é diferente de simplesmente matar o processo.
+
+Em sistemas maiores, o shutdown pode precisar lidar com:
+
+```text
+threads
+tasks
+arquivos
+banco de dados
+filas
+sockets
+logs
+```
+
+---
+
+# 31.17 Onde o TLS entra?
+
+Se o servidor precisar de comunicação criptografada:
+
+```text
+Aplicação
+    │
+    ▼
+Protocolo
+    │
+    ▼
+TLS
+    │
+    ▼
+TCP
+    │
+    ▼
+IP
+```
+
+O fluxo continua conceitualmente igual:
+
+```python
+client.recv(...)
+client.sendall(...)
+```
+
+A diferença é que o socket TCP é envolvido por TLS.
+
+Isso mostra novamente a importância das camadas:
+
+```text
+Aplicação
+    ↓
+Protocolo
+    ↓
+TLS
+    ↓
+TCP
+    ↓
+IP
+```
+
+Cada camada possui uma responsabilidade diferente.
+
+---
+
+# 31.18 Arquitetura completa em visão geral
+
+Podemos representar um servidor TCP mais completo assim:
+
+```text
+                         SERVIDOR
+                            │
+                ┌───────────▼───────────┐
+                │   Listening Socket    │
+                │ socket/bind/listen    │
+                └───────────┬───────────┘
+                            │
+                         accept()
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+         Cliente A      Cliente B      Cliente C
+             │              │              │
+             ▼              ▼              ▼
+         Handler A      Handler B      Handler C
+             │              │              │
+             ▼              ▼              ▼
+          Buffer A       Buffer B       Buffer C
+             │              │              │
+             ▼              ▼              ▼
+          Parser A       Parser B       Parser C
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                    Lógica da aplicação
+                            │
+                            ▼
+                       Resposta
+                            │
+                            ▼
+                     sendall()/TLS
+```
+
+Essa é uma visão muito mais próxima de como devemos pensar em servidores reais.
+
+---
+
+# 31.19 O que deve ficar separado
+
+Uma boa regra mental é:
+
+```text
+Socket
+    ↓
+transporta bytes
+
+Framing
+    ↓
+define onde começa/termina uma mensagem
+
+Protocolo
+    ↓
+define o significado da mensagem
+
+Aplicação
+    ↓
+define o que fazer
+
+Concorrência
+    ↓
+define como atender vários clientes
+
+Segurança
+    ↓
+define como proteger comunicação e recursos
+
+Observabilidade
+    ↓
+logs, métricas e diagnóstico
+```
+
+Não devemos esperar que o TCP resolva responsabilidades da aplicação.
+
+---
+
+# 31.20 Modelo mental definitivo
+
+Quando você olhar para um servidor TCP, pense nesta sequência:
+
+```text
+1. CRIAR
+   socket()
+
+2. CONFIGURAR
+   setsockopt()
+
+3. ASSOCIAR
+   bind()
+
+4. ESCUTAR
+   listen()
+
+5. ACEITAR
+   accept()
+
+6. RECEBER
+   recv()
+
+7. INTERPRETAR
+   protocolo/framing
+
+8. PROCESSAR
+   lógica da aplicação
+
+9. RESPONDER
+   send()/sendall()
+
+10. REPETIR
+    novas mensagens
+
+11. ENCERRAR
+    shutdown()/close()
+```
+
+E para múltiplos clientes:
+
+```text
+                    SERVIDOR
+                       │
+                    accept()
+                       │
+             ┌─────────┼─────────┐
+             ▼         ▼         ▼
+          Cliente A Cliente B Cliente C
+             │         │         │
+          handler    handler    handler
+             │         │         │
+             └─────────┼─────────┘
+                       ▼
+                aplicação
+```
+
+A grande evolução em relação aos primeiros exemplos de socket é perceber que **o socket é apenas uma parte da arquitetura**.
+
+---
+
+## Resumo da Parte
+
+- Um servidor TCP possui um **listening socket** e sockets individuais para cada cliente.
+    
+- `accept()` cria/retorna o socket responsável pela comunicação com aquele cliente.
+    
+- O listening socket continua disponível para novas conexões.
+    
+- É importante separar:
+    
+    - transporte;
+        
+    - framing;
+        
+    - protocolo;
+        
+    - lógica da aplicação;
+        
+    - concorrência;
+        
+    - segurança;
+        
+    - observabilidade.
+        
+- TCP transporta bytes; ele não conhece comandos como `PING`, `LOGIN` ou `GET`.
+    
+- Cada conexão pode possuir seu próprio buffer e estado.
+    
+- Uma conexão pode passar por estados como autenticação e sessão ativa.
+    
+- Erros de um cliente não devem necessariamente derrubar o servidor inteiro.
+    
+- Servidores reais precisam impor limites de recursos.
+    
+- Threads, `selectors` e `asyncio` são formas diferentes de atender múltiplas conexões.
+    
+- TLS pode ser colocado acima do TCP e abaixo da aplicação.
+    
+- Um servidor bem projetado separa responsabilidades para facilitar manutenção, testes e segurança.
+    
+
+**Modelo principal:**
+
+```text
+socket
+  ↓
+configuração
+  ↓
+bind
+  ↓
+listen
+  ↓
+accept
+  ↓
+conexão do cliente
+  ↓
+receber bytes
+  ↓
+framing
+  ↓
+protocolo
+  ↓
+lógica da aplicação
+  ↓
+resposta
+  ↓
+envio
+  ↓
+encerramento
+```
+
+---

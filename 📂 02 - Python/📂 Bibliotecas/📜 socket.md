@@ -32625,3 +32625,1457 @@ E, para depurar:
 ```
 
 ---
+# 30. Tratamento de erros e desconexões em servidores reais
+
+## 30.1 Por que tratamento de erros é essencial?
+
+Nos exemplos anteriores, muitos servidores tinham uma estrutura simples:
+
+```python
+client, address = server.accept()
+
+data = client.recv(1024)
+
+client.sendall(data)
+
+client.close()
+```
+
+Isso funciona para estudar o conceito, mas um servidor real precisa considerar que **qualquer etapa da comunicação pode falhar**.
+
+O cliente pode:
+
+- fechar a conexão;
+    
+- perder a rede;
+    
+- enviar dados inválidos;
+    
+- enviar dados incompletos;
+    
+- permanecer conectado sem enviar nada;
+    
+- enviar uma quantidade enorme de dados;
+    
+- desconectar durante um `send()`;
+    
+- enviar uma mensagem que viola o protocolo.
+    
+
+O próprio sistema operacional também pode retornar erros.
+
+Por isso, um servidor robusto precisa tratar erros sem necessariamente derrubar o processo inteiro.
+
+A ideia é:
+
+```text
+Cliente com problema
+       ↓
+Erro tratado
+       ↓
+Conexão encerrada
+       ↓
+Servidor continua funcionando
+       ↓
+Outros clientes continuam sendo atendidos
+```
+
+---
+
+## 30.2 Exceções de socket
+
+A biblioteca `socket` utiliza as exceções normais do Python para comunicar vários erros.
+
+Uma exceção importante é:
+
+```python
+OSError
+```
+
+Muitos erros de baixo nível relacionados a sockets derivam de `OSError`.
+
+Por exemplo:
+
+```python
+try:
+    server.bind(("127.0.0.1", 4444))
+except OSError as error:
+    print(f"Erro ao iniciar servidor: {error}")
+```
+
+Isso permite tratar problemas como:
+
+- endereço já utilizado;
+    
+- permissão negada;
+    
+- endereço inválido;
+    
+- interface indisponível;
+    
+- falhas de sistema.
+    
+
+---
+
+## 30.3 Exceções específicas
+
+Além de `OSError`, existem exceções mais específicas.
+
+Algumas importantes:
+
+```text
+socket.timeout
+ConnectionRefusedError
+ConnectionResetError
+BrokenPipeError
+ConnectionAbortedError
+BlockingIOError
+socket.gaierror
+```
+
+Podemos organizar conceitualmente:
+
+```text
+OSError
+├── ConnectionError
+│   ├── ConnectionRefusedError
+│   ├── ConnectionResetError
+│   ├── ConnectionAbortedError
+│   └── BrokenPipeError
+│
+├── TimeoutError
+│
+└── ...
+```
+
+A hierarquia exata possui detalhes adicionais, mas o importante é entender que podemos capturar erros mais específicos antes de usar um tratamento genérico.
+
+---
+
+## 30.4 `try/except`
+
+O mecanismo básico é:
+
+```python
+try:
+    data = client.recv(1024)
+except ConnectionResetError:
+    print("Cliente encerrou a conexão abruptamente.")
+```
+
+Podemos tratar vários erros:
+
+```python
+try:
+    data = client.recv(1024)
+
+except ConnectionResetError:
+    print("Conexão resetada.")
+
+except socket.timeout:
+    print("Timeout.")
+
+except OSError as error:
+    print(f"Erro de socket: {error}")
+```
+
+A ordem é importante.
+
+Erros específicos devem normalmente ser tratados antes do tratamento genérico.
+
+---
+
+## 30.5 Não capturar `Exception` cegamente
+
+É possível escrever:
+
+```python
+try:
+    ...
+except Exception:
+    pass
+```
+
+Mas isso é uma prática ruim para um servidor real.
+
+Esse código:
+
+```python
+except Exception:
+    pass
+```
+
+basicamente diz:
+
+> Se qualquer coisa der errado, ignore.
+
+Isso pode esconder bugs graves.
+
+Por exemplo:
+
+```python
+def process_message(data):
+    return data["username"]
+```
+
+Se `data` for um `bytes` em vez de um dicionário, teremos um erro de programação.
+
+Se fizermos:
+
+```python
+try:
+    process_message(data)
+except Exception:
+    pass
+```
+
+o servidor pode continuar executando, mas ninguém saberá que existe um bug.
+
+O ideal é:
+
+```python
+except ConnectionResetError:
+    ...
+```
+
+ou:
+
+```python
+except OSError as error:
+    ...
+```
+
+quando realmente sabemos que estamos tratando um erro de socket.
+
+---
+
+## 30.6 `finally`
+
+O bloco:
+
+```python
+finally:
+```
+
+é executado independentemente de uma exceção ter ocorrido ou não.
+
+Exemplo:
+
+```python
+client = None
+
+try:
+    client, address = server.accept()
+
+    data = client.recv(1024)
+
+    client.sendall(data)
+
+except OSError as error:
+    print(f"Erro: {error}")
+
+finally:
+    if client is not None:
+        client.close()
+```
+
+Isso é útil para garantir a liberação de recursos.
+
+Podemos pensar:
+
+```text
+try
+ ↓
+executa operação
+ ↓
+erro?
+ ├── não → continua
+ └── sim → except
+ ↓
+finally
+ ↓
+limpeza
+```
+
+---
+
+## 30.7 `with` para gerenciamento de sockets
+
+Quando possível, podemos utilizar um context manager:
+
+```python
+with socket.socket(...) as server:
+    ...
+```
+
+Quando o bloco termina, o socket é fechado automaticamente.
+
+Exemplo:
+
+```python
+import socket
+
+with socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+) as server:
+
+    server.bind(("127.0.0.1", 4444))
+    server.listen()
+
+    print("Servidor iniciado")
+
+    client, address = server.accept()
+
+    with client:
+        data = client.recv(1024)
+        client.sendall(data)
+```
+
+Isso reduz a possibilidade de esquecer:
+
+```python
+close()
+```
+
+---
+
+## 30.8 O socket de escuta e o socket do cliente são diferentes
+
+Esse conceito continua sendo fundamental.
+
+Temos:
+
+```text
+server
+  ↓
+socket de escuta
+
+client
+  ↓
+socket da conexão
+```
+
+Quando fazemos:
+
+```python
+client, address = server.accept()
+```
+
+o Python retorna um novo socket.
+
+Então:
+
+```text
+server
+  ↓
+continua escutando
+
+client
+  ↓
+comunicação com aquele cliente
+```
+
+Se um cliente desconectar:
+
+```python
+client.close()
+```
+
+não devemos fechar automaticamente:
+
+```python
+server.close()
+```
+
+caso o servidor ainda precise aceitar outros clientes.
+
+---
+
+## 30.9 Desconexão normal
+
+Imagine:
+
+```text
+Cliente                     Servidor
+   │                           │
+   │──── conexão ─────────────→│
+   │                           │
+   │──── dados ───────────────→│
+   │                           │
+   │          close()          │
+   │──────── FIN ─────────────→│
+   │                           │
+```
+
+No servidor:
+
+```python
+data = client.recv(1024)
+```
+
+pode retornar:
+
+```python
+b""
+```
+
+Isso indica que o peer realizou um encerramento ordenado.
+
+Podemos tratar:
+
+```python
+if data == b"":
+    print("Cliente desconectou.")
+    client.close()
+```
+
+---
+
+## 30.10 Desconexão abrupta
+
+Nem toda desconexão ocorre de maneira limpa.
+
+Podemos ter:
+
+```text
+Cliente
+   │
+   │ conexão
+   ↓
+Servidor
+   │
+   │
+   X
+conexão interrompida
+```
+
+Nesse caso, o servidor pode receber:
+
+```python
+ConnectionResetError
+```
+
+Por exemplo:
+
+```python
+try:
+    data = client.recv(1024)
+
+except ConnectionResetError:
+    print("Cliente perdeu a conexão.")
+```
+
+Isso não deve necessariamente derrubar o servidor inteiro.
+
+A conexão problemática pode simplesmente ser encerrada.
+
+---
+
+## 30.11 Cliente desconectando durante `sendall()`
+
+Também podemos ter problemas durante o envio.
+
+Por exemplo:
+
+```python
+try:
+    client.sendall(data)
+
+except BrokenPipeError:
+    print("Cliente fechou a conexão durante o envio.")
+
+except ConnectionResetError:
+    print("Conexão foi resetada pelo cliente.")
+```
+
+Isso é importante porque o fato de termos recebido dados anteriormente não garante que o cliente continuará conectado.
+
+Uma conexão TCP pode mudar de estado a qualquer momento.
+
+---
+
+## 30.12 O servidor não deve confiar no cliente
+
+Em aplicações reais, devemos assumir:
+
+> **Tudo que vem do cliente é entrada não confiável.**
+
+Isso inclui:
+
+```text
+dados
+comandos
+tamanho
+nomes de arquivos
+IDs
+JSON
+headers
+strings
+binários
+```
+
+Por exemplo, se nosso protocolo espera:
+
+```text
+LOGIN usuario senha
+```
+
+não devemos simplesmente assumir que o cliente sempre enviará isso corretamente.
+
+O cliente pode enviar:
+
+```text
+AAAAAAAAAAAAAAAAAAAAAAAA...
+```
+
+ou:
+
+```text
+COMANDO_INEXISTENTE
+```
+
+ou:
+
+```text
+dados incompletos
+```
+
+ou uma entrada malformada.
+
+---
+
+## 30.13 Validação antes de processar
+
+Um padrão importante é:
+
+```text
+receber
+   ↓
+validar
+   ↓
+interpretar
+   ↓
+processar
+   ↓
+responder
+```
+
+Não:
+
+```text
+receber
+   ↓
+executar imediatamente
+```
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+
+if len(data) > 1024:
+    client.close()
+    return
+```
+
+Embora esse exemplo específico já esteja limitado pelo tamanho do `recv()`, a ideia é que o protocolo deve possuir limites explícitos.
+
+---
+
+## 30.14 Limites de tamanho
+
+Imagine um protocolo que recebe uma mensagem:
+
+```text
+[TAMANHO][DADOS]
+```
+
+O cliente informa:
+
+```text
+999999999999999999
+```
+
+Se o servidor tentar simplesmente reservar toda essa quantidade de memória, poderá sofrer problemas.
+
+Por isso:
+
+```python
+MAX_MESSAGE_SIZE = 1024 * 1024
+```
+
+e:
+
+```python
+if message_size > MAX_MESSAGE_SIZE:
+    raise ValueError("Mensagem muito grande")
+```
+
+Esse tipo de limite é uma defesa importante.
+
+---
+
+## 30.15 Timeout para evitar clientes presos
+
+Imagine:
+
+```text
+Cliente conecta
+     ↓
+Servidor aceita
+     ↓
+Cliente não envia nada
+     ↓
+Servidor fica esperando
+```
+
+Se o servidor utiliza:
+
+```python
+client.recv(1024)
+```
+
+em modo bloqueante, pode ficar esperando indefinidamente.
+
+Podemos configurar:
+
+```python
+client.settimeout(10)
+```
+
+Agora:
+
+```python
+data = client.recv(1024)
+```
+
+não ficará bloqueado indefinidamente.
+
+Depois do tempo configurado, podemos receber:
+
+```python
+socket.timeout
+```
+
+Exemplo:
+
+```python
+try:
+    client.settimeout(10)
+    data = client.recv(1024)
+
+except socket.timeout:
+    print("Cliente demorou demais.")
+    client.close()
+```
+
+---
+
+## 30.16 Timeout não substitui protocolo
+
+Timeout é útil, mas não resolve todos os problemas.
+
+Imagine que uma mensagem válida possa levar:
+
+```text
+30 segundos
+```
+
+para ser transmitida em uma conexão lenta.
+
+Se configurarmos:
+
+```python
+client.settimeout(5)
+```
+
+podemos encerrar uma conexão válida prematuramente.
+
+Portanto, os valores devem refletir o comportamento esperado da aplicação.
+
+Além disso, protocolos podem precisar de:
+
+- timeout de conexão;
+    
+- timeout de leitura;
+    
+- timeout de escrita;
+    
+- timeout de autenticação;
+    
+- timeout de inatividade.
+    
+
+---
+
+## 30.17 Timeout de inatividade
+
+Um conceito diferente é o **idle timeout**.
+
+Imagine:
+
+```text
+Cliente conectado
+       ↓
+10 minutos sem enviar nada
+       ↓
+Servidor encerra conexão
+```
+
+Isso evita manter recursos ocupados indefinidamente.
+
+Podemos controlar isso utilizando timestamps, timers ou mecanismos de timeout.
+
+Conceitualmente:
+
+```python
+last_activity = time.monotonic()
+```
+
+e:
+
+```python
+if time.monotonic() - last_activity > IDLE_TIMEOUT:
+    close_connection()
+```
+
+`time.monotonic()` é apropriado para medir durações porque não depende de alterações no relógio do sistema.
+
+---
+
+## 30.18 Servidor não deve morrer por causa de um cliente
+
+Esse é um princípio importante.
+
+Imagine:
+
+```text
+Servidor
+   │
+   ├── Cliente A → erro
+   │
+   ├── Cliente B → funcionando
+   │
+   └── Cliente C → funcionando
+```
+
+Se o Cliente A enviar algo inválido, o ideal é:
+
+```text
+Cliente A
+   ↓
+erro
+   ↓
+fecha conexão A
+   ↓
+Servidor continua
+   ↓
+B e C continuam funcionando
+```
+
+Não:
+
+```text
+Cliente A
+   ↓
+erro
+   ↓
+Servidor inteiro encerra
+```
+
+É exatamente por isso que servidores concorrentes precisam tratar erros **por conexão**.
+
+---
+
+## 30.19 Tratamento de erros em um servidor concorrente
+
+Considere:
+
+```python
+def handle_client(client):
+    try:
+        while True:
+            data = client.recv(1024)
+
+            if not data:
+                break
+
+            client.sendall(data)
+
+    except ConnectionResetError:
+        print("Cliente desconectou abruptamente.")
+
+    except OSError as error:
+        print(f"Erro de socket: {error}")
+
+    finally:
+        client.close()
+```
+
+Cada cliente possui seu próprio tratamento:
+
+```text
+Cliente A
+   ↓
+handle_client(A)
+
+Cliente B
+   ↓
+handle_client(B)
+
+Cliente C
+   ↓
+handle_client(C)
+```
+
+Se A falhar:
+
+```text
+A → erro → fecha A
+
+B → continua
+C → continua
+```
+
+---
+
+## 30.20 Logging
+
+Em um servidor real, `print()` pode não ser suficiente.
+
+Podemos utilizar:
+
+```python
+import logging
+```
+
+Exemplo:
+
+```python
+import logging
+
+logging.basicConfig(
+    level=logging.INFO
+)
+
+logging.info("Servidor iniciado")
+```
+
+Depois:
+
+```python
+logging.info("Cliente conectado")
+```
+
+ou:
+
+```python
+logging.error("Falha ao processar cliente")
+```
+
+Também existem níveis como:
+
+```text
+DEBUG
+INFO
+WARNING
+ERROR
+CRITICAL
+```
+
+Podemos pensar:
+
+```text
+DEBUG
+ ↓
+informações detalhadas
+
+INFO
+ ↓
+eventos normais
+
+WARNING
+ ↓
+situação anormal, mas não necessariamente fatal
+
+ERROR
+ ↓
+erro
+
+CRITICAL
+ ↓
+problema grave
+```
+
+---
+
+## 30.21 Não registrar informações sensíveis
+
+Logging é importante, mas não devemos registrar indiscriminadamente:
+
+```text
+senhas
+tokens
+chaves privadas
+cookies
+dados pessoais desnecessários
+credenciais
+```
+
+Por exemplo, não devemos fazer:
+
+```python
+logging.info(f"Login: usuario={user}, senha={password}")
+```
+
+Mesmo durante desenvolvimento, esse hábito pode acabar indo para produção.
+
+Melhor:
+
+```python
+logging.info("Tentativa de autenticação recebida")
+```
+
+e registrar apenas o necessário para diagnosticar o comportamento.
+
+---
+
+## 30.22 Encerramento gracioso
+
+Um servidor pode precisar ser encerrado sem cortar clientes abruptamente.
+
+Uma ideia simplificada:
+
+```text
+Recebe sinal de encerramento
+        ↓
+para de aceitar novos clientes
+        ↓
+termina operações atuais
+        ↓
+fecha conexões
+        ↓
+fecha socket de escuta
+        ↓
+encerra processo
+```
+
+Isso é chamado de **graceful shutdown**.
+
+Em Python, podemos utilizar mecanismos como:
+
+```python
+signal
+```
+
+para reagir a sinais do sistema.
+
+Por exemplo, um processo pode receber:
+
+```text
+SIGTERM
+```
+
+e iniciar o encerramento de maneira controlada.
+
+---
+
+## 30.23 `SO_REUSEADDR` e reinicialização
+
+Durante o desenvolvimento, podemos reiniciar um servidor rapidamente.
+
+Às vezes encontramos:
+
+```text
+OSError: [Errno 98] Address already in use
+```
+
+Uma configuração frequentemente utilizada é:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+antes de:
+
+```python
+server.bind(...)
+```
+
+Isso pode ajudar em situações envolvendo endereços que ainda estão em estados relacionados ao encerramento anterior.
+
+Mas:
+
+```text
+SO_REUSEADDR
+```
+
+não significa:
+
+> "Ignore qualquer conflito de porta."
+
+Se outro processo estiver realmente escutando na mesma combinação de endereço/porta e as regras do sistema não permitirem o compartilhamento, o `bind()` ainda poderá falhar.
+
+---
+
+## 30.24 `shutdown()` antes de `close()`
+
+Em determinadas aplicações, podemos utilizar:
+
+```python
+client.shutdown(socket.SHUT_RDWR)
+```
+
+antes de:
+
+```python
+client.close()
+```
+
+Isso permite indicar explicitamente que não queremos mais enviar nem receber.
+
+Porém, não é obrigatório chamar `shutdown()` em toda situação.
+
+Em muitos casos:
+
+```python
+client.close()
+```
+
+é suficiente.
+
+O importante é entender que:
+
+```text
+shutdown()
+    ↓
+controla a direção da comunicação
+
+close()
+    ↓
+libera o descritor/socket
+```
+
+---
+
+## 30.25 Ordem recomendada ao tratar uma conexão
+
+Um fluxo robusto pode ser:
+
+```text
+accept()
+   ↓
+configurar timeout
+   ↓
+receber dados
+   ↓
+validar framing
+   ↓
+validar tamanho
+   ↓
+validar conteúdo
+   ↓
+processar
+   ↓
+enviar resposta
+   ↓
+tratar desconexão/erro
+   ↓
+fechar socket
+```
+
+Visualmente:
+
+```text
+          ┌───────────────┐
+          │   accept()    │
+          └───────┬───────┘
+                  ↓
+          ┌───────────────┐
+          │    recv()     │
+          └───────┬───────┘
+                  ↓
+          ┌───────────────┐
+          │    validar    │
+          └───────┬───────┘
+                  ↓
+          ┌───────────────┐
+          │   processar   │
+          └───────┬───────┘
+                  ↓
+          ┌───────────────┐
+          │   sendall()   │
+          └───────┬───────┘
+                  ↓
+          ┌───────────────┐
+          │    close()    │
+          └───────────────┘
+```
+
+Se algo falhar:
+
+```text
+             erro
+              ↓
+        tratar exceção
+              ↓
+       limpar recursos
+              ↓
+       fechar conexão
+              ↓
+      continuar servidor
+```
+
+---
+
+## 30.26 Exemplo de servidor mais robusto
+
+Um servidor simples pode ficar assim:
+
+```python
+import socket
+import logging
+
+HOST = "127.0.0.1"
+PORT = 4444
+
+logging.basicConfig(
+    level=logging.INFO
+)
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind((HOST, PORT))
+server.listen()
+
+logging.info(
+    f"Servidor ouvindo em {HOST}:{PORT}"
+)
+
+while True:
+    client = None
+
+    try:
+        client, address = server.accept()
+
+        logging.info(
+            f"Cliente conectado: {address}"
+        )
+
+        client.settimeout(30)
+
+        while True:
+            data = client.recv(1024)
+
+            if not data:
+                logging.info(
+                    f"Cliente desconectou: {address}"
+                )
+                break
+
+            logging.info(
+                f"Recebidos {len(data)} bytes"
+            )
+
+            client.sendall(data)
+
+    except KeyboardInterrupt:
+        logging.info("Encerrando servidor...")
+        break
+
+    except socket.timeout:
+        logging.warning(
+            "Timeout durante comunicação"
+        )
+
+    except ConnectionResetError:
+        logging.warning(
+            "Conexão resetada pelo cliente"
+        )
+
+    except BrokenPipeError:
+        logging.warning(
+            "Cliente fechou a conexão durante o envio"
+        )
+
+    except OSError as error:
+        logging.error(
+            f"Erro de socket: {error}"
+        )
+
+    finally:
+        if client is not None:
+            client.close()
+
+server.close()
+```
+
+Esse exemplo ainda não é um servidor de produção, mas já demonstra conceitos importantes:
+
+- tratamento de exceções;
+    
+- `SO_REUSEADDR`;
+    
+- timeout;
+    
+- logging;
+    
+- desconexão normal;
+    
+- reset de conexão;
+    
+- `BrokenPipeError`;
+    
+- limpeza com `finally`;
+    
+- encerramento por `KeyboardInterrupt`.
+    
+
+---
+
+## 30.27 Um detalhe importante sobre o `while`
+
+Observe:
+
+```python
+while True:
+    client, address = server.accept()
+```
+
+O servidor continua aceitando novos clientes.
+
+Dentro da conexão:
+
+```python
+while True:
+    data = client.recv(1024)
+```
+
+o servidor continua recebendo dados daquele cliente.
+
+Temos dois níveis:
+
+```text
+Servidor
+   │
+   ├── accept()
+   │
+   └── Cliente
+         │
+         ├── recv()
+         ├── processa
+         ├── sendall()
+         └── recv()
+```
+
+Em um servidor sequencial, enquanto o segundo `while` estiver processando um cliente, outros clientes podem ficar esperando.
+
+Por isso, os conceitos desta parte precisam ser combinados com o que estudamos sobre:
+
+```text
+threading
+selectors
+asyncio
+```
+
+para construir servidores concorrentes.
+
+---
+
+## 30.28 Segurança e tratamento de erros
+
+Tratamento de erros também faz parte da segurança.
+
+Um servidor que encerra ao receber uma entrada inválida pode sofrer uma forma simples de **negação de serviço**.
+
+Por exemplo:
+
+```text
+Cliente malicioso
+      ↓
+entrada inválida
+      ↓
+exceção não tratada
+      ↓
+servidor encerra
+      ↓
+serviço indisponível
+```
+
+Um servidor mais robusto faz:
+
+```text
+Cliente malicioso
+      ↓
+entrada inválida
+      ↓
+erro tratado
+      ↓
+conexão encerrada
+      ↓
+servidor continua
+```
+
+Isso não significa que apenas `try/except` torna uma aplicação segura.
+
+Também precisamos de:
+
+- limites;
+    
+- validação;
+    
+- autenticação;
+    
+- autorização;
+    
+- controle de recursos;
+    
+- timeouts;
+    
+- logs;
+    
+- isolamento;
+    
+- protocolo bem definido.
+    
+
+---
+
+## 30.29 Modelo mental
+
+Um servidor real pode ser pensado como:
+
+```text
+                SERVIDOR
+                   │
+                   ↓
+                accept()
+                   │
+          ┌────────┴────────┐
+          ↓                 ↓
+      Cliente A          Cliente B
+          │                 │
+       recv()             recv()
+          │                 │
+       validar            validar
+          │                 │
+      processar          processar
+          │                 │
+      sendall()          sendall()
+          │                 │
+        erro?              erro?
+       ┌──┴──┐           ┌──┴──┐
+      não   sim          não   sim
+       │     │            │     │
+       ↓     ↓            ↓     ↓
+    continua trata       continua trata
+             │                   │
+             ↓                   ↓
+          fecha A             fecha B
+```
+
+O princípio central é:
+
+> **Uma falha em uma conexão não deve necessariamente significar uma falha no servidor inteiro.**
+
+---
+
+## 30.30 Resumo da Parte
+
+- Servidores reais precisam tratar erros e desconexões.
+    
+- `OSError` é uma exceção importante para operações de baixo nível.
+    
+- Existem erros específicos como:
+    
+    - `ConnectionRefusedError`
+        
+    - `ConnectionResetError`
+        
+    - `BrokenPipeError`
+        
+    - `socket.timeout`
+        
+    - `BlockingIOError`
+        
+- `recv()` retornando `b""` indica encerramento ordenado da conexão TCP.
+    
+- `try/except` permite tratar falhas sem necessariamente derrubar o servidor.
+    
+- `finally` é útil para garantir limpeza de recursos.
+    
+- `with socket.socket(...)` ajuda a fechar sockets automaticamente.
+    
+- O socket retornado por `accept()` deve ser tratado separadamente do socket de escuta.
+    
+- Dados recebidos do cliente devem ser considerados **não confiáveis**.
+    
+- Protocolos devem validar:
+    
+    - formato;
+        
+    - tamanho;
+        
+    - conteúdo;
+        
+    - limites;
+        
+    - estado da comunicação.
+        
+- Timeouts ajudam a evitar conexões presas indefinidamente.
+    
+- Servidores concorrentes devem tratar erros por conexão.
+    
+- `logging` é preferível a depender apenas de `print()` em aplicações maiores.
+    
+- Informações sensíveis não devem ser registradas desnecessariamente.
+    
+- Graceful shutdown permite encerrar o servidor de maneira controlada.
+    
+- `SO_REUSEADDR` pode facilitar reinicializações, mas não elimina arbitrariamente conflitos de portas.
+    
+- Tratamento de erros também é uma preocupação de segurança.
+    
+- Um cliente com comportamento inválido não deveria derrubar o servidor inteiro.
+    
+
+O modelo principal desta parte é:
+
+```text
+Cliente
+   ↓
+conecta
+   ↓
+envia dados
+   ↓
+servidor recebe
+   ↓
+valida
+   ↓
+processa
+   ↓
+responde
+   ↓
+erro/desconexão?
+   ├── não → continua
+   └── sim → trata → fecha cliente
+                         ↓
+                  servidor continua
+```
+
+---

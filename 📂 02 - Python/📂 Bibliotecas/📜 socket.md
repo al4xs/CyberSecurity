@@ -46447,3 +46447,2237 @@ executa a operação
 ```
 
 ---
+# 40. Construindo um servidor socket mais completo
+
+Até agora estudamos cada peça separadamente:
+
+- `socket()`;
+    
+- `bind()`;
+    
+- `listen()`;
+    
+- `accept()`;
+    
+- `connect()`;
+    
+- `send()` e `sendall()`;
+    
+- `recv()`;
+    
+- protocolos de aplicação;
+    
+- framing;
+    
+- tratamento de erros;
+    
+- múltiplos clientes;
+    
+- `selectors`;
+    
+- `asyncio`;
+    
+- TLS;
+    
+- autenticação;
+    
+- autorização;
+    
+- transferência de arquivos.
+    
+
+Agora vamos juntar essas peças em uma arquitetura única.
+
+O objetivo não é criar ainda um sistema gigantesco.
+
+O objetivo é entender **como essas peças se encaixam em um servidor real**.
+
+---
+
+## 40.1. Um servidor socket não é apenas `accept()` + `recv()`
+
+Um exemplo extremamente simples seria:
+
+```python
+import socket
+
+server = socket.socket()
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+client, address = server.accept()
+
+data = client.recv(1024)
+
+client.sendall(data)
+
+client.close()
+server.close()
+```
+
+Esse código funciona para demonstrar o conceito.
+
+Mas ele possui vários problemas para uma aplicação real:
+
+- atende apenas uma conexão por vez;
+    
+- não possui protocolo estruturado;
+    
+- não possui autenticação;
+    
+- não possui autorização;
+    
+- não possui timeout;
+    
+- não possui limites adequados;
+    
+- não possui logging;
+    
+- não trata adequadamente várias falhas;
+    
+- não possui separação de responsabilidades;
+    
+- não possui gerenciamento de estado;
+    
+- não possui TLS.
+    
+
+Por isso, conforme a aplicação cresce, precisamos separar as responsabilidades.
+
+---
+
+## 40.2. Separando as responsabilidades
+
+Uma arquitetura simples pode ser:
+
+```text
+                    SERVIDOR
+                       │
+                       ▼
+              ┌─────────────────┐
+              │ Listening Socket│
+              └────────┬────────┘
+                       │
+                    accept()
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+             ▼                   ▼
+         Cliente 1            Cliente 2
+             │                   │
+             ▼                   ▼
+         Handler 1            Handler 2
+             │                   │
+             └─────────┬─────────┘
+                       │
+                       ▼
+                 Protocol Layer
+                       │
+                       ▼
+                Authentication
+                       │
+                       ▼
+                 Authorization
+                       │
+                       ▼
+                Application Logic
+```
+
+Cada camada possui uma função.
+
+---
+
+## 40.3. Listening socket
+
+O primeiro socket é responsável por escutar novas conexões.
+
+Por exemplo:
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Vamos analisar cada parâmetro.
+
+### `socket.AF_INET`
+
+Primeiro argumento.
+
+Define a família de endereços.
+
+```text
+AF_INET
+   ↓
+IPv4
+```
+
+---
+
+### `socket.SOCK_STREAM`
+
+Segundo argumento.
+
+Define o tipo do socket.
+
+```text
+SOCK_STREAM
+   ↓
+fluxo de bytes
+   ↓
+normalmente TCP
+```
+
+---
+
+Depois:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+O método `bind()` recebe um endereço local.
+
+No caso de IPv4, esse endereço é:
+
+```python
+("127.0.0.1", 4444)
+```
+
+O primeiro valor:
+
+```text
+127.0.0.1
+```
+
+é o endereço IP.
+
+O segundo:
+
+```text
+4444
+```
+
+é a porta.
+
+---
+
+Depois:
+
+```python
+server.listen(100)
+```
+
+O argumento:
+
+```text
+100
+```
+
+é o `backlog`.
+
+Ele representa a capacidade solicitada para a fila de conexões pendentes, embora o comportamento exato dependa do sistema operacional.
+
+---
+
+## 40.4. O listening socket não conversa diretamente com o cliente
+
+Esse conceito é muito importante.
+
+Temos:
+
+```text
+Listening socket
+       │
+       │ aceita conexões
+       ▼
+Client socket
+       │
+       │ troca dados
+       ▼
+Cliente
+```
+
+Quando executamos:
+
+```python
+client, address = server.accept()
+```
+
+o método `accept()` retorna dois valores.
+
+### Primeiro valor
+
+```python
+client
+```
+
+É um novo socket utilizado para comunicação com aquele cliente.
+
+### Segundo valor
+
+```python
+address
+```
+
+Contém o endereço remoto do cliente.
+
+Para IPv4, normalmente será algo parecido com:
+
+```python
+("127.0.0.1", 53142)
+```
+
+Nesse exemplo:
+
+```text
+127.0.0.1 → IP do cliente
+53142     → porta efêmera do cliente
+```
+
+---
+
+## 40.5. Por que precisamos de um socket separado?
+
+Imagine:
+
+```text
+Servidor
+porta 4444
+   │
+   ├── cliente A
+   ├── cliente B
+   └── cliente C
+```
+
+Todos podem se conectar ao mesmo serviço:
+
+```text
+192.168.1.10:4444
+```
+
+Mas cada conexão possui seu próprio socket de comunicação.
+
+Por exemplo:
+
+```text
+Listening socket
+        │
+        ├── socket cliente A
+        ├── socket cliente B
+        └── socket cliente C
+```
+
+O listening socket continua esperando novas conexões.
+
+---
+
+## 40.6. Handler de cliente
+
+Uma boa prática é separar o processamento de cada cliente em uma função.
+
+Por exemplo:
+
+```python
+def handle_client(client, address):
+    print(f"Cliente conectado: {address}")
+
+    while True:
+        data = client.recv(4096)
+
+        if not data:
+            break
+
+        client.sendall(data)
+
+    client.close()
+```
+
+Agora vamos analisar **cada linha e cada parâmetro**.
+
+---
+
+### `def handle_client(client, address):`
+
+```python
+def handle_client(client, address):
+```
+
+Cria uma função chamada:
+
+```text
+handle_client
+```
+
+O objetivo dela é cuidar da comunicação com um cliente específico.
+
+Ela recebe dois parâmetros.
+
+#### `client`
+
+É o socket retornado por:
+
+```python
+server.accept()
+```
+
+Esse é o socket utilizado para enviar e receber dados daquele cliente.
+
+#### `address`
+
+É o endereço remoto retornado por `accept()`.
+
+---
+
+### `print()`
+
+```python
+print(f"Cliente conectado: {address}")
+```
+
+Exibe informações no terminal.
+
+O:
+
+```python
+f"..."
+```
+
+permite inserir o valor de `address` dentro da string.
+
+---
+
+### `client.recv(4096)`
+
+```python
+data = client.recv(4096)
+```
+
+O método `recv()` recebe dados do socket.
+
+O argumento:
+
+```text
+4096
+```
+
+é o número máximo de bytes que essa chamada está preparada para retornar.
+
+Isso **não significa**:
+
+```text
+"espere exatamente 4096 bytes"
+```
+
+Significa:
+
+```text
+"retorne no máximo 4096 bytes"
+```
+
+---
+
+### `if not data`
+
+```python
+if not data:
+```
+
+Verifica se não foram recebidos dados.
+
+Quando uma conexão TCP é encerrada de forma ordenada pelo outro lado, `recv()` retorna:
+
+```python
+b""
+```
+
+Como `b""` é avaliado como falso em Python:
+
+```python
+not b""
+```
+
+resulta em:
+
+```text
+True
+```
+
+Então podemos sair do loop.
+
+---
+
+### `client.sendall(data)`
+
+```python
+client.sendall(data)
+```
+
+Envia os bytes recebidos de volta ao cliente.
+
+O parâmetro:
+
+```text
+data
+```
+
+é o conteúdo que será enviado.
+
+`sendall()` tenta enviar todos os bytes fornecidos, retornando `None` quando consegue concluir sem erro.
+
+---
+
+### `client.close()`
+
+```python
+client.close()
+```
+
+Fecha o socket do cliente.
+
+---
+
+## 40.7. O problema desse handler
+
+Embora o exemplo esteja melhor organizado, ainda temos um problema:
+
+```python
+data = client.recv(4096)
+```
+
+é uma operação bloqueante por padrão.
+
+Enquanto esse cliente estiver parado e não enviar nada:
+
+```text
+handler
+   ↓
+recv()
+   ↓
+esperando
+```
+
+o fluxo ficará bloqueado.
+
+Se tivermos um servidor sequencial:
+
+```python
+client, address = server.accept()
+handle_client(client, address)
+```
+
+isso significa:
+
+```text
+cliente A conecta
+      ↓
+servidor atende A
+      ↓
+A fica parado
+      ↓
+servidor continua esperando A
+      ↓
+cliente B pode ficar esperando
+```
+
+Por isso precisamos de concorrência ou multiplexação.
+
+---
+
+## 40.8. Servidor usando threads
+
+Uma solução didática é criar uma thread para cada cliente.
+
+```python
+import socket
+import threading
+
+
+def handle_client(client, address):
+    print(f"Cliente conectado: {address}")
+
+    try:
+        while True:
+            data = client.recv(4096)
+
+            if not data:
+                break
+
+            client.sendall(data)
+
+    finally:
+        client.close()
+
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind(("127.0.0.1", 4444))
+server.listen(100)
+
+while True:
+    client, address = server.accept()
+
+    thread = threading.Thread(
+        target=handle_client,
+        args=(client, address)
+    )
+
+    thread.start()
+```
+
+Agora vamos destrinchar o código.
+
+---
+
+# 40.9. `import socket`
+
+```python
+import socket
+```
+
+Importa o módulo padrão `socket`.
+
+Ele fornece a API Python para trabalhar com sockets.
+
+---
+
+# 40.10. `import threading`
+
+```python
+import threading
+```
+
+Importa o módulo responsável por trabalhar com threads.
+
+Neste exemplo, vamos usar uma thread para processar cada cliente.
+
+---
+
+# 40.11. A função `handle_client()`
+
+```python
+def handle_client(client, address):
+```
+
+É a função que será executada pela thread.
+
+Recebe:
+
+```text
+client
+   ↓
+socket da conexão
+
+address
+   ↓
+endereço do cliente
+```
+
+---
+
+# 40.12. `try`
+
+```python
+try:
+```
+
+Começa uma região onde podemos tratar erros e garantir limpeza de recursos.
+
+---
+
+# 40.13. Loop de comunicação
+
+```python
+while True:
+```
+
+Cria um loop infinito.
+
+A função continuará recebendo dados até ocorrer uma condição de saída.
+
+---
+
+# 40.14. Recebendo dados
+
+```python
+data = client.recv(4096)
+```
+
+Recebe até:
+
+```text
+4096 bytes
+```
+
+daquele cliente.
+
+Novamente:
+
+```text
+4096
+```
+
+é o tamanho máximo da chamada, não uma garantia de que serão recebidos 4096 bytes.
+
+---
+
+# 40.15. Detectando desconexão
+
+```python
+if not data:
+    break
+```
+
+Se `recv()` retornar:
+
+```python
+b""
+```
+
+a conexão foi encerrada ordenadamente pelo peer.
+
+Então:
+
+```python
+break
+```
+
+interrompe o loop.
+
+---
+
+# 40.16. Enviando resposta
+
+```python
+client.sendall(data)
+```
+
+Envia todos os bytes recebidos.
+
+Esse exemplo é um servidor **echo**:
+
+```text
+cliente
+   │
+   │ "hello"
+   ▼
+servidor
+   │
+   │ "hello"
+   ▼
+cliente
+```
+
+---
+
+# 40.17. `finally`
+
+```python
+finally:
+    client.close()
+```
+
+O bloco `finally` é executado mesmo quando ocorre uma exceção dentro do `try`.
+
+Isso é útil para garantir a liberação do socket.
+
+---
+
+# 40.18. Criando o socket
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Primeiro parâmetro:
+
+```python
+socket.AF_INET
+```
+
+Define IPv4.
+
+Segundo parâmetro:
+
+```python
+socket.SOCK_STREAM
+```
+
+Define um socket orientado a fluxo, normalmente TCP.
+
+---
+
+# 40.19. `setsockopt()`
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+Esse método configura uma opção do socket.
+
+A assinatura conceitual é:
+
+```python
+setsockopt(level, optname, value)
+```
+
+### Primeiro parâmetro: `level`
+
+```python
+socket.SOL_SOCKET
+```
+
+Indica que estamos configurando uma opção da camada geral do socket.
+
+### Segundo parâmetro: `optname`
+
+```python
+socket.SO_REUSEADDR
+```
+
+Seleciona a opção `SO_REUSEADDR`.
+
+Ela é frequentemente utilizada em servidores TCP para permitir determinadas reutilizações do endereço local, especialmente durante reinicializações, respeitando as regras do sistema operacional.
+
+### Terceiro parâmetro: `value`
+
+```python
+1
+```
+
+Ativa a opção.
+
+---
+
+# 40.20. `bind()`
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Associa o socket a:
+
+```text
+IP: 127.0.0.1
+porta: 4444
+```
+
+Como usamos `127.0.0.1`, o servidor fica acessível somente pela própria máquina através desse endereço.
+
+---
+
+# 40.21. `listen()`
+
+```python
+server.listen(100)
+```
+
+Coloca o socket em estado de escuta.
+
+O argumento:
+
+```text
+100
+```
+
+é o backlog solicitado.
+
+---
+
+# 40.22. Loop principal
+
+```python
+while True:
+```
+
+O servidor continua funcionando indefinidamente.
+
+---
+
+# 40.23. `accept()`
+
+```python
+client, address = server.accept()
+```
+
+Espera uma nova conexão.
+
+Quando uma conexão chega:
+
+```text
+client
+   ↓
+socket de comunicação
+
+address
+   ↓
+endereço do cliente
+```
+
+---
+
+# 40.24. Criando a thread
+
+```python
+thread = threading.Thread(
+    target=handle_client,
+    args=(client, address)
+)
+```
+
+O construtor `Thread` cria um objeto que representa uma thread.
+
+### `target`
+
+```python
+target=handle_client
+```
+
+Define qual função será executada pela thread.
+
+Observe que escrevemos:
+
+```python
+target=handle_client
+```
+
+e não:
+
+```python
+target=handle_client()
+```
+
+Porque queremos passar a função para a thread executar posteriormente.
+
+---
+
+### `args`
+
+```python
+args=(client, address)
+```
+
+Define os argumentos que serão enviados para a função `handle_client`.
+
+A função possui:
+
+```python
+def handle_client(client, address):
+```
+
+Então:
+
+```python
+args=(client, address)
+```
+
+faz:
+
+```text
+client → primeiro parâmetro
+address → segundo parâmetro
+```
+
+---
+
+# 40.25. `thread.start()`
+
+```python
+thread.start()
+```
+
+Inicia a execução da thread.
+
+A função:
+
+```python
+handle_client(client, address)
+```
+
+será executada pela nova thread.
+
+O fluxo passa a ser aproximadamente:
+
+```text
+Thread principal
+      │
+      ├── accept()
+      │
+      ├── cliente A
+      │      ↓
+      │   Thread A
+      │
+      ├── accept()
+      │
+      ├── cliente B
+      │      ↓
+      │   Thread B
+      │
+      └── accept()
+```
+
+Assim o servidor consegue continuar aceitando novos clientes enquanto outras threads estão atendendo conexões existentes.
+
+---
+
+# 40.26. Problema: quantidade ilimitada de threads
+
+Imagine milhares de clientes.
+
+Se fizermos:
+
+```text
+1 cliente
+   ↓
+1 thread
+
+10.000 clientes
+   ↓
+10.000 threads
+```
+
+isso pode consumir muitos recursos.
+
+Threads possuem:
+
+- memória;
+    
+- estruturas internas;
+    
+- custo de agendamento;
+    
+- custo de troca de contexto.
+    
+
+Portanto:
+
+```text
+mais threads ≠ automaticamente mais desempenho
+```
+
+---
+
+## 40.27. Thread pool
+
+Uma alternativa é usar um pool de threads.
+
+Python possui:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+```
+
+Podemos criar:
+
+```python
+executor = ThreadPoolExecutor(max_workers=20)
+```
+
+O parâmetro:
+
+```text
+max_workers=20
+```
+
+define o número máximo de workers no pool.
+
+A ideia é:
+
+```text
+clientes
+   │
+   ▼
+fila de tarefas
+   │
+   ▼
+┌───────────────┐
+│ Thread Pool   │
+│               │
+│ worker 1      │
+│ worker 2      │
+│ ...           │
+│ worker 20     │
+└───────────────┘
+```
+
+Em vez de criar uma thread nova para cada cliente, podemos reutilizar workers.
+
+---
+
+## 40.28. Enviando trabalho para o pool
+
+Por exemplo:
+
+```python
+executor.submit(
+    handle_client,
+    client,
+    address
+)
+```
+
+O método:
+
+```python
+submit()
+```
+
+agenda uma função para execução.
+
+### Primeiro parâmetro
+
+```python
+handle_client
+```
+
+É a função que deverá ser executada.
+
+### Segundo parâmetro
+
+```python
+client
+```
+
+É o primeiro argumento da função.
+
+### Terceiro parâmetro
+
+```python
+address
+```
+
+É o segundo argumento da função.
+
+Então é equivalente conceitualmente a:
+
+```python
+handle_client(client, address)
+```
+
+mas a execução será gerenciada pelo pool.
+
+---
+
+## 40.29. Arquitetura com ThreadPoolExecutor
+
+Podemos ter:
+
+```text
+                    servidor
+                       │
+                       ▼
+                    accept()
+                       │
+                       ▼
+                conexão recebida
+                       │
+                       ▼
+                ThreadPoolExecutor
+                       │
+            ┌──────────┼──────────┐
+            ▼          ▼          ▼
+         worker 1   worker 2   worker 3
+            │          │          │
+            ▼          ▼          ▼
+         cliente A  cliente B  cliente C
+```
+
+Essa arquitetura geralmente é mais controlada do que simplesmente criar uma thread sem limite para cada conexão.
+
+---
+
+# 40.30. Adicionando timeout por cliente
+
+Um cliente malicioso poderia conectar e simplesmente ficar parado.
+
+Por exemplo:
+
+```text
+cliente
+   │
+   │ conecta
+   ▼
+servidor
+   │
+   │ recv()
+   ▼
+esperando eternamente
+```
+
+Podemos definir:
+
+```python
+client.settimeout(30)
+```
+
+O método:
+
+```python
+settimeout(value)
+```
+
+recebe o tempo em segundos.
+
+Neste caso:
+
+```text
+30
+```
+
+significa aproximadamente:
+
+```text
+30 segundos
+```
+
+Se uma operação bloqueante ultrapassar esse limite, poderá ocorrer uma exceção de timeout.
+
+Isso ajuda a evitar conexões completamente ociosas ocupando recursos indefinidamente.
+
+---
+
+## 40.31. Limites são parte da segurança
+
+Um servidor real deve pensar em limites.
+
+Por exemplo:
+
+```text
+máximo de conexões
+máximo de bytes por mensagem
+máximo de tamanho de arquivo
+tempo máximo de conexão
+tempo máximo sem atividade
+máximo de tentativas de autenticação
+```
+
+Sem limites:
+
+```text
+cliente malicioso
+      ↓
+envia dados enormes
+      ↓
+consome memória
+      ↓
+servidor degrada
+```
+
+Ou:
+
+```text
+milhares de conexões
+      ↓
+recursos esgotados
+      ↓
+serviço indisponível
+```
+
+Isso transforma gerenciamento de recursos em uma questão de segurança.
+
+---
+
+# 40.32. Estado de uma conexão
+
+Uma conexão pode possuir um estado próprio.
+
+Por exemplo:
+
+```text
+CONNECTED
+    ↓
+WAITING_AUTH
+    ↓
+AUTHENTICATED
+    ↓
+ACTIVE
+    ↓
+CLOSING
+    ↓
+CLOSED
+```
+
+Isso permite que o servidor saiba em que etapa o cliente está.
+
+Por exemplo:
+
+```python
+state = "WAITING_AUTH"
+```
+
+Depois de autenticar:
+
+```python
+state = "AUTHENTICATED"
+```
+
+Depois de começar a executar operações:
+
+```python
+state = "ACTIVE"
+```
+
+---
+
+## 40.33. Por que manter estado?
+
+Imagine que o cliente envie:
+
+```text
+DOWNLOAD segredo.pdf
+```
+
+antes de autenticar.
+
+O servidor precisa saber:
+
+```text
+estado atual = WAITING_AUTH
+```
+
+Então:
+
+```text
+DOWNLOAD
+   ↓
+não autenticado
+   ↓
+AUTH_REQUIRED
+```
+
+Depois:
+
+```text
+AUTH
+   ↓
+credenciais válidas
+   ↓
+AUTHENTICATED
+```
+
+Agora:
+
+```text
+DOWNLOAD
+   ↓
+verificar autorização
+   ↓
+permitir ou negar
+```
+
+---
+
+# 40.34. Buffer por conexão
+
+Como TCP é um fluxo de bytes, cada conexão pode precisar de seu próprio buffer.
+
+Por exemplo:
+
+```python
+buffer = b""
+```
+
+O cliente pode enviar:
+
+```text
+PI
+```
+
+e depois:
+
+```text
+NG\n
+```
+
+A primeira chamada pode produzir:
+
+```text
+b"PI"
+```
+
+O servidor guarda:
+
+```text
+buffer = b"PI"
+```
+
+Depois recebe:
+
+```text
+b"NG\n"
+```
+
+Agora:
+
+```text
+buffer = b"PING\n"
+```
+
+Então o protocolo consegue identificar a mensagem completa.
+
+---
+
+## 40.35. Cada cliente precisa do próprio buffer
+
+Imagine:
+
+```text
+Cliente A
+buffer A
+
+Cliente B
+buffer B
+
+Cliente C
+buffer C
+```
+
+Não podemos misturar os dados.
+
+A arquitetura lógica é:
+
+```text
+socket A → estado A → buffer A
+socket B → estado B → buffer B
+socket C → estado C → buffer C
+```
+
+Esse é um dos motivos pelos quais um `ClientHandler` ou objeto de sessão pode ser útil.
+
+---
+
+# 40.36. Um objeto para representar a conexão
+
+Podemos criar uma classe:
+
+```python
+class ClientSession:
+    def __init__(self, client, address):
+        self.client = client
+        self.address = address
+        self.buffer = b""
+        self.authenticated = False
+        self.username = None
+```
+
+Agora vamos analisar cada parte.
+
+---
+
+### `class ClientSession`
+
+```python
+class ClientSession:
+```
+
+Cria uma classe chamada `ClientSession`.
+
+A ideia é representar o estado de **uma conexão específica**.
+
+---
+
+### `__init__`
+
+```python
+def __init__(self, client, address):
+```
+
+É o método executado quando criamos uma nova instância.
+
+Recebe:
+
+```text
+self
+client
+address
+```
+
+`self` representa a própria instância.
+
+---
+
+### `self.client`
+
+```python
+self.client = client
+```
+
+Armazena o socket da conexão.
+
+---
+
+### `self.address`
+
+```python
+self.address = address
+```
+
+Armazena o endereço do cliente.
+
+---
+
+### `self.buffer`
+
+```python
+self.buffer = b""
+```
+
+Cria o buffer inicial.
+
+Começa vazio:
+
+```text
+b""
+```
+
+---
+
+### `self.authenticated`
+
+```python
+self.authenticated = False
+```
+
+Indica que a sessão começa não autenticada.
+
+---
+
+### `self.username`
+
+```python
+self.username = None
+```
+
+Ainda não existe usuário autenticado associado à sessão.
+
+---
+
+## 40.37. Como essa sessão evolui
+
+Inicialmente:
+
+```text
+client       → socket
+address      → endereço
+buffer       → b""
+authenticated → False
+username     → None
+```
+
+Depois da autenticação:
+
+```text
+authenticated → True
+username      → "allan"
+```
+
+O buffer continua pertencendo àquela conexão.
+
+---
+
+## 40.38. Arquitetura completa
+
+Agora podemos visualizar:
+
+```text
+                    ┌─────────────────────┐
+                    │   Listening Socket  │
+                    └──────────┬──────────┘
+                               │
+                            accept()
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+          Session A         Session B        Session C
+              │                │                │
+              ├─ socket        ├─ socket       ├─ socket
+              ├─ buffer        ├─ buffer       ├─ buffer
+              ├─ state         ├─ state        ├─ state
+              ├─ user          ├─ user         ├─ user
+              └─ permissions   └─ permissions  └─ permissions
+```
+
+Cada sessão mantém seu próprio estado.
+
+---
+
+# 40.39. Separando protocolo e aplicação
+
+Imagine que o cliente envie:
+
+```text
+ECHO hello
+```
+
+O socket não sabe o significado disso.
+
+O TCP apenas transporta bytes.
+
+Quem entende:
+
+```text
+ECHO
+```
+
+é o protocolo da aplicação.
+
+Podemos separar:
+
+```text
+socket layer
+     ↓
+recebe bytes
+
+protocol layer
+     ↓
+interpreta bytes
+
+application layer
+     ↓
+executa ECHO
+```
+
+Essa separação é extremamente importante.
+
+---
+
+# 40.40. Exemplo de separação
+
+Podemos ter:
+
+```text
+server.py
+    ↓
+aceita conexões
+
+session.py
+    ↓
+representa cliente
+
+protocol.py
+    ↓
+interpreta mensagens
+
+auth.py
+    ↓
+autenticação
+
+authorization.py
+    ↓
+permissões
+
+commands.py
+    ↓
+executa comandos
+```
+
+Cada arquivo possui uma responsabilidade.
+
+---
+
+## 40.41. Exemplo de estrutura de projeto
+
+Uma estrutura possível:
+
+```text
+socket_server/
+│
+├── server.py
+├── session.py
+├── protocol.py
+├── auth.py
+├── authorization.py
+├── commands.py
+└── config.py
+```
+
+Não existe uma única estrutura correta.
+
+O objetivo é evitar transformar:
+
+```text
+server.py
+```
+
+em um arquivo de milhares de linhas contendo absolutamente tudo.
+
+---
+
+# 40.42. `server.py`
+
+Responsabilidade:
+
+```text
+criar socket
+bind
+listen
+accept
+gerenciar ciclo principal
+```
+
+Não deveria precisar conhecer todos os detalhes da lógica de negócio.
+
+---
+
+# 40.43. `session.py`
+
+Responsabilidade:
+
+```text
+socket do cliente
+endereço
+buffer
+estado
+usuário
+permissões
+```
+
+---
+
+# 40.44. `protocol.py`
+
+Responsabilidade:
+
+```text
+bytes
+   ↓
+mensagem
+   ↓
+comando
+   ↓
+argumentos
+```
+
+Por exemplo:
+
+```text
+ECHO hello
+```
+
+poderia virar:
+
+```python
+{
+    "command": "ECHO",
+    "argument": "hello"
+}
+```
+
+---
+
+# 40.45. `auth.py`
+
+Responsabilidade:
+
+```text
+credenciais
+   ↓
+verificação
+   ↓
+usuário autenticado
+```
+
+---
+
+# 40.46. `authorization.py`
+
+Responsabilidade:
+
+```text
+usuário
+   ↓
+permissões
+   ↓
+permitido?
+```
+
+---
+
+# 40.47. `commands.py`
+
+Responsabilidade:
+
+```text
+comando válido
+      ↓
+executar operação
+```
+
+Por exemplo:
+
+```text
+INFO
+ECHO
+DOWNLOAD
+UPLOAD
+QUIT
+```
+
+---
+
+# 40.48. Fluxo completo de uma requisição
+
+Agora podemos visualizar tudo:
+
+```text
+Cliente
+   │
+   │ bytes
+   ▼
+Socket
+   │
+   ▼
+Session
+   │
+   ▼
+Buffer
+   │
+   ▼
+Protocol
+   │
+   ▼
+Comando
+   │
+   ▼
+Autenticação
+   │
+   ▼
+Autorização
+   │
+   ▼
+Application Logic
+   │
+   ▼
+Resposta
+   │
+   ▼
+Protocol
+   │
+   ▼
+Bytes
+   │
+   ▼
+Socket
+   │
+   ▼
+Cliente
+```
+
+Essa é uma das visões mais importantes de toda a matéria.
+
+---
+
+# 40.49. Graceful shutdown
+
+Um servidor também precisa saber encerrar corretamente.
+
+Não é simplesmente:
+
+```python
+server.close()
+```
+
+e pronto.
+
+Em um servidor real, podemos ter:
+
+```text
+servidor recebeu sinal de encerramento
+             ↓
+para de aceitar novos clientes
+             ↓
+finaliza operações atuais
+             ↓
+fecha conexões
+             ↓
+fecha listening socket
+             ↓
+encerra processo
+```
+
+Isso é chamado de **graceful shutdown**.
+
+---
+
+## 40.50. Por que isso importa?
+
+Imagine que o servidor esteja transferindo um arquivo:
+
+```text
+arquivo de 1 GB
+        ↓
+600 MB enviados
+```
+
+Se o processo for encerrado imediatamente:
+
+```text
+600 MB
+   ↓
+conexão encerrada
+   ↓
+arquivo incompleto
+```
+
+Uma aplicação mais cuidadosa pode tentar concluir ou interromper a operação de maneira controlada.
+
+---
+
+# 40.51. TLS entra entre o transporte e a aplicação
+
+Se quisermos TLS:
+
+```text
+Aplicação
+   ↓
+Protocolo
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+IP
+```
+
+O socket TCP continua existindo.
+
+O TLS protege os dados transportados pela conexão.
+
+Conceitualmente:
+
+```text
+dados da aplicação
+       ↓
+   criptografados
+       ↓
+      TLS
+       ↓
+      TCP
+```
+
+---
+
+# 40.52. Uma arquitetura de servidor mais completa
+
+Podemos finalmente juntar tudo:
+
+```text
+┌─────────────────────────────────────┐
+│              CLIENTE                │
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+              ┌─────────┐
+              │   TCP   │
+              └────┬────┘
+                   │
+                   ▼
+              ┌─────────┐
+              │   TLS   │
+              └────┬────┘
+                   │
+                   ▼
+         ┌───────────────────┐
+         │ Application Server │
+         └─────────┬─────────┘
+                   │
+                   ▼
+             ClientSession
+                   │
+          ┌────────┼────────┐
+          │        │        │
+          ▼        ▼        ▼
+       Buffer    State    User
+          │                 │
+          ▼                 ▼
+       Protocol        Authentication
+                            │
+                            ▼
+                       Authorization
+                            │
+                            ▼
+                     Application Logic
+```
+
+---
+
+# 40.53. Threading, selectors ou asyncio?
+
+Essa arquitetura pode ser implementada usando diferentes modelos de concorrência.
+
+### Threads
+
+```text
+cliente
+   ↓
+thread
+```
+
+Mais simples de entender inicialmente.
+
+---
+
+### ThreadPoolExecutor
+
+```text
+clientes
+   ↓
+fila
+   ↓
+pool de threads
+```
+
+Controla melhor a quantidade de workers.
+
+---
+
+### Selectors
+
+```text
+um thread
+    ↓
+selector
+    ↓
+muitos sockets
+```
+
+Útil quando queremos controlar muitas conexões através de I/O multiplexado.
+
+---
+
+### Asyncio
+
+```text
+event loop
+    ↓
+coroutines
+    ↓
+muitos sockets
+```
+
+Utiliza programação assíncrona.
+
+---
+
+# 40.54. Não existe uma arquitetura universalmente melhor
+
+É um erro pensar:
+
+```text
+asyncio = sempre melhor
+```
+
+ou:
+
+```text
+threads = sempre melhor
+```
+
+A escolha depende da aplicação.
+
+Devemos considerar:
+
+- quantidade de conexões;
+    
+- duração das conexões;
+    
+- quantidade de dados;
+    
+- operações de I/O;
+    
+- CPU;
+    
+- complexidade do código;
+    
+- bibliotecas utilizadas;
+    
+- necessidade de escalabilidade;
+    
+- experiência da equipe.
+    
+
+---
+
+# 40.55. O que um servidor real precisa controlar?
+
+Uma lista mental útil:
+
+```text
+[ ] socket
+[ ] bind
+[ ] listen
+[ ] accept
+[ ] protocolo
+[ ] framing
+[ ] buffer
+[ ] timeout
+[ ] tratamento de erros
+[ ] concorrência
+[ ] autenticação
+[ ] autorização
+[ ] TLS
+[ ] limites
+[ ] logs
+[ ] métricas
+[ ] graceful shutdown
+[ ] validação de entrada
+[ ] gerenciamento de recursos
+```
+
+Quanto mais próxima uma aplicação estiver de produção, mais desses pontos precisam ser tratados explicitamente.
+
+---
+
+# 40.56. Modelo mental final
+
+O servidor socket completo pode ser pensado assim:
+
+```text
+                         SERVIDOR
+                            │
+                            ▼
+                    Listening Socket
+                            │
+                         accept()
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+          Cliente A      Cliente B      Cliente C
+             │              │              │
+             ▼              ▼              ▼
+          Session A       Session B       Session C
+             │              │              │
+             ▼              ▼              ▼
+           Buffer         Buffer         Buffer
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                       Protocolo
+                            │
+                            ▼
+                      Autenticação
+                            │
+                            ▼
+                      Autorização
+                            │
+                            ▼
+                    Lógica da aplicação
+                            │
+                            ▼
+                         resposta
+                            │
+                            ▼
+                         Socket
+                            │
+                            ▼
+                         Cliente
+```
+
+A grande ideia é:
+
+> **O socket fornece o canal. O protocolo define o significado dos dados. A sessão mantém o estado do cliente. A autenticação identifica o cliente. A autorização controla suas ações. E a aplicação executa a lógica real.**
+
+---
+
+## 40.57. Resumo da Parte
+
+Nesta parte construímos a arquitetura mental de um servidor socket mais completo.
+
+Aprendemos que:
+
+- o **listening socket** recebe novas conexões;
+    
+- o socket retornado por `accept()` é usado para conversar com aquele cliente;
+    
+- cada cliente pode possuir uma sessão própria;
+    
+- cada sessão pode manter:
+    
+    - socket;
+        
+    - endereço;
+        
+    - buffer;
+        
+    - estado;
+        
+    - usuário;
+        
+    - permissões;
+        
+- `recv()` continua sujeito ao comportamento de fluxo do TCP;
+    
+- cada conexão pode precisar de seu próprio buffer;
+    
+- threads permitem atender clientes concorrentemente;
+    
+- `ThreadPoolExecutor` limita e reutiliza workers;
+    
+- `selectors` permitem multiplexar I/O;
+    
+- `asyncio` permite construir servidores assíncronos;
+    
+- timeouts ajudam a evitar conexões bloqueadas indefinidamente;
+    
+- limites de recursos são importantes para segurança;
+    
+- autenticação responde **quem é o cliente**;
+    
+- autorização responde **o que ele pode fazer**;
+    
+- TLS protege a comunicação;
+    
+- o protocolo da aplicação define o significado dos bytes;
+    
+- separar responsabilidades torna o servidor mais fácil de manter;
+    
+- graceful shutdown permite encerrar o servidor de forma controlada.
+    
+
+A arquitetura fundamental fica:
+
+```text
+Cliente
+   ↓
+TCP
+   ↓
+TLS
+   ↓
+Socket
+   ↓
+Session
+   ↓
+Buffer
+   ↓
+Protocol
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Application Logic
+   ↓
+Response
+```
+
+---
+

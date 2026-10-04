@@ -13357,3 +13357,1055 @@ processar sockets prontos
 
 > **Um socket bloqueante pode esperar indefinidamente, um socket com timeout pode esperar por um período limitado e um socket não bloqueante não espera pela operação. Essa diferença é fundamental para entender servidores que trabalham com múltiplas conexões e operações de I/O.**
 
+---
+
+# 13. Protocolos de aplicação e delimitação de mensagens
+
+## 13.1 O problema: TCP não conhece suas mensagens
+
+Um dos conceitos mais importantes ao trabalhar com `SOCK_STREAM` é entender que o **TCP trabalha com um fluxo contínuo de bytes**, e não com mensagens individuais.
+
+Por exemplo, imagine que o cliente execute:
+
+```python
+client.sendall(b"Hello")
+client.sendall(b"World")
+```
+
+É tentador imaginar que o servidor receberá:
+
+```text
+Hello
+World
+```
+
+Mas isso **não é garantido**.
+
+O servidor poderia receber:
+
+```python
+b"HelloWorld"
+```
+
+Ou:
+
+```python
+b"Hel"
+b"loWo"
+b"rld"
+```
+
+Ou até:
+
+```python
+b"HelloW"
+b"orld"
+```
+
+Isso acontece porque o TCP não mantém a informação de onde uma chamada `send()` ou `sendall()` começou ou terminou.
+
+Para o TCP, existe apenas:
+
+```text
+HELLOWORLD
+```
+
+como uma sequência de bytes.
+
+---
+
+## 13.2 `send()` não cria uma mensagem
+
+Considere:
+
+```python
+client.sendall(b"Mensagem 1")
+client.sendall(b"Mensagem 2")
+client.sendall(b"Mensagem 3")
+```
+
+O TCP não cria três objetos independentes chamados:
+
+```text
+Mensagem 1
+Mensagem 2
+Mensagem 3
+```
+
+Ele simplesmente coloca os bytes no fluxo:
+
+```text
+Mensagem 1Mensagem 2Mensagem 3
+```
+
+O receptor precisa descobrir **onde uma mensagem termina e onde a próxima começa**.
+
+Essa responsabilidade pertence ao **protocolo da aplicação**.
+
+---
+
+## 13.3 O que é um protocolo de aplicação?
+
+Um protocolo de aplicação é um conjunto de regras que determina **como os programas vão interpretar os dados transmitidos pela rede**.
+
+Por exemplo, podemos criar uma regra:
+
+```text
+Cada mensagem termina com \n
+```
+
+Então:
+
+```text
+Olá\n
+Tudo bem?\n
+Sair\n
+```
+
+O TCP transportará os bytes normalmente, enquanto nossa aplicação interpreta:
+
+```text
+Olá
+```
+
+```text
+Tudo bem?
+```
+
+```text
+Sair
+```
+
+Nesse caso:
+
+```text
+TCP
+↓
+fluxo de bytes
+↓
+protocolo da aplicação
+↓
+mensagens
+```
+
+O TCP fornece o transporte.
+
+O protocolo da aplicação define o significado dos dados.
+
+---
+
+## 13.4 Delimitação por caractere
+
+Uma das formas mais simples de separar mensagens é utilizar um **delimitador**.
+
+Por exemplo:
+
+```text
+\n
+```
+
+Podemos definir:
+
+```text
+mensagem + \n
+```
+
+Então:
+
+```text
+Olá\n
+Python é legal\n
+Sair\n
+```
+
+representa três mensagens.
+
+O servidor pode acumular os bytes recebidos até encontrar `\n`.
+
+---
+
+## 13.5 Exemplo com mensagens terminadas em `\n`
+
+Cliente:
+
+```python
+import socket
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+client.connect(("127.0.0.1", 4444))
+
+client.sendall(b"Olá servidor\n")
+client.sendall(b"Estou estudando sockets\n")
+client.sendall(b"Sair\n")
+
+client.close()
+```
+
+O servidor não deve assumir que cada `recv()` representa uma mensagem.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+poderia retornar:
+
+```python
+b"Ol\xc3\xa1 servidor\nEstou estudando sockets\n"
+```
+
+Nesse caso, duas mensagens chegaram no mesmo `recv()`.
+
+Também poderia retornar apenas:
+
+```python
+b"Ol\xc3\xa1 serv"
+```
+
+A aplicação precisa continuar recebendo os dados.
+
+---
+
+## 13.6 Buffer de recebimento
+
+Uma técnica comum é manter um **buffer** com os dados que ainda não foram processados.
+
+Exemplo conceitual:
+
+```python
+buffer = b""
+
+while True:
+    data = client.recv(1024)
+
+    if not data:
+        break
+
+    buffer += data
+```
+
+Imagine que os dados cheguem assim:
+
+```text
+recv() #1
+b"Olá serv"
+```
+
+Depois:
+
+```text
+recv() #2
+b"idor\nTudo "
+```
+
+Depois:
+
+```text
+recv() #3
+b"bem?\n"
+```
+
+O buffer ficará:
+
+```text
+Olá servidor\nTudo bem?\n
+```
+
+A aplicação pode procurar `\n` e extrair as mensagens completas.
+
+---
+
+## 13.7 Extraindo mensagens do buffer
+
+Podemos fazer:
+
+```python
+buffer = b""
+
+while True:
+    data = client.recv(1024)
+
+    if not data:
+        break
+
+    buffer += data
+
+    while b"\n" in buffer:
+        message, buffer = buffer.split(b"\n", 1)
+
+        print(message.decode())
+```
+
+A parte mais importante é:
+
+```python
+buffer.split(b"\n", 1)
+```
+
+O `1` significa que queremos realizar apenas uma divisão por vez.
+
+Por exemplo:
+
+```python
+buffer = b"Olá\nTudo bem?\n"
+```
+
+Após:
+
+```python
+message, buffer = buffer.split(b"\n", 1)
+```
+
+teremos:
+
+```python
+message
+```
+
+com:
+
+```python
+b"Olá"
+```
+
+e:
+
+```python
+buffer
+```
+
+com:
+
+```python
+b"Tudo bem?\n"
+```
+
+Na próxima iteração, a segunda mensagem será processada.
+
+---
+
+## 13.8 Por que o buffer é necessário?
+
+Imagine que o servidor receba:
+
+```python
+b"Olá"
+```
+
+mas a mensagem completa seja:
+
+```text
+Olá servidor
+```
+
+Se o programa interpretar imediatamente:
+
+```python
+data = client.recv(1024)
+
+print(data.decode())
+```
+
+ele poderá considerar:
+
+```text
+Olá
+```
+
+como uma mensagem completa.
+
+Mas isso estaria errado.
+
+Talvez os próximos bytes ainda estejam chegando:
+
+```text
+ servidor
+```
+
+O buffer permite guardar os dados incompletos:
+
+```text
+recebido:
+"Olá"
+
+buffer:
+"Olá"
+```
+
+Depois:
+
+```text
+recebido:
+" servidor\n"
+
+buffer:
+"Olá servidor\n"
+```
+
+Agora temos uma mensagem completa.
+
+---
+
+## 13.9 Delimitadores precisam fazer parte do protocolo
+
+O delimitador não pode ser escolhido aleatoriamente.
+
+Imagine que definimos:
+
+```text
+\n
+```
+
+como final da mensagem.
+
+Então o protocolo precisa especificar que:
+
+```text
+\n = fim da mensagem
+```
+
+Se o conteúdo da própria mensagem puder conter `\n`, precisamos definir uma forma de escapar esse caractere ou utilizar outro mecanismo.
+
+Por exemplo:
+
+```text
+Mensagem normal\n
+```
+
+é simples.
+
+Mas:
+
+```text
+Olá
+Mundo
+```
+
+possui uma quebra de linha dentro do conteúdo.
+
+Nesse caso, o protocolo precisa definir como diferenciar:
+
+```text
+quebra de linha dentro da mensagem
+```
+
+de:
+
+```text
+delimitador que encerra a mensagem
+```
+
+Por isso, protocolos mais complexos frequentemente utilizam outras formas de framing.
+
+---
+
+## 13.10 Mensagens de tamanho fixo
+
+Outra possibilidade é definir que todas as mensagens possuem exatamente o mesmo tamanho.
+
+Por exemplo:
+
+```text
+20 bytes
+```
+
+Então:
+
+```text
+[---------20 bytes---------]
+[---------20 bytes---------]
+[---------20 bytes---------]
+```
+
+O receptor sabe exatamente quantos bytes precisa receber para completar uma mensagem.
+
+Porém, isso pode desperdiçar espaço quando as mensagens possuem tamanhos diferentes.
+
+Por exemplo:
+
+```text
+Olá
+```
+
+possui poucos bytes, mas ainda ocuparia:
+
+```text
+20 bytes
+```
+
+---
+
+## 13.11 Prefixo de tamanho
+
+Uma solução mais flexível é enviar primeiro o **tamanho da mensagem** e depois os dados.
+
+Por exemplo:
+
+```text
+[ tamanho ][ mensagem ]
+```
+
+Imagine:
+
+```text
+Olá
+```
+
+Possui 3 bytes.
+
+Podemos enviar:
+
+```text
+[3][Olá]
+```
+
+O receptor primeiro lê o tamanho:
+
+```text
+3
+```
+
+Depois sabe que precisa receber exatamente:
+
+```text
+3 bytes
+```
+
+para completar a mensagem.
+
+Esse método é conhecido como **length-prefix framing**.
+
+---
+
+## 13.12 Exemplo conceitual do length-prefix
+
+Imagine a mensagem:
+
+```text
+Python
+```
+
+Ela possui:
+
+```text
+6 bytes
+```
+
+O protocolo poderia representar:
+
+```text
+[6][Python]
+```
+
+Outra mensagem:
+
+```text
+Olá
+```
+
+poderia ser:
+
+```text
+[3][Olá]
+```
+
+O receptor faz:
+
+```text
+1. Receber o tamanho
+2. Interpretar o tamanho
+3. Receber exatamente essa quantidade de bytes
+4. Processar a mensagem
+5. Repetir
+```
+
+Esse modelo é muito mais robusto para mensagens de tamanho variável.
+
+---
+
+## 13.13 `struct` para representar o tamanho
+
+Em Python, a biblioteca `struct` pode ser utilizada para converter números em uma representação binária adequada para transmissão.
+
+Exemplo:
+
+```python
+import struct
+
+length = len(data)
+
+header = struct.pack("!I", length)
+```
+
+Aqui:
+
+```python
+struct.pack("!I", length)
+```
+
+transforma o inteiro em bytes.
+
+O prefixo:
+
+```text
+!
+```
+
+indica **network byte order**, ou seja, big-endian.
+
+E:
+
+```text
+I
+```
+
+representa um inteiro sem sinal de 4 bytes.
+
+Assim podemos construir:
+
+```python
+packet = header + data
+```
+
+E enviar:
+
+```python
+client.sendall(packet)
+```
+
+O formato será conceitualmente:
+
+```text
+[4 bytes contendo o tamanho][dados]
+```
+
+---
+
+## 13.14 Recebendo exatamente uma quantidade de bytes
+
+Aqui surge outro problema importante.
+
+Suponha que precisamos receber:
+
+```text
+100 bytes
+```
+
+Não podemos simplesmente fazer:
+
+```python
+data = client.recv(100)
+```
+
+e assumir:
+
+```python
+len(data) == 100
+```
+
+Isso **não é garantido**.
+
+Podemos receber:
+
+```text
+40 bytes
+```
+
+e depois:
+
+```text
+60 bytes
+```
+
+Por isso, precisamos continuar chamando `recv()` até obter a quantidade necessária.
+
+Uma função auxiliar pode ser:
+
+```python
+def recv_exactly(sock, size):
+    data = b""
+
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+
+        if not chunk:
+            raise ConnectionError("Conexão encerrada antes dos dados completos")
+
+        data += chunk
+
+    return data
+```
+
+Agora:
+
+```python
+data = recv_exactly(client, 100)
+```
+
+garante que a função só retorna quando:
+
+```text
+100 bytes
+```
+
+forem recebidos.
+
+Ou quando a conexão for encerrada antes disso, causando o erro definido pela função.
+
+---
+
+## 13.15 Por que `recv(size)` pode retornar menos que `size`?
+
+Porque o argumento:
+
+```python
+recv(size)
+```
+
+significa aproximadamente:
+
+> "Receba **até** `size` bytes."
+
+Não significa:
+
+> "Espere obrigatoriamente até receber `size` bytes."
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+pode retornar:
+
+```text
+10 bytes
+```
+
+```text
+500 bytes
+```
+
+```text
+1024 bytes
+```
+
+ou qualquer quantidade disponível dentro daquele limite.
+
+Por isso:
+
+```python
+recv(1024)
+```
+
+não deve ser interpretado como:
+
+```text
+"receberei uma mensagem de 1024 bytes"
+```
+
+Mas como:
+
+```text
+"posso receber até 1024 bytes nesta chamada"
+```
+
+---
+
+## 13.16 Comparando os principais mecanismos de framing
+
+|Método|Como funciona|Vantagem|Limitação|
+|---|---|---|---|
+|Delimitador|Usa um marcador de fim|Simples|Precisa tratar o delimitador dentro do conteúdo|
+|Tamanho fixo|Toda mensagem possui tamanho definido|Simples de implementar|Pode desperdiçar espaço|
+|Prefixo de tamanho|Envia tamanho antes dos dados|Flexível e eficiente|Implementação mais complexa|
+|Estrutura/protocolo|Define cabeçalho + payload|Muito flexível|Exige projeto do protocolo|
+
+---
+
+## 13.17 TCP fornece transporte, não significado
+
+É importante separar as responsabilidades:
+
+```text
+┌──────────────────────────────┐
+│ Aplicação                    │
+│                              │
+│ "LOGIN usuario senha"        │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Protocolo da aplicação       │
+│                              │
+│ Define formato das mensagens │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ TCP                          │
+│                              │
+│ Fluxo confiável de bytes     │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ IP                           │
+│                              │
+│ Endereçamento e roteamento   │
+└──────────────┬───────────────┘
+               │
+               ▼
+            Rede
+```
+
+O TCP não sabe que:
+
+```text
+LOGIN
+```
+
+é uma mensagem.
+
+Ele não sabe que:
+
+```text
+JSON
+```
+
+representa dados.
+
+Ele não sabe que:
+
+```text
+\n
+```
+
+significa final de mensagem.
+
+Tudo isso é responsabilidade das camadas superiores.
+
+---
+
+## 13.18 Exemplo de um protocolo simples de chat
+
+Podemos criar uma regra extremamente simples:
+
+```text
+Toda mensagem termina com \n
+```
+
+Cliente:
+
+```python
+client.sendall(b"Olá!\n")
+client.sendall(b"Como você está?\n")
+client.sendall(b"Sair\n")
+```
+
+Servidor:
+
+```python
+buffer = b""
+
+while True:
+    data = client.recv(1024)
+
+    if not data:
+        break
+
+    buffer += data
+
+    while b"\n" in buffer:
+        message, buffer = buffer.split(b"\n", 1)
+
+        message = message.decode()
+
+        print("Cliente:", message)
+
+        if message == "Sair":
+            break
+```
+
+O ponto principal desse exemplo não é o chat em si.
+
+É entender que:
+
+```text
+recv()
+```
+
+não representa uma mensagem.
+
+O programa precisa implementar uma regra para descobrir onde cada mensagem termina.
+
+---
+
+## 13.19 Erro conceitual: `recv()` = uma mensagem
+
+Este é um dos erros mais comuns de quem começa a estudar sockets.
+
+Código:
+
+```python
+data = client.recv(1024)
+message = data.decode()
+
+print(message)
+```
+
+Isso pode funcionar em exemplos extremamente simples.
+
+Mas não significa que o programa esteja implementando corretamente um protocolo.
+
+O código está assumindo implicitamente:
+
+```text
+1 recv() = 1 mensagem
+```
+
+Em TCP, essa relação não existe.
+
+O correto é pensar:
+
+```text
+recv()
+    ↓
+pedaço do fluxo
+    ↓
+buffer
+    ↓
+framing
+    ↓
+mensagem completa
+```
+
+---
+
+## 13.20 Modelo mental definitivo
+
+Ao utilizar TCP para criar um protocolo próprio, pense em três níveis:
+
+### Nível 1 — Transporte
+
+O TCP fornece:
+
+```text
+conexão
+ordenação
+retransmissão
+controle de fluxo
+entrega confiável
+```
+
+### Nível 2 — Framing
+
+A aplicação precisa determinar:
+
+```text
+onde começa uma mensagem
+onde termina uma mensagem
+```
+
+Por exemplo:
+
+```text
+\n
+```
+
+ou:
+
+```text
+[length][data]
+```
+
+### Nível 3 — Conteúdo
+
+Depois de identificar a mensagem, a aplicação interpreta seu conteúdo.
+
+Por exemplo:
+
+```json
+{
+    "action": "login",
+    "username": "admin"
+}
+```
+
+Assim:
+
+```text
+TCP
+ ↓
+bytes
+ ↓
+framing
+ ↓
+mensagem
+ ↓
+interpretação
+ ↓
+ação da aplicação
+```
+
+Esse modelo será fundamental para compreender posteriormente:
+
+- protocolos de rede;
+    
+- HTTP;
+    
+- WebSockets;
+    
+- APIs;
+    
+- servidores TCP;
+    
+- sistemas de chat;
+    
+- transferência de arquivos;
+    
+- protocolos binários;
+    
+- comunicação entre processos.
+    
+
+---
+
+## Resumo da Parte
+
+- TCP fornece um **fluxo de bytes**, não mensagens.
+    
+- Uma chamada `send()` não corresponde necessariamente a uma chamada `recv()`.
+    
+- Uma mensagem pode ser dividida entre vários `recv()`.
+    
+- Várias mensagens podem chegar em um único `recv()`.
+    
+- A aplicação precisa definir um mecanismo de **framing**.
+    
+- Delimitadores como `\n` são uma solução simples.
+    
+- Mensagens também podem utilizar tamanho fixo.
+    
+- O **length-prefix framing** envia o tamanho antes do conteúdo.
+    
+- `recv(n)` significa receber **até `n` bytes**, e não obrigatoriamente `n`.
+    
+- Para receber exatamente uma quantidade de bytes, é necessário utilizar um loop.
+    
+- `struct.pack()` pode ser usado para criar cabeçalhos binários.
+    
+- O TCP transporta os bytes; o protocolo da aplicação define o significado deles.
+    
+- O modelo fundamental é:
+    
+
+```text
+TCP → fluxo de bytes
+Framing → separação das mensagens
+Aplicação → interpretação das mensagens
+```
+
+	

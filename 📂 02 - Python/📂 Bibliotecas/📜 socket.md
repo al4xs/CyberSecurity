@@ -13357,4 +13357,3 @@ processar sockets prontos
 
 > **Um socket bloqueante pode esperar indefinidamente, um socket com timeout pode esperar por um período limitado e um socket não bloqueante não espera pela operação. Essa diferença é fundamental para entender servidores que trabalham com múltiplas conexões e operações de I/O.**
 
----

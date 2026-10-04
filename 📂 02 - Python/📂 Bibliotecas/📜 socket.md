@@ -39310,3 +39310,1265 @@ ARQUIVO TEMPORÁRIO
 
 ---
 
+# 35. Testes e validação de aplicações com sockets
+
+Até agora construímos servidores, clientes, protocolos, transferência de arquivos, tratamento de erros e mecanismos de concorrência.
+
+Mas existe uma etapa extremamente importante: **testar se tudo realmente funciona**.
+
+Uma aplicação de sockets pode parecer funcionar perfeitamente durante um teste manual simples e ainda possuir vários problemas:
+
+- mensagens chegando parcialmente;
+    
+- várias mensagens chegando juntas;
+    
+- cliente desconectando no meio da operação;
+    
+- arquivos recebidos incompletos;
+    
+- mensagens grandes demais;
+    
+- timeouts;
+    
+- múltiplos clientes simultâneos;
+    
+- dados corrompidos;
+    
+- caminhos de arquivos maliciosos;
+    
+- estados incorretos do protocolo.
+    
+
+Por isso, testar sockets exige mais do que simplesmente:
+
+```bash
+python3 server.py
+```
+
+e depois executar:
+
+```bash
+python3 client.py
+```
+
+O objetivo é testar também **as situações anormais**.
+
+---
+
+## 35.1 O que devemos testar?
+
+Podemos dividir os testes em diferentes níveis:
+
+```text
+                    TESTES
+                      │
+        ┌─────────────┴─────────────┐
+        │                           │
+    Testes unitários          Testes de integração
+        │                           │
+        ▼                           ▼
+ funções isoladas             servidor + cliente
+ protocolo                    socket real
+ validações                   comunicação TCP
+        │                           │
+        └─────────────┬─────────────┘
+                      │
+                      ▼
+              Testes de carga/
+              concorrência
+                      │
+                      ▼
+             vários clientes
+             simultâneos
+```
+
+Cada tipo encontra problemas diferentes.
+
+---
+
+# 35.2 Testes unitários
+
+Um teste unitário verifica uma parte pequena do programa **sem necessariamente abrir uma conexão de rede real**.
+
+Por exemplo, no nosso protocolo tínhamos funções como:
+
+```python
+encode_message()
+```
+
+e:
+
+```python
+extract_messages()
+```
+
+Podemos testá-las isoladamente.
+
+Exemplo:
+
+```python
+message = "PING"
+
+data = encode_message(message)
+
+assert data == b"PING\n"
+```
+
+Aqui estamos verificando uma regra simples:
+
+```text
+"PING"
+   ↓
+encode_message()
+   ↓
+b"PING\n"
+```
+
+Se alguém modificar `encode_message()` e remover o `\n`, o teste poderá detectar o problema.
+
+---
+
+## 35.3 Usando `pytest`
+
+Uma biblioteca bastante utilizada para testes em Python é o `pytest`.
+
+Instalação:
+
+```bash
+pip install pytest
+```
+
+Podemos criar:
+
+```text
+projeto/
+├── protocol.py
+├── server.py
+├── client.py
+└── tests/
+    └── test_protocol.py
+```
+
+Um teste simples:
+
+```python
+from protocol import encode_message
+
+
+def test_encode_message():
+    result = encode_message("PING")
+
+    assert result == b"PING\n"
+```
+
+Executando:
+
+```bash
+pytest
+```
+
+O `pytest` executará as funções de teste.
+
+Normalmente, funções de teste recebem nomes iniciados por:
+
+```text
+test_
+```
+
+---
+
+# 35.4 Testando mensagens vazias
+
+Não devemos testar apenas o caminho feliz.
+
+Por exemplo:
+
+```python
+def test_empty_message():
+    result = encode_message("")
+
+    assert result == b"\n"
+```
+
+Dependendo das regras do protocolo, porém, talvez mensagens vazias devam ser rejeitadas.
+
+Nesse caso, o teste deve verificar justamente isso:
+
+```python
+import pytest
+
+
+def test_empty_message():
+    with pytest.raises(ValueError):
+        encode_message("")
+```
+
+O importante é que o teste represente **a regra definida pelo protocolo**.
+
+---
+
+# 35.5 Testando mensagens grandes
+
+Se nosso protocolo possui:
+
+```python
+MAX_MESSAGE_SIZE = 4096
+```
+
+precisamos testar o limite.
+
+Por exemplo:
+
+```python
+message = "A" * 4096
+```
+
+e também:
+
+```python
+message = "A" * 4097
+```
+
+O primeiro pode ser permitido e o segundo deve ser rejeitado, dependendo da implementação.
+
+Exemplo:
+
+```python
+def test_message_too_large():
+    message = "A" * 4097
+
+    with pytest.raises(ValueError):
+        encode_message(message)
+```
+
+Isso é importante porque limites de tamanho também são uma medida de segurança.
+
+Sem limites, um cliente malicioso poderia tentar enviar:
+
+```text
+1 MB
+100 MB
+1 GB
+...
+```
+
+e consumir recursos do servidor.
+
+---
+
+# 35.6 Testando o problema mais importante do TCP
+
+Existe um teste especialmente importante para aplicações TCP:
+
+> **Uma chamada de `send()` não corresponde necessariamente a uma chamada de `recv()`.**
+
+Por exemplo, o cliente pode fazer:
+
+```python
+client.sendall(b"PING\n")
+```
+
+e o servidor pode receber:
+
+```python
+b"PI"
+```
+
+depois:
+
+```python
+b"NG\n"
+```
+
+Ou poderia receber tudo:
+
+```python
+b"PING\n"
+```
+
+Ou até:
+
+```python
+b"PING\nPONG\n"
+```
+
+em uma única chamada.
+
+Portanto, precisamos testar essas situações.
+
+---
+
+# 35.7 Simulando uma mensagem fragmentada
+
+Podemos deliberadamente dividir uma mensagem:
+
+```python
+sock.sendall(b"PI")
+sock.sendall(b"NG\n")
+```
+
+O protocolo deve conseguir reconstruir:
+
+```text
+PI + NG\n
+   ↓
+PING\n
+   ↓
+mensagem completa
+```
+
+Isso testa se nosso buffer está funcionando corretamente.
+
+Um protocolo mal implementado pode interpretar:
+
+```text
+PI
+```
+
+como uma mensagem completa.
+
+Isso seria um erro.
+
+---
+
+# 35.8 Testando várias mensagens juntas
+
+Também precisamos testar o caso contrário.
+
+O cliente pode enviar:
+
+```python
+sock.sendall(b"PING\nPONG\n")
+```
+
+O servidor pode receber:
+
+```python
+b"PING\nPONG\n"
+```
+
+O parser precisa identificar duas mensagens:
+
+```text
+PING
+PONG
+```
+
+e não:
+
+```text
+PINGPONG
+```
+
+ou apenas:
+
+```text
+PING
+```
+
+ignorando o restante.
+
+Esse teste é extremamente importante para protocolos baseados em delimitadores.
+
+---
+
+# 35.9 Testando o buffer
+
+Imagine que o servidor recebeu:
+
+```python
+data = b"PING\nPONG\nECHO hello\n"
+```
+
+O parser precisa produzir:
+
+```text
+PING
+PONG
+ECHO hello
+```
+
+O buffer restante deve ficar vazio.
+
+Agora imagine:
+
+```python
+data = b"PING\nPON"
+```
+
+O parser deve produzir:
+
+```text
+mensagens:
+    PING
+
+buffer restante:
+    PON
+```
+
+Depois chega:
+
+```python
+b"G\n"
+```
+
+O buffer se transforma em:
+
+```text
+PONG\n
+```
+
+e finalmente:
+
+```text
+PONG
+```
+
+é extraído.
+
+Esse é exatamente o tipo de comportamento que devemos testar automaticamente.
+
+---
+
+# 35.10 Testando `recv_exactly()`
+
+Também devemos testar nossa função:
+
+```python
+recv_exactly(sock, size)
+```
+
+Por exemplo:
+
+```python
+data = recv_exactly(sock, 8)
+```
+
+Precisamos verificar se ela realmente espera até receber os 8 bytes.
+
+Imagine que os dados cheguem assim:
+
+```text
+recv() → 3 bytes
+recv() → 2 bytes
+recv() → 3 bytes
+```
+
+A função precisa produzir:
+
+```text
+3 + 2 + 3 = 8 bytes
+```
+
+e só então retornar.
+
+---
+
+# 35.11 Testando desconexão durante `recv_exactly()`
+
+Agora vem um caso importante.
+
+Imagine que o servidor espera:
+
+```text
+1000 bytes
+```
+
+mas o cliente envia apenas:
+
+```text
+400 bytes
+```
+
+e fecha a conexão.
+
+O servidor não pode interpretar esses 400 bytes como um arquivo completo.
+
+Deve detectar:
+
+```python
+if not chunk:
+    raise ConnectionError("Conexão encerrada antes dos dados completos")
+```
+
+Esse caso deve possuir um teste.
+
+---
+
+# 35.12 Testes de integração
+
+Testes unitários verificam funções isoladas.
+
+Testes de integração verificam os componentes **funcionando juntos**.
+
+Por exemplo:
+
+```text
+        CLIENTE
+           │
+           │ TCP
+           ▼
+        SERVIDOR
+           │
+           ▼
+       PROTOCOLO
+```
+
+Podemos iniciar um servidor real:
+
+```python
+server.bind(("127.0.0.1", 0))
+```
+
+Observe o:
+
+```python
+0
+```
+
+como porta.
+
+Quando usamos porta `0`, o sistema operacional escolhe uma porta livre.
+
+Depois podemos descobrir a porta escolhida:
+
+```python
+host, port = server.getsockname()
+```
+
+Isso é muito útil em testes porque evita depender de uma porta fixa como:
+
+```text
+4444
+```
+
+---
+
+# 35.13 Por que usar `127.0.0.1` nos testes?
+
+Durante os testes locais, podemos usar:
+
+```text
+127.0.0.1
+```
+
+porque o tráfego permanece na própria máquina.
+
+Modelo:
+
+```text
+┌─────────────────────────────┐
+│          Ubuntu             │
+│                             │
+│  Cliente                    │
+│    │                        │
+│    │ TCP                    │
+│    ▼                        │
+│  Servidor                   │
+│                             │
+│  127.0.0.1                  │
+└─────────────────────────────┘
+```
+
+Isso permite testar a aplicação sem depender de outro computador ou da Internet.
+
+---
+
+# 35.14 Testando conexão recusada
+
+Também devemos testar quando o servidor **não está executando**.
+
+Por exemplo:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+pode produzir:
+
+```text
+ConnectionRefusedError
+```
+
+Isso não significa necessariamente que o código esteja errado.
+
+Pode simplesmente significar:
+
+```text
+não existe nenhum processo escutando nessa porta
+```
+
+Um teste pode verificar esse comportamento:
+
+```python
+import socket
+import pytest
+
+
+def test_connection_refused():
+    client = socket.socket()
+
+    with pytest.raises(ConnectionRefusedError):
+        client.connect(("127.0.0.1", 4444))
+
+    client.close()
+```
+
+---
+
+# 35.15 Testando timeout
+
+Também precisamos testar operações que podem ficar bloqueadas.
+
+Exemplo:
+
+```python
+client.settimeout(1)
+```
+
+Se o servidor não enviar nada dentro do período:
+
+```python
+1 segundo
+```
+
+pode ocorrer:
+
+```python
+socket.timeout
+```
+
+Teste:
+
+```python
+with pytest.raises(socket.timeout):
+    client.recv(1024)
+```
+
+Isso garante que nosso programa não fique esperando indefinidamente.
+
+---
+
+# 35.16 Testando desconexão normal
+
+Quando o cliente fecha a conexão de forma normal:
+
+```python
+client.close()
+```
+
+o servidor pode receber:
+
+```python
+b""
+```
+
+Esse comportamento precisa ser tratado.
+
+Teste conceitual:
+
+```text
+cliente
+   │
+   │ close()
+   ▼
+TCP
+   │
+   ▼
+servidor
+   │
+   │ recv()
+   ▼
+b""
+```
+
+O servidor deve interpretar:
+
+```text
+b""
+=
+cliente encerrou a conexão
+```
+
+e não:
+
+```text
+mensagem vazia
+```
+
+---
+
+# 35.17 Testando desconexão abrupta
+
+Também devemos testar situações como:
+
+```text
+cliente conectado
+      ↓
+envia dados
+      ↓
+conexão é interrompida
+      ↓
+servidor recebe erro
+```
+
+Dependendo da situação, podemos encontrar:
+
+```python
+ConnectionResetError
+```
+
+O servidor deve tratar isso sem derrubar as conexões dos outros clientes.
+
+---
+
+# 35.18 Testando múltiplos clientes
+
+Nosso servidor também precisa ser testado com vários clientes.
+
+Por exemplo:
+
+```text
+             ┌── Cliente 1
+             │
+             ├── Cliente 2
+             │
+Servidor ────┼── Cliente 3
+             │
+             ├── Cliente 4
+             │
+             └── Cliente 5
+```
+
+Podemos criar várias threads para simular clientes:
+
+```python
+import threading
+```
+
+Cada thread pode abrir uma conexão:
+
+```python
+def client_task():
+    with socket.socket() as client:
+        client.connect(("127.0.0.1", port))
+        client.sendall(b"PING\n")
+```
+
+Depois:
+
+```python
+threads = []
+
+for _ in range(10):
+    thread = threading.Thread(target=client_task)
+    thread.start()
+    threads.append(thread)
+
+for thread in threads:
+    thread.join()
+```
+
+Isso permite verificar se o servidor consegue lidar com vários clientes.
+
+---
+
+# 35.19 Testando transferência de arquivos
+
+Para o projeto de transferência de arquivos, não basta verificar:
+
+```text
+"o arquivo chegou"
+```
+
+Precisamos verificar se o arquivo recebido é **exatamente igual** ao original.
+
+Uma maneira excelente é utilizar SHA-256.
+
+No arquivo original:
+
+```python
+import hashlib
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+
+    with open(path, "rb") as file:
+        while chunk := file.read(64 * 1024):
+            digest.update(chunk)
+
+    return digest.hexdigest()
+```
+
+Depois:
+
+```python
+original_hash = sha256_file("original.bin")
+received_hash = sha256_file("received.bin")
+```
+
+E:
+
+```python
+assert original_hash == received_hash
+```
+
+Se os hashes forem iguais, temos uma forte evidência de que os bytes dos arquivos são iguais.
+
+---
+
+# 35.20 Testando arquivos de tamanhos diferentes
+
+Não devemos testar apenas um arquivo.
+
+Uma boa matriz de testes seria:
+
+|Arquivo|Objetivo|
+|---|---|
+|`0 bytes`|arquivo vazio|
+|`1 byte`|menor arquivo possível|
+|`1 KB`|arquivo pequeno|
+|`64 KB`|tamanho próximo ao chunk|
+|`1 MB`|arquivo médio|
+|`10 MB`|transferência maior|
+|tamanho não múltiplo do chunk|testar último bloco|
+
+Por exemplo, se usamos:
+
+```python
+CHUNK_SIZE = 64 * 1024
+```
+
+é interessante testar:
+
+```text
+64 KB
+```
+
+mas também:
+
+```text
+64 KB + 1 byte
+```
+
+Isso força o código a tratar corretamente o último pedaço.
+
+---
+
+# 35.21 Testando path traversal
+
+Se o cliente envia:
+
+```text
+../../../../etc/passwd
+```
+
+o servidor **não deve simplesmente fazer**:
+
+```python
+open("/uploads/" + filename, "wb")
+```
+
+Precisamos testar explicitamente essa situação.
+
+Exemplo conceitual:
+
+```text
+nome recebido:
+../../etc/passwd
+
+        ↓
+
+validação
+
+        ↓
+
+REJEITADO
+```
+
+Ou normalização segura:
+
+```python
+from pathlib import Path
+
+safe_name = Path(filename).name
+```
+
+Mesmo assim, a aplicação deve possuir uma política clara sobre quais nomes são aceitos.
+
+Testes de segurança devem verificar essas regras.
+
+---
+
+# 35.22 Testando mensagens malformadas
+
+Um cliente pode enviar:
+
+```text
+ABC
+```
+
+quando o protocolo espera:
+
+```text
+COMMAND argumento
+```
+
+ou:
+
+```text
+FILE <size> <hash>
+```
+
+Precisamos testar entradas inválidas:
+
+```text
+comando inexistente
+campo faltando
+campo extra
+tamanho inválido
+tamanho negativo
+hash inválido
+nome inválido
+mensagem grande demais
+bytes inválidos
+```
+
+O servidor deve rejeitar essas entradas de maneira controlada.
+
+---
+
+# 35.23 Teste não deve depender apenas do caminho feliz
+
+Um erro comum é testar apenas:
+
+```text
+cliente envia PING
+servidor responde PONG
+```
+
+Esse é o chamado **happy path**.
+
+Mas aplicações reais precisam sobreviver também a:
+
+```text
+cliente desconecta
+cliente envia lixo
+cliente envia dados incompletos
+cliente envia dados demais
+cliente fica parado
+cliente envia arquivo corrompido
+cliente abre várias conexões
+servidor perde recurso
+```
+
+Uma aplicação robusta é aquela que continua funcionando quando as coisas dão errado.
+
+---
+
+# 35.24 Matriz de testes
+
+Podemos organizar os testes assim:
+
+|Categoria|Teste|
+|---|---|
+|Protocolo|mensagem válida|
+|Protocolo|mensagem vazia|
+|Protocolo|mensagem grande|
+|Framing|mensagem fragmentada|
+|Framing|várias mensagens juntas|
+|TCP|desconexão normal|
+|TCP|desconexão abrupta|
+|TCP|conexão recusada|
+|TCP|timeout|
+|Concorrência|vários clientes|
+|Arquivos|arquivo vazio|
+|Arquivos|arquivo grande|
+|Arquivos|tamanho incorreto|
+|Integridade|SHA-256 diferente|
+|Segurança|path traversal|
+|Segurança|entrada malformada|
+|Limites|excesso de conexões|
+|Limites|excesso de dados|
+
+Essa matriz transforma os requisitos do servidor em casos concretos de teste.
+
+---
+
+# 35.25 Testar manualmente também é importante
+
+Testes automatizados são fundamentais, mas o teste manual continua sendo útil.
+
+Por exemplo:
+
+Terminal 1:
+
+```bash
+python3 server.py
+```
+
+Terminal 2:
+
+```bash
+python3 client.py
+```
+
+Terminal 3:
+
+```bash
+python3 client.py
+```
+
+Terminal 4:
+
+```bash
+ss -tanp
+```
+
+Podemos observar:
+
+```text
+LISTEN
+ESTABLISHED
+TIME-WAIT
+CLOSE-WAIT
+```
+
+Isso ajuda a conectar o comportamento da aplicação com o estado real do sistema operacional.
+
+---
+
+# 35.26 Testando com `nc`
+
+O `netcat` também pode funcionar como um cliente TCP simples.
+
+Servidor Python:
+
+```text
+127.0.0.1:4444
+```
+
+No terminal:
+
+```bash
+nc 127.0.0.1 4444
+```
+
+Agora podemos enviar manualmente:
+
+```text
+PING
+```
+
+ou:
+
+```text
+ECHO hello
+```
+
+Isso é útil porque permite testar o servidor sem utilizar o nosso cliente Python.
+
+Podemos descobrir problemas que estavam escondidos no próprio cliente.
+
+---
+
+# 35.27 Testando com `tcpdump`
+
+Também podemos observar os pacotes:
+
+```bash
+sudo tcpdump -i lo port 4444
+```
+
+Como estamos utilizando:
+
+```text
+127.0.0.1
+```
+
+a interface normalmente será:
+
+```text
+lo
+```
+
+Podemos observar o tráfego TCP:
+
+```text
+SYN
+SYN-ACK
+ACK
+DATA
+FIN
+ACK
+```
+
+Isso permite relacionar:
+
+```text
+Python
+  ↓
+socket
+  ↓
+TCP
+  ↓
+pacotes
+```
+
+com o que realmente está acontecendo no sistema.
+
+---
+
+# 35.28 O objetivo dos testes de sockets
+
+O objetivo não é simplesmente descobrir:
+
+> "O servidor funciona?"
+
+A pergunta correta é:
+
+> **"O servidor continua funcionando corretamente quando as condições esperadas e inesperadas acontecem?"**
+
+Essa diferença é enorme.
+
+Uma aplicação pode funcionar perfeitamente com:
+
+```text
+1 cliente
+1 mensagem
+mensagem pequena
+rede perfeita
+cliente obediente
+```
+
+e falhar completamente com:
+
+```text
+20 clientes
+mensagens fragmentadas
+cliente desconectando
+dados inválidos
+timeout
+arquivo grande
+```
+
+Por isso os testes devem tentar **quebrar a aplicação de maneira controlada**.
+
+---
+
+# 35.29 Modelo mental
+
+Podemos pensar nos testes em camadas:
+
+```text
+                 TESTES
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+        ▼           ▼           ▼
+     Funções     Protocolo    Rede
+        │           │           │
+        ▼           ▼           ▼
+     unidade      framing     conexão
+        │           │           │
+        └───────────┼───────────┘
+                    │
+                    ▼
+              Integração
+                    │
+                    ▼
+              Concorrência
+                    │
+                    ▼
+                Segurança
+                    │
+                    ▼
+             Aplicação robusta
+```
+
+O pensamento correto é:
+
+```text
+Não testar apenas:
+"funciona?"
+
+Testar:
+"funciona?"
+"e se receber pouco?"
+"e se receber muito?"
+"e se receber quebrado?"
+"e se o cliente fechar?"
+"e se houver vários clientes?"
+"e se o cliente for malicioso?"
+"e se a rede atrasar?"
+```
+
+---
+
+# 35.30 Resumo da Parte
+
+Nesta parte aprendemos que testar aplicações de sockets exige muito mais do que executar cliente e servidor manualmente.
+
+Aprendemos:
+
+- testes unitários;
+    
+- `pytest`;
+    
+- testes de protocolo;
+    
+- testes de mensagens fragmentadas;
+    
+- testes de várias mensagens juntas;
+    
+- testes de buffer;
+    
+- testes de `recv_exactly()`;
+    
+- testes de desconexão;
+    
+- testes de timeout;
+    
+- testes de conexão recusada;
+    
+- testes de múltiplos clientes;
+    
+- testes de transferência de arquivos;
+    
+- validação com SHA-256;
+    
+- testes de arquivos de diferentes tamanhos;
+    
+- testes contra path traversal;
+    
+- testes de mensagens malformadas;
+    
+- testes manuais com `nc`;
+    
+- observação do tráfego com `tcpdump`;
+    
+- criação de uma matriz de testes.
+    
+
+O principal conceito desta parte é:
+
+```text
+Aplicação de rede robusta
+        =
+funciona no caminho normal
++
+lida corretamente com falhas
++
+rejeita entradas inválidas
++
+suporta concorrência
++
+respeita limites
++
+mantém integridade dos dados
+```
+
+Em aplicações de rede, **testar os casos de erro é tão importante quanto testar o funcionamento normal**.
+
+---

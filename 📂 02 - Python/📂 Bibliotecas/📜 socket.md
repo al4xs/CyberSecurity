@@ -1059,3 +1059,1048 @@ rede
 O socket é, portanto, a ponte entre o **código da aplicação** e os mecanismos de comunicação fornecidos pelo **sistema operacional**.
 
 ---
+# 📜 Família de endereços
+
+---
+
+# 2. Família de endereços
+
+Ao criar um socket, um dos primeiros parâmetros que precisamos definir é a **família de endereços**.
+
+Em Python:
+
+```python
+socket.socket(
+    family=...,
+    type=...
+)
+```
+
+O parâmetro `family` determina **como os endereços utilizados pelo socket serão representados e interpretados**.
+
+Isso é diferente do parâmetro `type`, que veremos posteriormente.
+
+Uma forma simples de separar os dois conceitos é:
+
+```text
+family
+   ↓
+"Que tipo de sistema de endereçamento estou usando?"
+
+type
+   ↓
+"Que tipo de comunicação o socket representa?"
+```
+
+Por exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+significa, conceitualmente:
+
+```text
+AF_INET
+   ↓
+endereçamento IPv4
+
+SOCK_STREAM
+   ↓
+socket orientado a fluxo
+```
+
+---
+
+## 2.1 O que é uma família de endereços?
+
+Uma família de endereços define a estrutura e o formato dos endereços que o socket utilizará.
+
+Entre as famílias mais importantes para quem trabalha com Python, Linux e redes estão:
+
+```python
+socket.AF_INET
+socket.AF_INET6
+socket.AF_UNIX
+```
+
+Podemos visualizar:
+
+```text
+Famílias de endereços
+
+AF_INET
+   ↓
+IPv4
+
+AF_INET6
+   ↓
+IPv6
+
+AF_UNIX
+   ↓
+Unix Domain Socket
+   ↓
+comunicação local entre processos
+```
+
+Essas famílias resolvem problemas diferentes.
+
+---
+
+# 2.2 `AF_INET` — IPv4
+
+`AF_INET` representa a família de endereços **IPv4**.
+
+Exemplo:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Nesse caso, o socket utilizará endereços IPv4.
+
+Um endereço IPv4 pode ser representado, por exemplo, como:
+
+```text
+192.168.1.10
+```
+
+Quando combinado com uma porta:
+
+```text
+192.168.1.10:4444
+```
+
+temos a representação comum de um endpoint IPv4 TCP.
+
+Para `AF_INET`, o endereço normalmente aparece em Python como uma tupla:
+
+```python
+("192.168.1.10", 4444)
+```
+
+Por exemplo:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Aqui:
+
+```text
+127.0.0.1
+   ↓
+endereço IPv4
+
+4444
+   ↓
+porta
+```
+
+---
+
+# 2.3 Estrutura de um endereço IPv4
+
+IPv4 utiliza endereços de **32 bits**.
+
+Esses 32 bits normalmente são escritos em quatro grupos de 8 bits:
+
+```text
+8 bits . 8 bits . 8 bits . 8 bits
+```
+
+Por exemplo:
+
+```text
+192.168.1.10
+```
+
+Cada número decimal representa um octeto.
+
+```text
+192 → 8 bits
+168 → 8 bits
+1   → 8 bits
+10  → 8 bits
+
+Total = 32 bits
+```
+
+Uma representação binária aproximada seria:
+
+```text
+192       168       1         10
+↓         ↓         ↓         ↓
+11000000  10101000  00000001  00001010
+```
+
+O socket Python não exige que escrevamos esses bits manualmente.
+
+Podemos simplesmente utilizar:
+
+```python
+("192.168.1.10", 4444)
+```
+
+A conversão e manipulação necessárias são tratadas pelas camadas inferiores.
+
+---
+
+# 2.4 `127.0.0.1` dentro de `AF_INET`
+
+O endereço:
+
+```text
+127.0.0.1
+```
+
+é um endereço IPv4 de **loopback**.
+
+Quando usamos:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+estamos associando o socket ao loopback IPv4.
+
+Um cliente na mesma máquina pode fazer:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+O caminho conceitual é:
+
+```text
+┌─────────────────────────────┐
+│          Máquina            │
+│                             │
+│  Cliente                    │
+│     │                       │
+│     │ 127.0.0.1:4444        │
+│     ↓                       │
+│  Loopback                   │
+│     ↓                       │
+│  Servidor                   │
+│                             │
+└─────────────────────────────┘
+```
+
+Isso é extremamente útil para laboratórios.
+
+Por exemplo, podemos testar:
+
+- servidores TCP;
+    
+- clientes TCP;
+    
+- chats;
+    
+- protocolos próprios;
+    
+- scanners;
+    
+- testes de parsing;
+    
+- autenticação;
+    
+- TLS;
+    
+- tratamento de erros;
+    
+
+sem precisar expor o serviço à rede externa.
+
+---
+
+# 2.5 `AF_INET6` — IPv6
+
+`AF_INET6` representa a família de endereços **IPv6**.
+
+Exemplo:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET6,
+    socket.SOCK_STREAM
+)
+```
+
+IPv6 utiliza endereços de **128 bits**.
+
+Por isso, sua representação é muito maior que IPv4.
+
+Exemplo:
+
+```text
+2001:db8::10
+```
+
+Um endereço IPv6 pode conter vários grupos hexadecimais separados por `:`.
+
+Por exemplo:
+
+```text
+2001:0db8:0000:0000:0000:0000:0000:0010
+```
+
+pode ser abreviado para:
+
+```text
+2001:db8::10
+```
+
+A abreviação `::` representa uma sequência de grupos consecutivos de zeros.
+
+---
+
+# 2.6 Loopback IPv6
+
+Assim como IPv4 possui:
+
+```text
+127.0.0.1
+```
+
+IPv6 possui:
+
+```text
+::1
+```
+
+Portanto:
+
+```python
+("127.0.0.1", 4444)
+```
+
+é um endereço IPv4.
+
+Enquanto:
+
+```python
+("::1", 4444)
+```
+
+é um endereço IPv6.
+
+Podemos comparar:
+
+|IPv4|IPv6|
+|---|---|
+|`AF_INET`|`AF_INET6`|
+|`127.0.0.1`|`::1`|
+|32 bits|128 bits|
+|endereço separado por `.`|endereço separado por `:`|
+|`("127.0.0.1", 4444)`|`("::1", 4444)`|
+
+---
+
+# 2.7 Por que `127.0.0.1` e `::1` são diferentes?
+
+Apesar de ambos representarem o conceito de **loopback**, pertencem a famílias de endereçamento diferentes.
+
+```text
+127.0.0.1
+    ↓
+IPv4
+    ↓
+AF_INET
+```
+
+Enquanto:
+
+```text
+::1
+  ↓
+IPv6
+  ↓
+AF_INET6
+```
+
+Portanto, um socket criado como:
+
+```python
+socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+```
+
+não deve ser tratado simplesmente como se fosse um socket IPv6.
+
+E vice-versa.
+
+A família determina como o endereço será interpretado.
+
+---
+
+# 2.8 `AF_UNIX` — Unix Domain Socket
+
+Agora entramos em um conceito muito importante para Linux.
+
+`AF_UNIX` representa **Unix Domain Sockets**.
+
+Também pode aparecer como:
+
+```python
+socket.AF_LOCAL
+```
+
+dependendo da plataforma.
+
+Diferentemente de `AF_INET` e `AF_INET6`, o objetivo principal aqui não é comunicação entre hosts através de IP.
+
+O objetivo é permitir comunicação entre processos no **mesmo sistema operacional**.
+
+Por exemplo:
+
+```text
+Processo A
+    │
+    │ Unix Domain Socket
+    ↓
+Processo B
+```
+
+Não precisamos necessariamente utilizar:
+
+```text
+IP
+porta TCP
+roteamento IP
+Ethernet
+Wi-Fi
+```
+
+A comunicação acontece através dos mecanismos locais fornecidos pelo sistema operacional.
+
+---
+
+# 2.9 Unix Domain Socket e arquivos
+
+Uma característica interessante é que Unix Domain Sockets podem ser associados a um caminho no sistema de arquivos.
+
+Por exemplo:
+
+```text
+/tmp/meu_socket
+```
+
+Um servidor pode criar:
+
+```python
+server.bind("/tmp/meu_socket")
+```
+
+e um cliente pode conectar:
+
+```python
+client.connect("/tmp/meu_socket")
+```
+
+Observe uma diferença importante:
+
+IPv4:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Unix Domain Socket:
+
+```python
+server.bind("/tmp/meu_socket")
+```
+
+A estrutura do endereço é diferente porque a família é diferente.
+
+---
+
+# 2.10 Quando utilizar `AF_UNIX`?
+
+Unix Domain Sockets são interessantes quando:
+
+- cliente e servidor estão no mesmo host;
+    
+- queremos comunicação entre processos;
+    
+- não precisamos de comunicação IP;
+    
+- queremos utilizar mecanismos de controle de acesso do sistema de arquivos;
+    
+- queremos evitar a pilha IP quando uma comunicação local é suficiente.
+    
+
+Um exemplo comum é a comunicação entre componentes de uma aplicação.
+
+Imagine:
+
+```text
+Aplicação Web
+     │
+     │ Unix Socket
+     ↓
+Servidor local
+```
+
+Em vez de:
+
+```text
+Aplicação Web
+     │
+     │ TCP/IP
+     ↓
+127.0.0.1:8000
+```
+
+pode existir:
+
+```text
+/tmp/app.sock
+```
+
+---
+
+# 2.11 Unix Socket não significa "socket menos poderoso"
+
+É importante não pensar:
+
+```text
+AF_INET
+   ↓
+rede
+
+AF_UNIX
+   ↓
+"arquivo comum"
+```
+
+Isso seria incorreto.
+
+Unix Domain Socket continua sendo um socket.
+
+Ele apenas utiliza outro mecanismo de endereçamento e comunicação.
+
+Podemos ter:
+
+```text
+AF_INET
+    ↓
+comunicação através de IPv4
+
+AF_INET6
+    ↓
+comunicação através de IPv6
+
+AF_UNIX
+    ↓
+comunicação local entre processos
+```
+
+---
+
+# 2.12 Comparação entre as principais famílias
+
+|Família|Comunicação|Endereço típico|Uso|
+|---|---|---|---|
+|`AF_INET`|IPv4|`("127.0.0.1", 4444)`|Redes IPv4|
+|`AF_INET6`|IPv6|`("::1", 4444)`|Redes IPv6|
+|`AF_UNIX`|Local|`"/tmp/app.sock"`|Processos no mesmo host|
+
+Podemos pensar:
+
+```text
+                 SOCKET
+                    │
+       ┌────────────┼────────────┐
+       ↓            ↓            ↓
+   AF_INET      AF_INET6      AF_UNIX
+       │            │            │
+      IPv4         IPv6       comunicação
+                              local
+```
+
+---
+
+# 2.13 Outras famílias
+
+Python expõe diversas constantes de famílias de endereços, e a disponibilidade exata pode variar conforme o sistema operacional.
+
+Além das três mais importantes para nosso estudo:
+
+```python
+socket.AF_INET
+socket.AF_INET6
+socket.AF_UNIX
+```
+
+existem famílias relacionadas a tecnologias e mecanismos específicos.
+
+Por exemplo, em determinados sistemas podem existir famílias relacionadas a:
+
+- Bluetooth;
+    
+- Netlink;
+    
+- packet sockets;
+    
+- protocolos específicos do sistema;
+    
+- outras formas de comunicação local ou de rede.
+    
+
+A disponibilidade não deve ser presumida de forma universal.
+
+Podemos consultar uma instalação Python:
+
+```python
+import socket
+
+print(socket.AF_INET)
+print(socket.AF_INET6)
+print(socket.AF_UNIX)
+```
+
+E também consultar os atributos disponíveis:
+
+```python
+import socket
+
+print(dir(socket))
+```
+
+Entretanto, `dir(socket)` mostra uma grande quantidade de constantes, classes e funções, portanto não deve ser utilizado como substituto de documentação técnica.
+
+---
+
+# 2.14 Família de endereço ≠ protocolo
+
+Esse é um erro conceitual bastante comum.
+
+Considere:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Não devemos interpretar:
+
+```text
+AF_INET = TCP
+```
+
+Isso está errado.
+
+O correto é:
+
+```text
+AF_INET
+   ↓
+família de endereçamento
+   ↓
+IPv4
+```
+
+e:
+
+```text
+SOCK_STREAM
+   ↓
+tipo de socket
+   ↓
+fluxo de bytes
+   ↓
+normalmente TCP
+```
+
+Da mesma forma:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+representa normalmente:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+datagramas
+   ↓
+normalmente UDP
+```
+
+Essa separação ficará ainda mais importante quando estudarmos `SOCK_RAW`, protocolos e o parâmetro `proto`.
+
+---
+
+# 2.15 Endereço Python depende da família
+
+Observe:
+
+```python
+("127.0.0.1", 4444)
+```
+
+e:
+
+```python
+("::1", 4444)
+```
+
+Eles possuem uma estrutura semelhante:
+
+```text
+(host, port)
+```
+
+mas representam famílias diferentes.
+
+No IPv4:
+
+```python
+host = "127.0.0.1"
+port = 4444
+```
+
+No IPv6:
+
+```python
+host = "::1"
+port = 4444
+```
+
+O Python e o sistema operacional sabem interpretar o endereço de acordo com a família do socket.
+
+---
+
+# 2.16 Uma diferença importante no IPv6
+
+IPv6 também possui informações adicionais que podem aparecer em endereços de socket, especialmente relacionadas a **escopo/interface**.
+
+Isso é particularmente importante para endereços IPv6 _link-local_, como:
+
+```text
+fe80::...
+```
+
+Nesses casos, pode ser necessário especificar uma interface de rede.
+
+Por isso, endereços IPv6 podem aparecer em Python com estruturas mais complexas que simplesmente:
+
+```python
+(host, port)
+```
+
+Em determinadas operações, o formato pode incluir:
+
+```text
+(host, port, flowinfo, scopeid)
+```
+
+Por exemplo, conceitualmente:
+
+```python
+("fe80::1234", 4444, 0, 2)
+```
+
+Os campos adicionais são relevantes para determinadas situações IPv6.
+
+Não devemos assumir que todo endereço IPv6 será sempre representado apenas por dois valores.
+
+---
+
+# 2.17 Como escolher a família?
+
+A escolha depende do ambiente e do objetivo.
+
+### IPv4
+
+Utilize:
+
+```python
+socket.AF_INET
+```
+
+quando:
+
+- o serviço utiliza IPv4;
+    
+- o laboratório utiliza IPv4;
+    
+- você está aprendendo conceitos básicos de sockets;
+    
+- precisa explicitamente de um endpoint IPv4.
+    
+
+### IPv6
+
+Utilize:
+
+```python
+socket.AF_INET6
+```
+
+quando:
+
+- o serviço utiliza IPv6;
+    
+- deseja testar compatibilidade IPv6;
+    
+- precisa trabalhar com endereços IPv6;
+    
+- está desenvolvendo uma aplicação que precisa suportar IPv6 explicitamente.
+    
+
+### Unix Domain Socket
+
+Utilize:
+
+```python
+socket.AF_UNIX
+```
+
+quando:
+
+- os processos estão no mesmo host;
+    
+- não é necessário utilizar IP;
+    
+- comunicação local entre processos é suficiente.
+    
+
+---
+
+# 2.18 Uma aplicação pode suportar IPv4 e IPv6?
+
+Sim.
+
+Existem várias estratégias para isso.
+
+Uma aplicação pode:
+
+```text
+Socket IPv4
+    +
+Socket IPv6
+```
+
+ou utilizar mecanismos de dual stack dependendo do sistema operacional e da configuração do socket.
+
+Por exemplo:
+
+```text
+                Aplicação
+                    │
+          ┌─────────┴─────────┐
+          ↓                   ↓
+      IPv4 socket         IPv6 socket
+          │                   │
+       AF_INET            AF_INET6
+```
+
+Isso será aprofundado quando estudarmos IPv6 e `getaddrinfo()`.
+
+É importante não assumir que:
+
+```python
+AF_INET6
+```
+
+automaticamente significa:
+
+> "Esse socket sempre aceitará IPv4 e IPv6."
+
+O comportamento de dual stack depende da configuração e do sistema operacional.
+
+---
+
+# 2.19 Relação com Linux
+
+No Linux, a família escolhida influencia diretamente o tipo de socket que o kernel cria e como o endereço será tratado.
+
+Podemos pensar:
+
+```text
+Python
+   ↓
+socket(AF_INET, ...)
+   ↓
+kernel
+   ↓
+socket IPv4
+```
+
+ou:
+
+```text
+Python
+   ↓
+socket(AF_INET6, ...)
+   ↓
+kernel
+   ↓
+socket IPv6
+```
+
+ou:
+
+```text
+Python
+   ↓
+socket(AF_UNIX, ...)
+   ↓
+kernel
+   ↓
+Unix Domain Socket
+```
+
+Isso mostra novamente que o objeto Python é uma interface para um recurso gerenciado pelo sistema operacional.
+
+---
+
+# 2.20 Observação de segurança
+
+A família de endereços também possui implicações de segurança.
+
+Por exemplo:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+normalmente restringe o serviço ao próprio host.
+
+Já:
+
+```python
+server.bind(("0.0.0.0", 4444))
+```
+
+pode fazer com que o serviço fique acessível através das interfaces IPv4 da máquina.
+
+Isso muda significativamente a superfície de exposição.
+
+Por isso, durante desenvolvimento e laboratório, frequentemente é preferível começar com:
+
+```python
+127.0.0.1
+```
+
+em vez de:
+
+```python
+0.0.0.0
+```
+
+quando não existe necessidade de acesso externo.
+
+O mesmo princípio deve ser analisado para IPv6.
+
+Um serviço pode estar corretamente limitado em IPv4 e, dependendo da configuração, ainda possuir exposição através de IPv6.
+
+Essa é uma questão importante em auditorias e hardening de serviços.
+
+---
+
+# 2.21 Modelo mental final da família de endereços
+
+Podemos resumir o conceito desta seção assim:
+
+```text
+                    socket()
+                       │
+                       ↓
+              ┌─────────────────┐
+              │     family      │
+              └────────┬────────┘
+                       │
+          ┌────────────┼────────────┐
+          ↓            ↓            ↓
+      AF_INET      AF_INET6      AF_UNIX
+          │            │            │
+        IPv4          IPv6        local
+          │            │            │
+      127.0.0.1       ::1       /tmp/app.sock
+          │            │            │
+          └────────────┼────────────┘
+                       ↓
+                endereço do socket
+```
+
+O ponto fundamental é:
+
+> **A família define o modelo de endereçamento utilizado pelo socket.**
+
+Ela não define sozinha:
+
+- TCP;
+    
+- UDP;
+    
+- confiabilidade;
+    
+- conexão;
+    
+- fluxo de bytes;
+    
+- datagramas.
+    
+
+Essas características estão relacionadas principalmente ao **tipo de socket** e ao protocolo utilizado.
+
+Essa será a próxima etapa.
+
+---
+
+# Resumo da seção
+
+- `AF_INET` representa IPv4.
+    
+- `AF_INET6` representa IPv6.
+    
+- `AF_UNIX` representa Unix Domain Sockets.
+    
+- `127.0.0.1` é loopback IPv4.
+    
+- `::1` é loopback IPv6.
+    
+- `IP:porta` é uma representação comum de um endpoint de transporte.
+    
+- `AF_INET` não significa TCP.
+    
+- `AF_INET6` não significa UDP ou TCP por si só.
+    
+- `AF_UNIX` permite comunicação local entre processos.
+    
+- A família de endereços influencia a estrutura do endereço passado para métodos como `bind()` e `connect()`.
+    
+- IPv6 pode envolver informações adicionais como `scopeid`.
+    
+- Dual stack não deve ser presumido automaticamente.
+    
+- A escolha do endereço de `bind()` influencia a exposição do serviço.
+    
+- `127.0.0.1` é especialmente útil para laboratórios e desenvolvimento local.
+
+
+---

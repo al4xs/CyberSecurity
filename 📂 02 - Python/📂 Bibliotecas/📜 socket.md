@@ -44775,3 +44775,1675 @@ VALIDAÇÃO
 Um protocolo binário nada mais é do que uma **convenção precisa sobre como os bytes devem ser interpretados**.
 
 ---
+# 39. Autenticação e autorização em aplicações socket
+
+Até agora vimos como criar conexões, trocar dados, criar protocolos, transferir arquivos, usar TLS, tratar erros, trabalhar com vários clientes e até criar protocolos binários.
+
+Mas existe uma pergunta fundamental:
+
+> **Como o servidor sabe quem está conectado e o que essa pessoa pode fazer?**
+
+É aqui que entram dois conceitos diferentes:
+
+- **Autenticação:** descobrir/confirmar **quem é o cliente**.
+    
+- **Autorização:** descobrir **o que esse cliente pode fazer**.
+    
+
+Esses conceitos parecem parecidos, mas têm funções diferentes.
+
+---
+
+## 39.1. Autenticação
+
+Autenticação é o processo de verificar a identidade de alguém.
+
+Por exemplo, um cliente conecta ao servidor:
+
+```text
+Cliente
+   │
+   │ conexão TCP
+   ▼
+Servidor
+   │
+   │ "Quem é você?"
+   ▼
+Cliente
+   │
+   │ usuário + credencial
+   ▼
+Servidor
+   │
+   │ valida credencial
+   ▼
+"Autenticado"
+```
+
+Um exemplo clássico é:
+
+```text
+usuário: allan
+senha: ********
+```
+
+O servidor verifica se essas credenciais são válidas.
+
+Se forem:
+
+```text
+AUTH_OK
+```
+
+Se não forem:
+
+```text
+AUTH_FAILED
+```
+
+---
+
+## 39.2. Autorização
+
+Depois que o usuário foi autenticado, ainda precisamos responder:
+
+> **O que esse usuário está autorizado a fazer?**
+
+Por exemplo:
+
+```text
+allan → usuário comum
+admin → administrador
+```
+
+O usuário `allan` pode ter permissão para:
+
+```text
+ECHO
+INFO
+DOWNLOAD
+```
+
+Mas talvez não possa:
+
+```text
+DELETE_USER
+CREATE_ADMIN
+SHUTDOWN_SERVER
+```
+
+Enquanto um administrador poderia ter essas permissões.
+
+Portanto:
+
+```text
+AUTENTICAÇÃO
+      ↓
+Quem é você?
+      ↓
+"allan"
+
+      ↓
+
+AUTORIZAÇÃO
+      ↓
+O que allan pode fazer?
+      ↓
+"ECHO, INFO, DOWNLOAD"
+```
+
+---
+
+## 39.3. Autenticação não é autorização
+
+Essa diferença é extremamente importante.
+
+Imagine que o servidor receba:
+
+```text
+AUTH allan senha123
+```
+
+Depois de validar a senha, o servidor sabe:
+
+```text
+Usuário autenticado: allan
+```
+
+Mas isso não significa:
+
+```text
+allan pode fazer qualquer coisa
+```
+
+O servidor ainda precisa verificar as permissões.
+
+Um fluxo correto seria:
+
+```text
+CONNECT
+   ↓
+AUTH
+   ↓
+AUTH_OK
+   ↓
+comando solicitado
+   ↓
+verificação de permissão
+   ↓
+permitido ou negado
+```
+
+---
+
+## 39.4. TCP não autentica usuários
+
+Uma conexão TCP possui informações como:
+
+```text
+IP origem
+porta origem
+IP destino
+porta destino
+```
+
+Mas isso não significa que o servidor saiba quem é a pessoa.
+
+Por exemplo:
+
+```text
+192.168.1.50:53142
+        ↓
+192.168.1.10:4444
+```
+
+O servidor sabe que existe uma conexão vindo de:
+
+```text
+192.168.1.50
+```
+
+Mas não sabe automaticamente:
+
+```text
+"Essa pessoa é o usuário allan."
+```
+
+O IP não deve ser tratado como identidade de usuário.
+
+Além disso, vários usuários podem estar atrás do mesmo NAT, e um endereço IP pode mudar.
+
+Portanto:
+
+```text
+IP ≠ identidade do usuário
+```
+
+---
+
+## 39.5. TLS também não significa autenticação de usuário
+
+TLS fornece mecanismos importantes de segurança, como:
+
+- criptografia;
+    
+- integridade;
+    
+- autenticação do servidor por certificado;
+    
+- possibilidade de autenticação do cliente por certificado.
+    
+
+Porém, em uma aplicação tradicional, normalmente ainda existe uma camada de autenticação própria.
+
+Por exemplo:
+
+```text
+TCP
+ ↓
+TLS
+ ↓
+Protocolo da aplicação
+ ↓
+AUTH
+ ↓
+usuário autenticado
+```
+
+Podemos ter:
+
+```text
+HTTPS
+ ↓
+TLS
+ ↓
+HTTP
+ ↓
+Login da aplicação
+```
+
+Da mesma forma, uma aplicação socket poderia ter:
+
+```text
+TCP
+ ↓
+TLS
+ ↓
+protocolo próprio
+ ↓
+AUTH
+```
+
+---
+
+## 39.6. Nunca envie senhas em texto puro através de TCP
+
+Imagine:
+
+```python
+client.sendall(b"LOGIN allan senha123")
+```
+
+Isso não é seguro se o socket estiver utilizando apenas TCP.
+
+O TCP não fornece criptografia.
+
+Alguém que consiga observar o tráfego poderá potencialmente visualizar os dados transmitidos.
+
+O correto é utilizar uma camada segura, normalmente TLS:
+
+```text
+Aplicação
+    ↓
+credenciais
+    ↓
+TLS
+    ↓
+TCP
+    ↓
+rede
+```
+
+Assim, o conteúdo da aplicação é protegido durante o transporte.
+
+---
+
+## 39.7. Senha não deve ser armazenada em texto puro
+
+Existe outro problema além do envio.
+
+Imagine um banco de dados:
+
+```text
+usuario     senha
+allan       senha123
+joao        123456
+maria       abc123
+```
+
+Isso é uma péssima prática.
+
+Se o banco de dados for comprometido, todas as senhas poderão ser obtidas diretamente.
+
+O servidor deve armazenar **hashes de senha**, utilizando algoritmos apropriados para armazenamento de senhas, como:
+
+- Argon2id;
+    
+- bcrypt;
+    
+- scrypt;
+    
+- PBKDF2.
+    
+
+A ideia é:
+
+```text
+senha original
+      ↓
+algoritmo de derivação/hash de senha
+      ↓
+hash armazenado
+```
+
+Durante o login:
+
+```text
+senha fornecida
+      ↓
+verificação
+      ↓
+hash armazenado
+      ↓
+válida?
+```
+
+O servidor não precisa armazenar a senha original.
+
+---
+
+## 39.8. Hash de senha não é criptografia
+
+É importante não confundir os conceitos.
+
+### Criptografia
+
+A ideia geral é:
+
+```text
+texto original
+      ↓
+criptografia
+      ↓
+dados protegidos
+      ↓
+descriptografia
+      ↓
+texto original
+```
+
+Existe uma operação reversa.
+
+---
+
+### Hash
+
+Um hash tradicional é uma transformação de mão única:
+
+```text
+dados
+  ↓
+hash
+```
+
+Não existe uma operação normal de:
+
+```text
+hash → dados originais
+```
+
+Para senhas, entretanto, não devemos simplesmente usar SHA-256 diretamente.
+
+O armazenamento de senhas deve utilizar algoritmos específicos para esse objetivo, com salt e custo computacional adequado.
+
+---
+
+## 39.9. O que é um salt?
+
+Um **salt** é um valor aleatório associado à senha antes da derivação do hash.
+
+Conceitualmente:
+
+```text
+senha
+ +
+salt aleatório
+      ↓
+algoritmo de senha
+      ↓
+hash
+```
+
+Isso ajuda a impedir que senhas iguais produzam simplesmente o mesmo resultado armazenado e dificulta ataques baseados em tabelas pré-computadas.
+
+Algoritmos modernos de senha normalmente cuidam dessa estrutura automaticamente.
+
+---
+
+## 39.10. Fluxo de autenticação de um servidor socket
+
+Um protocolo simples poderia utilizar:
+
+```text
+CLIENTE                         SERVIDOR
+   │                               │
+   │──── conexão TCP ────────────>│
+   │                               │
+   │<──── TLS estabelecido ───────│
+   │                               │
+   │──── AUTH allan senha ────────>│
+   │                               │
+   │         valida credencial      │
+   │                               │
+   │<──── AUTH_OK ─────────────────│
+   │                               │
+   │──── INFO ────────────────────>│
+   │                               │
+   │<──── resposta ────────────────│
+```
+
+Em uma aplicação real, a senha não deveria ser enviada dessa maneira sobre TCP puro.
+
+O exemplo serve apenas para mostrar a estrutura lógica do protocolo.
+
+Com TLS:
+
+```text
+TCP
+ ↓
+TLS
+ ↓
+AUTH
+ ↓
+sessão autenticada
+ ↓
+comandos
+```
+
+---
+
+## 39.11. Estado de autenticação da conexão
+
+O servidor precisa saber se aquele socket está autenticado.
+
+Podemos imaginar estados:
+
+```text
+CONNECTED
+    ↓
+WAITING_AUTH
+    ↓
+AUTHENTICATED
+    ↓
+ACTIVE
+    ↓
+CLOSING
+```
+
+Enquanto estiver em:
+
+```text
+WAITING_AUTH
+```
+
+o cliente não deveria poder executar operações protegidas.
+
+Por exemplo:
+
+```text
+CLIENTE → DOWNLOAD segredo.pdf
+```
+
+O servidor pode responder:
+
+```text
+ERROR AUTH_REQUIRED
+```
+
+Depois:
+
+```text
+CLIENTE → AUTH
+```
+
+Se a autenticação for válida:
+
+```text
+AUTH_OK
+```
+
+Agora:
+
+```text
+CLIENTE → DOWNLOAD segredo.pdf
+```
+
+pode ser permitido, dependendo das permissões.
+
+---
+
+## 39.12. Exemplo simples de estado do cliente
+
+Podemos representar isso em Python:
+
+```python
+authenticated = False
+```
+
+Essa variável representa:
+
+```text
+False → ainda não autenticado
+True  → autenticado
+```
+
+Depois:
+
+```python
+if not authenticated:
+    send_error("AUTH_REQUIRED")
+```
+
+O `if` verifica se a variável ainda é `False`.
+
+O operador `not` inverte o valor lógico:
+
+```text
+authenticated = False
+
+not authenticated
+        ↓
+      True
+```
+
+Portanto o bloco será executado.
+
+---
+
+## 39.13. Criando uma função para verificar autorização
+
+Podemos separar a lógica de autorização:
+
+```python
+def has_permission(user, permission):
+    return permission in user["permissions"]
+```
+
+Vamos analisar cada parte.
+
+### `def`
+
+```python
+def
+```
+
+Declara uma função.
+
+---
+
+### `has_permission`
+
+```python
+has_permission
+```
+
+É o nome da função.
+
+O nome indica que queremos descobrir se o usuário possui determinada permissão.
+
+---
+
+### `user`
+
+```python
+user
+```
+
+É o primeiro parâmetro da função.
+
+Ele representa os dados do usuário.
+
+Por exemplo:
+
+```python
+user = {
+    "username": "allan",
+    "permissions": ["INFO", "ECHO"]
+}
+```
+
+---
+
+### `permission`
+
+```python
+permission
+```
+
+É o segundo parâmetro.
+
+Representa a permissão que queremos verificar.
+
+Exemplo:
+
+```python
+"INFO"
+```
+
+---
+
+### `user["permissions"]`
+
+```python
+user["permissions"]
+```
+
+Acessa a lista de permissões armazenada no dicionário.
+
+Neste exemplo:
+
+```python
+["INFO", "ECHO"]
+```
+
+---
+
+### `permission in user["permissions"]`
+
+```python
+permission in user["permissions"]
+```
+
+O operador `in` verifica se determinado valor existe dentro da coleção.
+
+Por exemplo:
+
+```python
+"INFO" in ["INFO", "ECHO"]
+```
+
+Resultado:
+
+```python
+True
+```
+
+Já:
+
+```python
+"DELETE" in ["INFO", "ECHO"]
+```
+
+Resultado:
+
+```python
+False
+```
+
+---
+
+### `return`
+
+```python
+return
+```
+
+Retorna o resultado da expressão para quem chamou a função.
+
+Portanto:
+
+```python
+def has_permission(user, permission):
+    return permission in user["permissions"]
+```
+
+pode retornar:
+
+```text
+True
+```
+
+ou:
+
+```text
+False
+```
+
+---
+
+## 39.14. Utilizando a função
+
+Podemos criar um usuário de exemplo:
+
+```python
+user = {
+    "username": "allan",
+    "permissions": ["INFO", "ECHO"]
+}
+```
+
+Agora:
+
+```python
+if has_permission(user, "INFO"):
+    print("Permitido")
+```
+
+A chamada:
+
+```python
+has_permission(user, "INFO")
+```
+
+passa:
+
+```text
+user       → primeiro parâmetro
+"INFO"     → segundo parâmetro
+```
+
+O resultado será:
+
+```python
+True
+```
+
+Portanto:
+
+```text
+Permitido
+```
+
+---
+
+Agora:
+
+```python
+if has_permission(user, "DELETE"):
+    print("Permitido")
+else:
+    print("Negado")
+```
+
+Como `"DELETE"` não está na lista:
+
+```python
+["INFO", "ECHO"]
+```
+
+o resultado será:
+
+```text
+Negado
+```
+
+---
+
+## 39.15. Nunca confie em uma role enviada pelo cliente
+
+Um erro grave seria aceitar algo como:
+
+```text
+ROLE admin
+```
+
+e simplesmente confiar.
+
+Imagine:
+
+```text
+CLIENTE → ROLE admin
+```
+
+Se o servidor acreditar nisso:
+
+```text
+cliente malicioso
+       ↓
+"eu sou admin"
+       ↓
+servidor acredita
+       ↓
+acesso administrativo
+```
+
+Isso quebra completamente a segurança.
+
+A informação sobre permissões deve vir de uma fonte confiável no servidor.
+
+Por exemplo:
+
+```text
+CLIENTE
+   ↓
+AUTH
+   ↓
+SERVIDOR valida usuário
+   ↓
+SERVIDOR consulta permissões
+   ↓
+sessão recebe permissões confiáveis
+```
+
+Nunca:
+
+```text
+CLIENTE → "sou admin"
+             ↓
+          confiança
+```
+
+---
+
+## 39.16. Sessão autenticada
+
+Depois que o cliente é autenticado, o servidor pode associar a identidade à conexão.
+
+Por exemplo:
+
+```python
+session = {
+    "username": "allan",
+    "authenticated": True,
+    "permissions": ["INFO", "ECHO"]
+}
+```
+
+Essa estrutura representa a sessão atual.
+
+Cada comando recebido pode consultar essa sessão.
+
+Por exemplo:
+
+```python
+if not session["authenticated"]:
+    return "AUTH_REQUIRED"
+```
+
+Depois:
+
+```python
+if not has_permission(session, "INFO"):
+    return "PERMISSION_DENIED"
+```
+
+Existe, entretanto, uma diferença importante:
+
+Nesse exemplo, `session` está simplificada para fins didáticos.
+
+Em sistemas reais, a estrutura de autenticação pode envolver banco de dados, tokens, sessões persistentes, expiração, revogação e outras medidas.
+
+---
+
+## 39.17. Controle de tentativas de login
+
+Um servidor não deve permitir tentativas ilimitadas de autenticação.
+
+Imagine:
+
+```text
+tentativa 1 → senha errada
+tentativa 2 → senha errada
+tentativa 3 → senha errada
+...
+tentativa 1.000.000 → senha errada
+```
+
+Um atacante poderia tentar muitas combinações.
+
+Isso pode causar:
+
+- brute force;
+    
+- consumo de CPU;
+    
+- consumo de recursos;
+    
+- tentativa de descoberta de credenciais.
+    
+
+Por isso, aplicações reais podem implementar:
+
+- rate limiting;
+    
+- atraso progressivo;
+    
+- limite de tentativas;
+    
+- bloqueio temporário;
+    
+- monitoramento;
+    
+- alertas.
+    
+
+---
+
+## 39.18. Rate limiting
+
+Rate limiting significa limitar a frequência de determinadas operações.
+
+Por exemplo:
+
+```text
+máximo:
+5 tentativas
+por minuto
+por origem/conta
+```
+
+O objetivo não é necessariamente impedir toda tentativa incorreta.
+
+O objetivo é dificultar abuso automatizado.
+
+Um modelo simplificado:
+
+```text
+tentativa
+   ↓
+contador
+   ↓
+limite atingido?
+   ├── NÃO → processa
+   │
+   └── SIM → rejeita/aguarda
+```
+
+---
+
+## 39.19. Comparações sensíveis ao tempo
+
+Em determinados contextos de segurança, comparações de segredos devem evitar comparações ingênuas que possam permitir ataques de timing.
+
+Python fornece:
+
+```python
+hmac.compare_digest(a, b)
+```
+
+A função:
+
+```python
+hmac.compare_digest(a, b)
+```
+
+recebe dois valores para comparação.
+
+### `a`
+
+Primeiro valor.
+
+### `b`
+
+Segundo valor.
+
+A função foi projetada para comparações mais apropriadas para valores sensíveis do que uma comparação ingênua em determinados cenários.
+
+Exemplo:
+
+```python
+import hmac
+
+if hmac.compare_digest(received_token, expected_token):
+    print("Token válido")
+```
+
+Aqui:
+
+```python
+received_token
+```
+
+é o valor recebido.
+
+E:
+
+```python
+expected_token
+```
+
+é o valor que o servidor espera.
+
+Isso é particularmente útil para comparar tokens, códigos ou outros valores secretos em situações apropriadas.
+
+---
+
+## 39.20. Exemplo de protocolo autenticado
+
+Podemos imaginar um protocolo:
+
+```text
+AUTH <usuario> <credencial>
+INFO
+ECHO <mensagem>
+DOWNLOAD <arquivo>
+QUIT
+```
+
+O servidor pode possuir regras:
+
+```text
+AUTH
+    → permitido antes da autenticação
+
+INFO
+    → usuário autenticado
+
+ECHO
+    → usuário autenticado
+
+DOWNLOAD
+    → usuário autenticado + permissão DOWNLOAD
+
+QUIT
+    → permitido sempre
+```
+
+Isso pode ser representado como:
+
+```text
+                 ┌──────────────────┐
+                 │ Cliente conectado│
+                 └────────┬─────────┘
+                          │
+                          ▼
+                  ┌───────────────┐
+                  │ Autenticado?  │
+                  └───────┬───────┘
+                          │
+             ┌────────────┴────────────┐
+             │                         │
+            NÃO                       SIM
+             │                         │
+             ▼                         ▼
+       somente AUTH             verificar permissão
+                                       │
+                                       ▼
+                              executar comando
+```
+
+---
+
+## 39.21. Exemplo de servidor simplificado
+
+O exemplo abaixo demonstra **somente a lógica de autenticação/autorização**.
+
+Ele não deve ser tratado como um sistema de autenticação de produção.
+
+```python
+USERS = {
+    "allan": {
+        "password": "senha-de-exemplo",
+        "permissions": ["INFO", "ECHO"]
+    }
+}
+
+
+def authenticate(username, password):
+    user = USERS.get(username)
+
+    if user is None:
+        return None
+
+    if user["password"] != password:
+        return None
+
+    return {
+        "username": username,
+        "permissions": user["permissions"]
+    }
+
+
+def has_permission(session, permission):
+    return permission in session["permissions"]
+```
+
+Agora vamos analisar **cada linha**.
+
+---
+
+### `USERS = {`
+
+```python
+USERS = {
+```
+
+Cria um dicionário chamado `USERS`.
+
+Neste exemplo didático, ele representa uma pequena base de usuários em memória.
+
+Em uma aplicação real, não devemos armazenar senhas dessa maneira.
+
+---
+
+### `"allan": {`
+
+```python
+"allan": {
+```
+
+Cria uma entrada cujo nome de usuário é:
+
+```text
+allan
+```
+
+---
+
+### `"password": "senha-de-exemplo"`
+
+```python
+"password": "senha-de-exemplo"
+```
+
+Representa a credencial do usuário.
+
+**Isso existe apenas para demonstrar o fluxo.**
+
+Em um sistema real, a senha não deveria ficar armazenada em texto puro.
+
+---
+
+### `"permissions": ["INFO", "ECHO"]`
+
+```python
+"permissions": ["INFO", "ECHO"]
+```
+
+Define quais operações o usuário possui.
+
+Nesse exemplo:
+
+```text
+INFO
+ECHO
+```
+
+---
+
+### `authenticate()`
+
+```python
+def authenticate(username, password):
+```
+
+Cria uma função responsável por tentar autenticar o usuário.
+
+Possui dois parâmetros:
+
+```text
+username → nome do usuário
+password → credencial apresentada
+```
+
+---
+
+### `USERS.get(username)`
+
+```python
+user = USERS.get(username)
+```
+
+Procura o usuário no dicionário.
+
+O método:
+
+```python
+.get()
+```
+
+recebe a chave que queremos procurar.
+
+Se encontrar:
+
+```text
+retorna os dados
+```
+
+Se não encontrar:
+
+```text
+retorna None
+```
+
+---
+
+### Verificando usuário inexistente
+
+```python
+if user is None:
+    return None
+```
+
+Se o usuário não existir:
+
+```python
+user is None
+```
+
+será:
+
+```text
+True
+```
+
+Então a função encerra retornando:
+
+```python
+None
+```
+
+Isso indica que a autenticação falhou.
+
+---
+
+### Verificando a senha
+
+```python
+if user["password"] != password:
+    return None
+```
+
+Aqui:
+
+```python
+user["password"]
+```
+
+representa a credencial armazenada no exemplo.
+
+Enquanto:
+
+```python
+password
+```
+
+é a credencial apresentada pelo cliente.
+
+O operador:
+
+```python
+!=
+```
+
+significa:
+
+```text
+diferente de
+```
+
+Se forem diferentes:
+
+```python
+return None
+```
+
+A autenticação falha.
+
+---
+
+### Retornando a sessão
+
+```python
+return {
+    "username": username,
+    "permissions": user["permissions"]
+}
+```
+
+Se todas as verificações passarem, a função retorna uma estrutura representando a sessão autenticada.
+
+Ela contém:
+
+```text
+username
+permissions
+```
+
+Por exemplo:
+
+```python
+{
+    "username": "allan",
+    "permissions": ["INFO", "ECHO"]
+}
+```
+
+---
+
+## 39.22. Problema importante do exemplo
+
+O exemplo acima utiliza:
+
+```python
+"password": "senha-de-exemplo"
+```
+
+Isso foi feito apenas para tornar a lógica fácil de visualizar.
+
+**Não faça isso em um sistema real.**
+
+Uma arquitetura real seria mais parecida com:
+
+```text
+cliente
+   ↓
+TLS
+   ↓
+AUTH
+   ↓
+servidor
+   ↓
+consulta usuário
+   ↓
+verificação de hash de senha
+   ↓
+usuário autenticado
+   ↓
+carrega permissões
+   ↓
+sessão
+```
+
+---
+
+## 39.23. Autenticação + autorização + TLS
+
+Uma arquitetura mais completa pode ser:
+
+```text
+┌───────────────────────────────┐
+│          CLIENTE              │
+└───────────────┬───────────────┘
+                │
+                │ TCP
+                ▼
+┌───────────────────────────────┐
+│             TCP               │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│             TLS               │
+│ criptografia + integridade    │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│     PROTOCOLO DA APLICAÇÃO    │
+├───────────────────────────────┤
+│ AUTH                           │
+│ INFO                           │
+│ ECHO                           │
+│ DOWNLOAD                       │
+│ QUIT                           │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│        AUTENTICAÇÃO           │
+│ "Quem é esse usuário?"        │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│         AUTORIZAÇÃO           │
+│ "O que ele pode fazer?"       │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│       LÓGICA DA APLICAÇÃO     │
+└───────────────────────────────┘
+```
+
+Cada camada possui uma responsabilidade diferente.
+
+---
+
+## 39.24. Autenticação não deve ser misturada com a lógica do comando
+
+Um erro comum seria colocar tudo dentro de uma função enorme:
+
+```python
+if command == "DOWNLOAD":
+    # autenticação
+    # banco
+    # permissão
+    # arquivo
+    # envio
+    # tratamento de erro
+```
+
+Isso rapidamente se torna difícil de manter.
+
+É melhor separar responsabilidades:
+
+```text
+authentication.py
+        ↓
+autenticação
+
+authorization.py
+        ↓
+permissões
+
+protocol.py
+        ↓
+interpretação das mensagens
+
+handler.py
+        ↓
+tratamento da conexão
+
+storage.py
+        ↓
+arquivos/banco
+
+server.py
+        ↓
+infraestrutura do socket
+```
+
+Isso torna o projeto mais organizado.
+
+---
+
+## 39.25. Regra importante: negar por padrão
+
+Em segurança, uma estratégia importante é:
+
+> **Se não existe autorização explícita, o acesso deve ser negado.**
+
+Por exemplo:
+
+```python
+if has_permission(session, "DELETE"):
+    delete_file()
+else:
+    return "PERMISSION_DENIED"
+```
+
+Não devemos assumir:
+
+```text
+"se não proibiu, então pode"
+```
+
+É preferível:
+
+```text
+"se não permitiu, então não pode"
+```
+
+Isso é especialmente importante em operações sensíveis.
+
+---
+
+## 39.26. Autorização por comando
+
+Uma aplicação pode possuir uma tabela lógica:
+
+|Comando|Autenticado|Permissão|
+|---|--:|---|
+|`AUTH`|Não|Nenhuma|
+|`INFO`|Sim|`INFO`|
+|`ECHO`|Sim|`ECHO`|
+|`DOWNLOAD`|Sim|`DOWNLOAD`|
+|`DELETE`|Sim|`DELETE`|
+|`SHUTDOWN`|Sim|`ADMIN`|
+|`QUIT`|Não|Nenhuma|
+
+Assim, o servidor pode decidir:
+
+```text
+comando recebido
+      ↓
+cliente autenticado?
+      ↓
+permissão necessária?
+      ↓
+possui permissão?
+      ↓
+executar ou negar
+```
+
+---
+
+## 39.27. Autenticação em uma conexão não significa segurança total
+
+Mesmo depois da autenticação, ainda existem vários problemas possíveis:
+
+```text
+usuário autenticado
+       ↓
+entrada maliciosa
+       ↓
+path traversal
+       ↓
+DoS
+       ↓
+injeção
+       ↓
+acesso indevido
+```
+
+Portanto:
+
+```text
+AUTENTICAÇÃO
+```
+
+é apenas uma parte da segurança.
+
+Uma aplicação segura pode precisar de:
+
+- TLS;
+    
+- autenticação;
+    
+- autorização;
+    
+- validação de entrada;
+    
+- rate limiting;
+    
+- limites de tamanho;
+    
+- timeouts;
+    
+- logs;
+    
+- auditoria;
+    
+- proteção contra replay;
+    
+- gerenciamento de sessão;
+    
+- princípio do menor privilégio.
+    
+
+---
+
+## 39.28. Modelo mental
+
+Guarde esta sequência:
+
+```text
+TCP
+ ↓
+cria o canal de comunicação
+ ↓
+TLS
+ ↓
+protege a comunicação
+ ↓
+AUTENTICAÇÃO
+ ↓
+descobre quem é o cliente
+ ↓
+SESSÃO
+ ↓
+mantém o estado daquele cliente
+ ↓
+AUTORIZAÇÃO
+ ↓
+determina o que ele pode fazer
+ ↓
+LÓGICA DA APLICAÇÃO
+ ↓
+executa a operação
+```
+
+Ou, de forma ainda mais simples:
+
+```text
+Quem é você?
+     ↓
+AUTENTICAÇÃO
+
+O que você pode fazer?
+     ↓
+AUTORIZAÇÃO
+
+Como suas informações são protegidas durante o transporte?
+     ↓
+TLS
+```
+
+---
+
+## 39.29. Resumo da Parte
+
+Nesta parte aprendemos que:
+
+- **Autenticação** verifica a identidade do cliente.
+    
+- **Autorização** verifica quais operações o cliente pode executar.
+    
+- TCP não sabe quem é o usuário da aplicação.
+    
+- IP não deve ser tratado como identidade.
+    
+- TLS protege a comunicação, mas não substitui necessariamente a autenticação da aplicação.
+    
+- Senhas não devem ser armazenadas em texto puro.
+    
+- Para armazenamento de senhas devem ser utilizados mecanismos apropriados, como Argon2id, bcrypt, scrypt ou PBKDF2.
+    
+- Salt ajuda a proteger hashes de senha contra ataques pré-computados.
+    
+- O cliente não deve informar sua própria role e esperar que o servidor confie nela.
+    
+- As permissões devem ser determinadas pelo servidor.
+    
+- Uma conexão pode possuir estados como `WAITING_AUTH` e `AUTHENTICATED`.
+    
+- Clientes não autenticados devem ter acesso limitado.
+    
+- Operações sensíveis devem exigir autorização explícita.
+    
+- Rate limiting ajuda a dificultar brute force.
+    
+- `hmac.compare_digest()` pode ser útil para comparações apropriadas de valores secretos.
+    
+- Segurança não termina na autenticação.
+    
+- O servidor deve continuar validando entradas e protegendo recursos.
+    
+
+A ideia central é:
+
+```text
+TCP
+ ↓
+comunicação
+
+TLS
+ ↓
+proteção do canal
+
+Autenticação
+ ↓
+quem é?
+
+Autorização
+ ↓
+pode fazer o quê?
+
+Aplicação
+ ↓
+executa a operação
+```
+
+---

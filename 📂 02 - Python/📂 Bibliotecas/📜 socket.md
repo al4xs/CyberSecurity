@@ -25922,3 +25922,5 @@ event loop + corrotinas
        ↓
 programação assíncrona
 ```
+
+

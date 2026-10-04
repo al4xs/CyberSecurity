@@ -40572,3 +40572,1423 @@ mantém integridade dos dados
 Em aplicações de rede, **testar os casos de erro é tão importante quanto testar o funcionamento normal**.
 
 ---
+# 36. Performance e escalabilidade em aplicações de sockets
+
+Até agora construímos aplicações capazes de:
+
+- aceitar conexões;
+    
+- enviar e receber dados;
+    
+- trabalhar com TCP e UDP;
+    
+- atender vários clientes;
+    
+- utilizar threads;
+    
+- utilizar `selectors`;
+    
+- utilizar `asyncio`;
+    
+- transferir arquivos;
+    
+- aplicar limites e validações;
+    
+- tratar erros e desconexões.
+    
+
+Agora surge uma pergunta importante:
+
+> **O que acontece quando o número de clientes aumenta?**
+
+Um servidor que funciona perfeitamente com 2 clientes pode apresentar problemas com:
+
+```text
+10 clientes
+100 clientes
+1.000 clientes
+10.000 clientes
+```
+
+Por isso precisamos entender **performance** e **escalabilidade**.
+
+---
+
+## 36.1 Performance ≠ escalabilidade
+
+Esses conceitos são relacionados, mas não são iguais.
+
+### Performance
+
+Performance está relacionada à eficiência de uma operação.
+
+Por exemplo:
+
+```text
+requisição → resposta em 5 ms
+```
+
+é mais rápida que:
+
+```text
+requisição → resposta em 500 ms
+```
+
+Podemos medir:
+
+- latência;
+    
+- throughput;
+    
+- CPU;
+    
+- memória;
+    
+- uso de rede;
+    
+- operações por segundo.
+    
+
+### Escalabilidade
+
+Escalabilidade está relacionada à capacidade de aumentar a quantidade de trabalho sem degradar excessivamente o sistema.
+
+Por exemplo:
+
+```text
+100 clientes
+     ↓
+servidor funcionando bem
+
+1.000 clientes
+     ↓
+servidor funcionando bem
+
+10.000 clientes
+     ↓
+servidor ainda funcionando de forma aceitável
+```
+
+Um sistema pode ser rápido para poucos clientes e pouco escalável.
+
+---
+
+# 36.2 Latência
+
+**Latência** é o tempo necessário para determinada operação acontecer.
+
+Em um protocolo simples:
+
+```text
+CLIENTE
+   │
+   │ request
+   ▼
+SERVIDOR
+   │
+   │ response
+   ▼
+CLIENTE
+```
+
+Podemos medir:
+
+```text
+tempo do request até response
+```
+
+Por exemplo:
+
+```text
+0 ms       cliente envia
+│
+├── 2 ms   servidor recebe
+├── 3 ms   processamento
+├── 5 ms   resposta enviada
+│
+└── 8 ms   cliente recebe
+```
+
+Latência:
+
+```text
+8 ms
+```
+
+---
+
+# 36.3 Throughput
+
+**Throughput** representa quanto trabalho ou dados conseguimos processar em determinado período.
+
+Por exemplo:
+
+```text
+100 MB/s
+```
+
+significa aproximadamente que o sistema consegue transferir:
+
+```text
+100 megabytes por segundo
+```
+
+Também podemos medir requisições:
+
+```text
+5.000 requisições/segundo
+```
+
+ou:
+
+```text
+1.000 arquivos/minuto
+```
+
+Dependendo da aplicação.
+
+---
+
+# 36.4 Bandwidth não é a mesma coisa que throughput
+
+Esses conceitos costumam ser confundidos.
+
+**Bandwidth** é a capacidade disponível do canal.
+
+Por exemplo:
+
+```text
+interface:
+1 Gbit/s
+```
+
+Isso não significa que nossa aplicação necessariamente conseguirá transferir:
+
+```text
+1 Gbit/s
+```
+
+Podemos ter:
+
+```text
+Bandwidth:
+1 Gbit/s
+
+Throughput real:
+400 Mbit/s
+```
+
+porque existem outros fatores:
+
+- overhead de protocolos;
+    
+- CPU;
+    
+- memória;
+    
+- armazenamento;
+    
+- congestionamento;
+    
+- implementação da aplicação;
+    
+- limitações do outro lado.
+    
+
+---
+
+# 36.5 O primeiro gargalo: CPU
+
+Imagine um servidor que recebe:
+
+```text
+10.000 requisições
+```
+
+Se cada requisição exige muito processamento:
+
+```text
+receber dados
+    ↓
+processar
+    ↓
+criptografar
+    ↓
+calcular hash
+    ↓
+gerar resposta
+```
+
+a CPU pode se tornar o gargalo.
+
+Podemos imaginar:
+
+```text
+             CLIENTES
+                │
+                ▼
+             SOCKET
+                │
+                ▼
+          ┌───────────┐
+          │    CPU    │ ← gargalo
+          └───────────┘
+                │
+                ▼
+             resposta
+```
+
+Nesse caso, simplesmente aumentar o número de threads pode não resolver.
+
+---
+
+# 36.6 O segundo gargalo: memória
+
+Cada conexão pode consumir recursos.
+
+Por exemplo:
+
+```text
+cliente
+   ↓
+socket
+   ↓
+buffers
+   ↓
+estado da conexão
+   ↓
+objetos Python
+```
+
+Se temos:
+
+```text
+1 cliente
+```
+
+isso é praticamente irrelevante.
+
+Mas imagine:
+
+```text
+100.000 conexões
+```
+
+Mesmo pequenos consumos individuais podem se tornar grandes.
+
+Por isso servidores precisam controlar:
+
+- tamanho de buffers;
+    
+- quantidade de conexões;
+    
+- quantidade de dados pendentes;
+    
+- quantidade de tarefas;
+    
+- tamanho de filas.
+    
+
+---
+
+# 36.7 O terceiro gargalo: rede
+
+A aplicação pode estar perfeitamente otimizada e ainda assim a rede ser o limite.
+
+Imagine:
+
+```text
+Servidor
+   │
+   │ 100 Mbit/s
+   ▼
+Internet
+```
+
+Mesmo que a CPU consiga processar muito mais dados, a interface ou o caminho da rede pode limitar o throughput.
+
+O fluxo real pode ser:
+
+```text
+Aplicação
+   ↓
+Socket
+   ↓
+TCP
+   ↓
+Interface de rede
+   ↓
+Roteador
+   ↓
+Internet
+   ↓
+Cliente
+```
+
+O gargalo pode estar em qualquer ponto.
+
+---
+
+# 36.8 O quarto gargalo: armazenamento
+
+No nosso projeto de transferência de arquivos, existe outro componente:
+
+```text
+Cliente
+   ↓
+Rede
+   ↓
+Servidor
+   ↓
+Disco
+```
+
+Se o disco consegue gravar:
+
+```text
+100 MB/s
+```
+
+mas a rede entrega:
+
+```text
+500 MB/s
+```
+
+o armazenamento pode se tornar o gargalo.
+
+Nesse caso:
+
+```text
+rede → 500 MB/s
+disco → 100 MB/s
+```
+
+o sistema não conseguirá gravar os 500 MB/s de maneira sustentada.
+
+---
+
+# 36.9 Gargalo
+
+Um **gargalo** é o componente que limita o desempenho geral.
+
+Modelo:
+
+```text
+Cliente
+   │
+   ▼
+Rede ─────── 1 Gbit/s
+   │
+   ▼
+CPU ──────── 500 Mbit/s
+   │
+   ▼
+Disco ────── 100 Mbit/s
+   │
+   ▼
+Aplicação
+```
+
+Nesse exemplo, o disco pode ser o principal limitador.
+
+Melhorar somente a rede não resolveria o problema.
+
+---
+
+# 36.10 Threads e escalabilidade
+
+Já vimos o modelo:
+
+```python
+threading.Thread(...)
+```
+
+Uma abordagem simples é:
+
+```text
+cliente 1 → thread 1
+cliente 2 → thread 2
+cliente 3 → thread 3
+cliente 4 → thread 4
+```
+
+Funciona muito bem para determinadas aplicações.
+
+Mas imagine:
+
+```text
+10.000 clientes
+```
+
+e:
+
+```text
+10.000 threads
+```
+
+Isso pode causar custos significativos.
+
+Cada thread precisa de:
+
+- memória;
+    
+- agendamento;
+    
+- estruturas internas;
+    
+- troca de contexto.
+    
+
+Além disso, muitas threads competindo por CPU podem aumentar o overhead.
+
+---
+
+# 36.11 O que é troca de contexto?
+
+O sistema operacional precisa alternar entre tarefas.
+
+Por exemplo:
+
+```text
+Thread A
+   ↓
+Thread B
+   ↓
+Thread C
+   ↓
+Thread A
+   ↓
+Thread D
+```
+
+Esse processo possui custo.
+
+Se temos poucas threads:
+
+```text
+A
+B
+C
+```
+
+o custo pode ser aceitável.
+
+Se temos milhares de threads fazendo pequenas operações:
+
+```text
+A
+B
+C
+...
+9999
+10000
+```
+
+o gerenciamento pode se tornar significativo.
+
+Isso não significa que threads sejam ruins.
+
+Significa que precisamos escolher o modelo adequado.
+
+---
+
+# 36.12 I/O-bound versus CPU-bound
+
+Essa distinção é extremamente importante.
+
+### I/O-bound
+
+O programa passa grande parte do tempo esperando:
+
+```text
+rede
+disco
+banco de dados
+socket
+```
+
+Exemplo:
+
+```text
+cliente envia dados
+      ↓
+servidor espera
+      ↓
+dados chegam
+```
+
+Sockets normalmente possuem bastante trabalho **I/O-bound**.
+
+Threads podem funcionar muito bem nesse cenário.
+
+---
+
+### CPU-bound
+
+O programa passa grande parte do tempo utilizando CPU.
+
+Exemplo:
+
+```text
+recebe dados
+   ↓
+processa milhões de operações
+   ↓
+calcula
+   ↓
+gera resultado
+```
+
+Aqui aumentar threads em CPython não necessariamente aumenta o processamento paralelo de código Python devido ao GIL.
+
+Para CPU-bound, outras estratégias podem ser melhores:
+
+```text
+multiprocessing
+processos separados
+workers externos
+extensões nativas
+```
+
+---
+
+# 36.13 Por que `asyncio` pode escalar bem para I/O?
+
+Imagine 10.000 conexões:
+
+```text
+Cliente 1 → esperando dados
+Cliente 2 → esperando dados
+Cliente 3 → esperando dados
+...
+Cliente 10000 → esperando dados
+```
+
+Não precisamos necessariamente de uma thread para cada cliente.
+
+Um event loop pode monitorar várias operações:
+
+```text
+             EVENT LOOP
+                 │
+       ┌─────────┼─────────┐
+       │         │         │
+       ▼         ▼         ▼
+    socket 1  socket 2  socket 3
+       │         │         │
+    esperando esperando esperando
+```
+
+Quando uma operação está pronta:
+
+```text
+socket 37 → dados disponíveis
+```
+
+o event loop trabalha nela.
+
+Isso pode reduzir o overhead associado a milhares de threads.
+
+---
+
+# 36.14 `selectors` e escalabilidade
+
+O mesmo princípio existe com:
+
+```python
+selectors
+```
+
+Podemos registrar vários sockets:
+
+```python
+selector.register(sock1, selectors.EVENT_READ)
+selector.register(sock2, selectors.EVENT_READ)
+selector.register(sock3, selectors.EVENT_READ)
+```
+
+Depois:
+
+```python
+events = selector.select()
+```
+
+O sistema informa quais estão prontos.
+
+Em vez de:
+
+```text
+thread 1 esperando socket 1
+thread 2 esperando socket 2
+thread 3 esperando socket 3
+```
+
+podemos ter:
+
+```text
+um mecanismo
+      ↓
+monitora vários sockets
+      ↓
+trabalha apenas nos que estão prontos
+```
+
+---
+
+# 36.15 Backpressure
+
+Um conceito muito importante em sistemas de rede é **backpressure**.
+
+Imagine:
+
+```text
+CLIENTE
+   │
+   │ envia muito rápido
+   ▼
+SERVIDOR
+   │
+   │ processa lentamente
+   ▼
+```
+
+O produtor está produzindo dados mais rapidamente do que o consumidor consegue processar.
+
+Isso pode gerar:
+
+```text
+fila crescendo
+   ↓
+memória crescendo
+   ↓
+recursos esgotando
+```
+
+Precisamos de mecanismos para controlar esse fluxo.
+
+---
+
+# 36.16 Exemplo de backpressure
+
+Imagine um cliente enviando:
+
+```text
+100 MB/s
+```
+
+e o servidor processando:
+
+```text
+10 MB/s
+```
+
+A diferença é:
+
+```text
+100 - 10 = 90 MB/s
+```
+
+Se simplesmente armazenarmos tudo em memória:
+
+```text
+1 segundo  → 90 MB acumulados
+10 segundos → 900 MB
+60 segundos → 5,4 GB
+```
+
+Isso pode causar um problema grave.
+
+Por isso não devemos assumir:
+
+> "A memória aguenta."
+
+Precisamos controlar o fluxo.
+
+---
+
+# 36.17 `send()` e buffers do sistema
+
+Quando fazemos:
+
+```python
+sock.sendall(data)
+```
+
+isso não significa:
+
+> "Todos os dados já chegaram ao outro computador."
+
+O processo entrega os dados ao mecanismo de socket do sistema operacional.
+
+Depois:
+
+```text
+Python
+  ↓
+buffer do kernel
+  ↓
+TCP
+  ↓
+rede
+  ↓
+TCP remoto
+  ↓
+buffer remoto
+  ↓
+Python remoto
+```
+
+Existem várias etapas.
+
+Por isso:
+
+```python
+sendall()
+```
+
+não deve ser interpretado como uma confirmação de que o destinatário processou os dados.
+
+---
+
+# 36.18 `sendall()` e controle de fluxo
+
+O TCP possui mecanismos próprios de controle de fluxo.
+
+Se o receptor não consegue acompanhar:
+
+```text
+remetente
+   ↓
+TCP
+   ↓
+receptor
+```
+
+o TCP pode reduzir a quantidade de dados enviados.
+
+Isso ajuda a impedir que o receptor seja simplesmente inundado.
+
+Mas a aplicação também precisa tomar cuidado.
+
+Por exemplo, não devemos criar uma fila Python ilimitada:
+
+```python
+messages.append(data)
+```
+
+sem nenhum limite.
+
+---
+
+# 36.19 Limites de filas
+
+Uma estratégia melhor é estabelecer limites.
+
+Por exemplo:
+
+```python
+MAX_QUEUE_SIZE = 1000
+```
+
+Quando a fila chega ao limite:
+
+```text
+fila cheia
+   ↓
+não aceitar mais trabalho
+```
+
+Dependendo da aplicação, podemos:
+
+- bloquear o produtor;
+    
+- rejeitar a requisição;
+    
+- descartar dados;
+    
+- aplicar backpressure;
+    
+- fechar a conexão;
+    
+- retornar erro.
+    
+
+A decisão depende do protocolo.
+
+---
+
+# 36.20 Tamanho dos buffers
+
+Também precisamos tomar cuidado com:
+
+```python
+recv(1024)
+```
+
+versus:
+
+```python
+recv(1024 * 1024)
+```
+
+Um buffer maior não significa automaticamente maior performance.
+
+Precisamos considerar:
+
+```text
+memória
++
+latência
++
+frequência de chamadas
++
+tamanho das mensagens
++
+padrão de tráfego
+```
+
+O tamanho adequado depende da aplicação.
+
+---
+
+# 36.21 Benchmark
+
+Para estudar performance, podemos fazer um **benchmark**.
+
+Um benchmark mede o comportamento da aplicação sob determinadas condições.
+
+Por exemplo:
+
+```text
+100 clientes
+1000 requisições
+```
+
+Podemos medir:
+
+```text
+tempo total
+requisições/segundo
+latência média
+latência máxima
+CPU
+memória
+```
+
+Exemplo conceitual:
+
+```text
+Clientes:          100
+Requisições:       10.000
+Tempo:             4,2 s
+Throughput:        ~2380 req/s
+```
+
+---
+
+# 36.22 Não confie em uma única medição
+
+Imagine que executamos:
+
+```text
+Teste 1 → 1000 req/s
+```
+
+Isso não significa necessariamente que a performance real seja:
+
+```text
+1000 req/s
+```
+
+O resultado pode variar devido a:
+
+- carga do sistema;
+    
+- processos em segundo plano;
+    
+- cache;
+    
+- temperatura;
+    
+- estado da rede;
+    
+- disco;
+    
+- quantidade de clientes;
+    
+- tamanho dos dados.
+    
+
+Por isso normalmente executamos vários testes.
+
+---
+
+# 36.23 Latência média pode esconder problemas
+
+Imagine 100 requisições:
+
+```text
+99 requisições → 5 ms
+1 requisição    → 5 segundos
+```
+
+A média pode parecer aceitável.
+
+Mas existe uma requisição extremamente lenta.
+
+Por isso sistemas reais também analisam percentis.
+
+Por exemplo:
+
+```text
+p50 → 5 ms
+p95 → 20 ms
+p99 → 100 ms
+```
+
+Isso significa aproximadamente:
+
+```text
+50% das requisições ≤ 5 ms
+95% ≤ 20 ms
+99% ≤ 100 ms
+```
+
+Percentis são muito úteis para entender a experiência real dos clientes.
+
+---
+
+# 36.24 Não otimize antes de medir
+
+Um erro comum é começar a modificar o código imediatamente:
+
+```text
+"Vou usar mais threads."
+"Vou aumentar o buffer."
+"Vou usar asyncio."
+"Vou aumentar o chunk."
+```
+
+sem saber qual é o problema.
+
+O processo correto é:
+
+```text
+medir
+  ↓
+identificar gargalo
+  ↓
+formular hipótese
+  ↓
+alterar
+  ↓
+medir novamente
+  ↓
+comparar
+```
+
+Isso é muito mais confiável.
+
+---
+
+# 36.25 Ferramentas para observar performance
+
+No Linux podemos usar ferramentas como:
+
+```bash
+top
+```
+
+ou:
+
+```bash
+htop
+```
+
+para observar CPU e memória.
+
+Para processos:
+
+```bash
+ps aux
+```
+
+Para sockets:
+
+```bash
+ss -tanp
+```
+
+Para tráfego:
+
+```bash
+sudo tcpdump -i lo port 4444
+```
+
+Podemos combinar essas informações.
+
+Por exemplo:
+
+```text
+Aplicação lenta
+     │
+     ├── CPU 100%?
+     │
+     ├── memória aumentando?
+     │
+     ├── milhares de conexões?
+     │
+     ├── rede saturada?
+     │
+     └── disco lento?
+```
+
+---
+
+# 36.26 Concorrência não significa automaticamente performance
+
+Isso é importante.
+
+Imagine um servidor sequencial:
+
+```text
+Cliente A
+   ↓
+processa
+   ↓
+responde
+
+Cliente B
+   ↓
+processa
+   ↓
+responde
+```
+
+Podemos melhorar a concorrência:
+
+```text
+Cliente A ──→ thread A
+Cliente B ──→ thread B
+Cliente C ──→ thread C
+```
+
+Isso pode melhorar o tempo de espera.
+
+Mas também pode aumentar:
+
+```text
+CPU
+memória
+complexidade
+contenção
+```
+
+Portanto:
+
+```text
+mais concorrência
+≠
+sempre mais performance
+```
+
+---
+
+# 36.27 Um servidor precisa de limites
+
+Um servidor real não deveria aceitar recursos infinitamente.
+
+Podemos limitar:
+
+```text
+máximo de conexões
+máximo de mensagens
+máximo de tamanho de mensagem
+máximo de arquivo
+máximo de requisições por segundo
+máximo de tarefas pendentes
+timeout de conexão
+timeout de operação
+```
+
+Por exemplo:
+
+```python
+MAX_FILE_SIZE = 100 * 1024 * 1024
+MAX_MESSAGE_SIZE = 4096
+MAX_CONNECTIONS = 1000
+```
+
+Esses limites ajudam tanto na:
+
+- performance;
+    
+- estabilidade;
+    
+- segurança.
+    
+
+---
+
+# 36.28 Escalabilidade horizontal e vertical
+
+Existem duas ideias gerais.
+
+### Escalabilidade vertical
+
+Aumentar os recursos de uma máquina:
+
+```text
+Servidor
+   ↓
+mais CPU
+mais RAM
+mais armazenamento
+rede mais rápida
+```
+
+### Escalabilidade horizontal
+
+Adicionar mais máquinas:
+
+```text
+              ┌── Servidor 1
+Cliente ──────┼── Servidor 2
+              ├── Servidor 3
+              └── Servidor 4
+```
+
+Um balanceador pode distribuir as conexões.
+
+Isso já entra em uma arquitetura maior do que um simples servidor Python, mas o conceito é importante para entender como aplicações de rede crescem.
+
+---
+
+# 36.29 Arquitetura mental de performance
+
+Podemos visualizar o caminho completo:
+
+```text
+                 CLIENTES
+                    │
+                    ▼
+              ┌───────────┐
+              │   REDE    │
+              └─────┬─────┘
+                    │
+                    ▼
+              ┌───────────┐
+              │  SOCKET   │
+              └─────┬─────┘
+                    │
+                    ▼
+          ┌───────────────────┐
+          │ CONCORRÊNCIA      │
+          │ thread/selector/  │
+          │ asyncio            │
+          └─────────┬─────────┘
+                    │
+                    ▼
+          ┌───────────────────┐
+          │ PROCESSAMENTO     │
+          └─────────┬─────────┘
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+        CPU                 DISCO
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+                 RESPOSTA
+```
+
+Qualquer uma dessas partes pode virar um gargalo.
+
+---
+
+# 36.30 Escolhendo o modelo de concorrência
+
+Uma visão simplificada:
+
+|Modelo|Bom para|
+|---|---|
+|Sequencial|aplicações simples|
+|Thread por cliente|poucos/médios clientes, I/O|
+|Thread pool|controlar quantidade de threads|
+|`selectors`|muitas conexões I/O|
+|`asyncio`|muitas operações assíncronas|
+|Processos|tarefas CPU-bound|
+|Arquitetura distribuída|cargas muito grandes|
+
+Não existe um modelo universalmente melhor.
+
+A escolha depende da aplicação.
+
+---
+
+# 36.31 O erro de "otimizar" prematuramente
+
+Imagine uma aplicação que possui:
+
+```text
+5 clientes
+```
+
+e alguém decide implementar:
+
+```text
+asyncio
++
+multiprocessing
++
+10 workers
++
+fila distribuída
++
+balanceador
+```
+
+para resolver um problema que não existe.
+
+Isso pode aumentar enormemente a complexidade.
+
+Uma abordagem melhor:
+
+```text
+começar simples
+      ↓
+medir
+      ↓
+encontrar problema
+      ↓
+otimizar
+      ↓
+medir novamente
+```
+
+A simplicidade também é uma característica importante de uma boa arquitetura.
+
+---
+
+# 36.32 Performance e segurança estão relacionadas
+
+Imagine que um servidor aceite:
+
+```text
+10.000 conexões
+```
+
+sem qualquer limite.
+
+Um atacante pode tentar:
+
+```text
+conexão 1
+conexão 2
+conexão 3
+...
+conexão 100.000
+```
+
+Mesmo que nenhuma conexão faça trabalho útil, elas podem consumir:
+
+```text
+memória
+descritores de arquivo
+threads
+CPU
+```
+
+Portanto, controles de escalabilidade também podem funcionar como mecanismos de defesa contra DoS.
+
+---
+
+# 36.33 Resumo da Parte
+
+Nesta parte aprendemos que performance em sockets não significa apenas "enviar dados mais rápido".
+
+Precisamos observar:
+
+- latência;
+    
+- throughput;
+    
+- bandwidth;
+    
+- CPU;
+    
+- memória;
+    
+- rede;
+    
+- armazenamento;
+    
+- gargalos;
+    
+- concorrência;
+    
+- threads;
+    
+- I/O-bound;
+    
+- CPU-bound;
+    
+- `selectors`;
+    
+- `asyncio`;
+    
+- backpressure;
+    
+- buffers;
+    
+- filas;
+    
+- limites;
+    
+- benchmarks;
+    
+- percentis;
+    
+- monitoramento;
+    
+- escalabilidade vertical;
+    
+- escalabilidade horizontal.
+    
+
+O principal modelo mental é:
+
+```text
+Performance
+    =
+medir
+  ↓
+identificar gargalo
+  ↓
+entender a causa
+  ↓
+otimizar
+  ↓
+medir novamente
+```
+
+E principalmente:
+
+```text
+Mais threads
+     ≠
+Mais performance
+
+Mais concorrência
+     ≠
+Mais performance
+
+Buffer maior
+     ≠
+Mais performance
+```
+
+A performance correta depende do **gargalo real da aplicação**.
+
+---

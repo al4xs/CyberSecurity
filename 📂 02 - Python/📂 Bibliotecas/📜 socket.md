@@ -28191,3 +28191,926 @@ Cliente
 
 ---
 
+# 26. IPv6 com sockets
+
+## 26.1 O que é IPv6?
+
+**IPv6 (Internet Protocol version 6)** é a versão mais recente do protocolo IP, criada principalmente para solucionar a limitação de endereços do IPv4.
+
+No IPv4, um endereço possui **32 bits**, permitindo aproximadamente 4,3 bilhões de endereços.
+
+No IPv6, um endereço possui **128 bits**, permitindo uma quantidade extremamente maior de endereços.
+
+Exemplo de IPv4:
+
+```text
+192.168.1.10
+```
+
+Exemplo de IPv6:
+
+```text
+2001:db8::10
+```
+
+O funcionamento de sockets continua seguindo a mesma ideia:
+
+```text
+Aplicação
+    ↓
+socket()
+    ↓
+TCP / UDP
+    ↓
+IPv4 ou IPv6
+    ↓
+Rede
+```
+
+A principal diferença está na **família de endereços** utilizada pelo socket.
+
+No IPv4:
+
+```python
+socket.AF_INET
+```
+
+No IPv6:
+
+```python
+socket.AF_INET6
+```
+
+---
+
+## 26.2 `AF_INET6`
+
+Para criar um socket IPv6, utilizamos `AF_INET6`.
+
+Exemplo TCP:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+```
+
+Aqui:
+
+```text
+AF_INET6
+   ↓
+IPv6
+
+SOCK_STREAM
+   ↓
+TCP
+```
+
+Portanto:
+
+```python
+socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+```
+
+significa:
+
+> Crie um socket TCP que utilize IPv6.
+
+Para UDP:
+
+```python
+socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+```
+
+---
+
+## 26.3 Endereço de loopback IPv6
+
+No IPv4, utilizamos:
+
+```text
+127.0.0.1
+```
+
+para representar o próprio computador.
+
+No IPv6, o equivalente é:
+
+```text
+::1
+```
+
+Portanto:
+
+```text
+IPv4:
+127.0.0.1
+
+IPv6:
+::1
+```
+
+Exemplo:
+
+```python
+server.bind(("::1", 4444))
+```
+
+Isso significa:
+
+> Escute a porta `4444` somente através do endereço de loopback IPv6.
+
+Assim como:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+limita o servidor ao loopback IPv4.
+
+---
+
+## 26.4 O endereço `::`
+
+Outro endereço importante é:
+
+```text
+::
+```
+
+Ele é o endereço IPv6 **não especificado**.
+
+Em um `bind()`, ele pode ser utilizado para indicar que o socket deve escutar nas interfaces IPv6 disponíveis.
+
+Exemplo:
+
+```python
+server.bind(("::", 4444))
+```
+
+Isso possui uma ideia semelhante ao:
+
+```python
+server.bind(("0.0.0.0", 4444))
+```
+
+no IPv4.
+
+A diferença é a família:
+
+```text
+0.0.0.0
+    ↓
+IPv4
+
+::
+    ↓
+IPv6
+```
+
+### Atenção
+
+Assim como `0.0.0.0`, utilizar `::` **não significa "somente localhost"**.
+
+Dependendo da configuração da máquina, firewall e interfaces disponíveis, o serviço poderá ficar acessível pela rede.
+
+Para um servidor que deve ser apenas local, é mais restritivo utilizar:
+
+```python
+server.bind(("::1", 4444))
+```
+
+---
+
+## 26.5 Estrutura do endereço de um socket IPv6
+
+No IPv4, normalmente trabalhamos com:
+
+```python
+("127.0.0.1", 4444)
+```
+
+No IPv6, o endereço normalmente é representado por uma tupla de quatro elementos:
+
+```python
+("::1", 4444, 0, 0)
+```
+
+A estrutura é:
+
+```text
+(host, port, flowinfo, scopeid)
+```
+
+|Campo|Tipo|Função|
+|---|---|---|
+|`host`|`str`|Endereço IPv6|
+|`port`|`int`|Porta|
+|`flowinfo`|`int`|Informação de fluxo IPv6|
+|`scopeid`|`int`|Identificador de escopo/interface|
+
+Para operações comuns com IPv6, normalmente utilizamos apenas:
+
+```python
+("::1", 4444)
+```
+
+e o Python trata os demais campos conforme necessário.
+
+Por exemplo:
+
+```python
+server.bind(("::1", 4444))
+```
+
+---
+
+## 26.6 Servidor TCP IPv6
+
+Um servidor TCP IPv6 básico pode ser construído assim:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+server.bind(("::1", 4444))
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+print(f"Cliente conectado: {address}")
+
+data = client.recv(1024)
+
+print(f"Recebido: {data.decode()}")
+
+client.sendall(b"Mensagem recebida!")
+
+client.close()
+server.close()
+```
+
+O fluxo continua sendo o mesmo que vimos com IPv4:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+recv()
+   ↓
+sendall()
+   ↓
+close()
+```
+
+A principal diferença está na família:
+
+```python
+socket.AF_INET6
+```
+
+e no endereço:
+
+```python
+"::1"
+```
+
+---
+
+## 26.7 Cliente TCP IPv6
+
+O cliente correspondente:
+
+```python
+import socket
+
+client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+client.connect(("::1", 4444))
+
+client.sendall(b"Ola, servidor IPv6!")
+
+response = client.recv(1024)
+
+print(response.decode())
+
+client.close()
+```
+
+Temos:
+
+```text
+CLIENTE
+   |
+   | connect(("::1", 4444))
+   ↓
+SERVIDOR
+   |
+   | bind(("::1", 4444))
+   ↓
+TCP + IPv6
+```
+
+---
+
+## 26.8 IPv4 x IPv6
+
+|Característica|IPv4|IPv6|
+|---|---|---|
+|Família|`AF_INET`|`AF_INET6`|
+|Tamanho|32 bits|128 bits|
+|Loopback|`127.0.0.1`|`::1`|
+|Não especificado|`0.0.0.0`|`::`|
+|Exemplo|`192.168.1.10`|`2001:db8::10`|
+|TCP|`SOCK_STREAM`|`SOCK_STREAM`|
+|UDP|`SOCK_DGRAM`|`SOCK_DGRAM`|
+
+O protocolo de transporte não muda simplesmente porque estamos usando IPv6.
+
+Podemos ter:
+
+```text
+IPv4 + TCP
+IPv4 + UDP
+
+IPv6 + TCP
+IPv6 + UDP
+```
+
+---
+
+## 26.9 `getaddrinfo()` e IPv6
+
+Uma das formas mais importantes de escrever código que pode trabalhar com IPv4 e IPv6 é utilizar:
+
+```python
+socket.getaddrinfo()
+```
+
+Por exemplo:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "localhost",
+    4444,
+    socket.AF_UNSPEC,
+    socket.SOCK_STREAM
+)
+
+for result in results:
+    print(result)
+```
+
+O:
+
+```python
+socket.AF_UNSPEC
+```
+
+significa:
+
+> Não restrinja a resolução a uma família específica de endereços.
+
+Assim, o sistema pode retornar informações para IPv4, IPv6 ou ambos, dependendo da configuração e resolução daquele nome.
+
+Isso é geralmente mais flexível do que assumir:
+
+```python
+AF_INET
+```
+
+ou:
+
+```python
+AF_INET6
+```
+
+sem necessidade.
+
+---
+
+## 26.10 Utilizando o resultado de `getaddrinfo()`
+
+Cada resultado possui informações suficientes para criar o socket apropriado.
+
+Exemplo:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "localhost",
+    4444,
+    socket.AF_UNSPEC,
+    socket.SOCK_STREAM
+)
+
+for family, socktype, proto, canonname, sockaddr in results:
+    print("Família:", family)
+    print("Tipo:", socktype)
+    print("Protocolo:", proto)
+    print("Endereço:", sockaddr)
+```
+
+Podemos utilizar essas informações para tentar uma conexão:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "localhost",
+    4444,
+    socket.AF_UNSPEC,
+    socket.SOCK_STREAM
+)
+
+for family, socktype, proto, canonname, sockaddr in results:
+    try:
+        client = socket.socket(family, socktype, proto)
+        client.connect(sockaddr)
+
+        print("Conectado!")
+        break
+
+    except OSError:
+        client.close()
+```
+
+A ideia é:
+
+```text
+hostname
+    ↓
+getaddrinfo()
+    ↓
+endereços disponíveis
+    ↓
+família + tipo + protocolo
+    ↓
+socket apropriado
+    ↓
+connect()
+```
+
+Isso é especialmente útil em aplicações que precisam funcionar em ambientes IPv4 e IPv6.
+
+---
+
+## 26.11 `IPV6_V6ONLY`
+
+Um detalhe importante de IPv6 é a opção:
+
+```python
+socket.IPV6_V6ONLY
+```
+
+Ela controla se um socket IPv6 pode também aceitar conexões IPv4 mapeadas para IPv6.
+
+Por exemplo:
+
+```python
+server.setsockopt(
+    socket.IPPROTO_IPV6,
+    socket.IPV6_V6ONLY,
+    1
+)
+```
+
+Com:
+
+```text
+1
+```
+
+o socket fica somente IPv6.
+
+Com:
+
+```text
+0
+```
+
+o comportamento pode permitir IPv4-mapped addresses em algumas plataformas.
+
+Porém, **o comportamento padrão não é universal**. Ele depende do sistema operacional e da configuração.
+
+Por isso, não devemos assumir que:
+
+```python
+AF_INET6
+```
+
+automaticamente significa:
+
+```text
+IPv4 + IPv6
+```
+
+ou:
+
+```text
+somente IPv6
+```
+
+O comportamento deve ser tratado explicitamente quando isso for importante para a aplicação.
+
+---
+
+## 26.12 Endereços IPv6 link-local e `scopeid`
+
+Existem endereços IPv6 que possuem escopo local à interface, principalmente os endereços **link-local**, normalmente dentro de:
+
+```text
+fe80::/10
+```
+
+Um exemplo poderia aparecer como:
+
+```text
+fe80::1234:5678:abcd:ef01
+```
+
+Esses endereços podem existir simultaneamente em várias interfaces.
+
+Por isso, pode ser necessário informar qual interface deve ser utilizada através do `scopeid`.
+
+A estrutura:
+
+```text
+(host, port, flowinfo, scopeid)
+```
+
+permite representar essa informação.
+
+Em situações comuns de:
+
+```python
+::1
+```
+
+ou endereços globais, normalmente não precisamos lidar manualmente com `scopeid`.
+
+---
+
+## 26.13 Tipos importantes de endereços IPv6
+
+Algumas categorias importantes:
+
+### Loopback
+
+```text
+::1
+```
+
+Representa o próprio computador.
+
+---
+
+### Unspecified
+
+```text
+::
+```
+
+Representa um endereço não especificado.
+
+É especialmente importante em operações como `bind()`.
+
+---
+
+### Link-local
+
+```text
+fe80::/10
+```
+
+Utilizado para comunicação no enlace local.
+
+---
+
+### Multicast
+
+```text
+ff00::/8
+```
+
+Utilizado para comunicação multicast.
+
+IPv6 não utiliza broadcast da mesma maneira que IPv4; muitos mecanismos que seriam associados a broadcast no IPv4 utilizam multicast no IPv6.
+
+---
+
+### Global unicast
+
+São endereços utilizados para comunicação IPv6 roteável globalmente.
+
+Um exemplo de documentação:
+
+```text
+2001:db8::1
+```
+
+O prefixo `2001:db8::/32` é reservado para documentação e exemplos.
+
+---
+
+## 26.14 Biblioteca `ipaddress`
+
+O Python também possui a biblioteca:
+
+```python
+ipaddress
+```
+
+que permite trabalhar com endereços e redes IP sem precisar tratar tudo manualmente como strings.
+
+Exemplo:
+
+```python
+import ipaddress
+
+address = ipaddress.ip_address("2001:db8::1")
+
+print(address)
+print(address.version)
+```
+
+Resultado conceitual:
+
+```text
+2001:db8::1
+6
+```
+
+Também podemos verificar se um endereço é IPv6:
+
+```python
+import ipaddress
+
+address = ipaddress.ip_address("::1")
+
+print(address.version)
+```
+
+Resultado:
+
+```text
+6
+```
+
+Para IPv4:
+
+```python
+address = ipaddress.ip_address("127.0.0.1")
+
+print(address.version)
+```
+
+Resultado:
+
+```text
+4
+```
+
+Essa biblioteca é útil quando a aplicação precisa **validar, comparar ou manipular endereços e redes IP**.
+
+---
+
+## 26.15 Erros comuns com IPv6
+
+### 1. Usar `AF_INET` com endereço IPv6
+
+Exemplo incorreto:
+
+```python
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("::1", 4444))
+```
+
+O socket foi criado para IPv4, mas o endereço é IPv6.
+
+Isso pode resultar em erro de família de endereços.
+
+O correto é:
+
+```python
+server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+server.bind(("::1", 4444))
+```
+
+---
+
+### 2. Usar o formato IPv4 para IPv6
+
+IPv4:
+
+```python
+("127.0.0.1", 4444)
+```
+
+IPv6:
+
+```python
+("::1", 4444)
+```
+
+Não devemos tentar colocar:
+
+```text
+[::1]:4444
+```
+
+como string de host dentro do `bind()`.
+
+Esse formato com colchetes é comum na representação de IPv6 em URLs, mas não é o formato utilizado como host na tupla de endereço do socket.
+
+---
+
+### 3. IPv6 desabilitado ou indisponível
+
+Uma máquina pode possuir IPv6 desabilitado ou configurado de maneira diferente.
+
+Nesse caso, operações como:
+
+```python
+connect(("::1", 4444))
+```
+
+podem falhar.
+
+Um erro comum pode ser:
+
+```text
+ConnectionRefusedError
+```
+
+quando não existe nenhum serviço escutando naquela porta.
+
+Ou erros relacionados à resolução/família de endereço podem ocorrer dependendo da operação.
+
+---
+
+## 26.16 IPv6 e exposição de serviços
+
+Um erro importante em segurança é assumir:
+
+```python
+bind(("::", 4444))
+```
+
+como sendo apenas local.
+
+Não é.
+
+A ideia é semelhante a:
+
+```python
+bind(("0.0.0.0", 4444))
+```
+
+no IPv4.
+
+Quando um servidor é destinado somente para testes locais, podemos utilizar:
+
+```python
+bind(("127.0.0.1", 4444))
+```
+
+ou:
+
+```python
+bind(("::1", 4444))
+```
+
+Dependendo da aplicação, também pode ser necessário considerar que o serviço está disponível em **uma ou ambas as famílias**.
+
+Por isso, ao analisar um serviço de rede, não basta verificar apenas:
+
+```text
+IPv4
+```
+
+Também devemos verificar:
+
+```text
+IPv6
+```
+
+Por exemplo:
+
+```bash
+ss -lnt
+```
+
+pode mostrar sockets IPv4 e IPv6.
+
+---
+
+## 26.17 Modelo mental
+
+Podemos visualizar IPv4 e IPv6 assim:
+
+```text
+                    SOCKET
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+          AF_INET             AF_INET6
+             │                   │
+           IPv4                 IPv6
+             │                   │
+       127.0.0.1                ::1
+             │                   │
+             └─────────┬─────────┘
+                       │
+                     TCP
+                       │
+                    Rede
+```
+
+A família do socket determina **como o endereço de rede será representado e utilizado**.
+
+O protocolo de transporte continua separado:
+
+```text
+AF_INET  + SOCK_STREAM
+    ↓
+IPv4 + TCP
+
+AF_INET6 + SOCK_STREAM
+    ↓
+IPv6 + TCP
+
+AF_INET  + SOCK_DGRAM
+    ↓
+IPv4 + UDP
+
+AF_INET6 + SOCK_DGRAM
+    ↓
+IPv6 + UDP
+```
+
+---
+
+## 26.18 Resumo da Parte
+
+- `AF_INET` representa IPv4.
+    
+- `AF_INET6` representa IPv6.
+    
+- IPv4 possui endereços de 32 bits.
+    
+- IPv6 possui endereços de 128 bits.
+    
+- O loopback IPv4 é `127.0.0.1`.
+    
+- O loopback IPv6 é `::1`.
+    
+- `0.0.0.0` e `::` representam endereços não especificados para suas respectivas famílias.
+    
+- Um socket IPv6 pode ser criado com:
+    
+
+```python
+socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+```
+
+- Endereços IPv6 em sockets normalmente possuem a estrutura:
+    
+
+```text
+(host, port, flowinfo, scopeid)
+```
+
+- `getaddrinfo()` é uma ferramenta importante para trabalhar com IPv4 e IPv6 de maneira mais flexível.
+    
+- `IPV6_V6ONLY` controla um aspecto importante da coexistência entre IPv6 e IPv4, mas seu comportamento padrão pode variar entre sistemas.
+    
+- Endereços link-local podem exigir `scopeid`.
+    
+- `ipaddress` ajuda a validar e manipular endereços IP.
+    
+- `::` pode expor um serviço além do localhost, dependendo da configuração.
+    
+- IPv6 não altera o conceito fundamental de sockets:
+    
+
+```text
+socket → endereço → conexão/comunicação → dados → fechamento
+```
+
+---
+

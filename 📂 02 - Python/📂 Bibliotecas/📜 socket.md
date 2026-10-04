@@ -10960,3 +10960,1143 @@ close()
 
 > **`shutdown()` controla quais direções da comunicação serão encerradas, enquanto `close()` encerra o socket local e libera o recurso utilizado pela aplicação.**
 
+---
+
+# 11. O ciclo de vida de uma conexão TCP
+
+Até agora vimos como criar sockets, associá-los a endereços, colocar um servidor em escuta, aceitar conexões, conectar um cliente e trocar dados.
+
+Agora precisamos entender o que acontece **por baixo dessas chamadas**.
+
+Uma conexão TCP não simplesmente passa de:
+
+```text
+desconectado
+    ↓
+conectado
+```
+
+Ela passa por diferentes **estados internos**.
+
+Esses estados fazem parte do funcionamento do próprio protocolo TCP.
+
+---
+
+## 11.1 Por que existem estados TCP?
+
+O TCP precisa controlar várias informações durante a vida de uma conexão.
+
+Por exemplo:
+
+- se a conexão está sendo estabelecida;
+    
+- se já foi estabelecida;
+    
+- se uma das partes começou a encerrá-la;
+    
+- se ambas as partes terminaram;
+    
+- se ainda existem dados aguardando confirmação;
+    
+- se o socket está aguardando uma conexão.
+    
+
+Por isso, o TCP utiliza uma **máquina de estados**.
+
+Podemos imaginar:
+
+```text
+        conexão sendo criada
+                 │
+                 ▼
+          estabelecimento
+                 │
+                 ▼
+          ESTABLISHED
+                 │
+                 │
+          troca de dados
+                 │
+                 ▼
+          encerramento
+                 │
+                 ▼
+            CLOSED
+```
+
+Na prática existem vários estados intermediários.
+
+---
+
+## 11.2 O estado `CLOSED`
+
+`CLOSED` representa a ausência de uma conexão TCP ativa naquele endpoint.
+
+Não significa necessariamente que o objeto Python:
+
+```python
+socket
+```
+
+não exista.
+
+São conceitos diferentes.
+
+Por exemplo:
+
+```python
+client = socket.socket(...)
+```
+
+cria um objeto socket em Python.
+
+Mas isso não significa que ele já tenha uma conexão TCP estabelecida.
+
+Podemos ter:
+
+```text
+objeto socket criado
+        ↓
+nenhuma conexão TCP
+        ↓
+CLOSED
+```
+
+Portanto:
+
+> **socket Python criado ≠ conexão TCP estabelecida.**
+
+---
+
+## 11.3 O estado `LISTEN`
+
+O estado `LISTEN` está relacionado ao servidor TCP.
+
+Quando fazemos:
+
+```python
+server.bind(("127.0.0.1", 4444))
+server.listen()
+```
+
+o socket passa a atuar como um socket de escuta.
+
+Podemos visualizar:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+LISTEN
+```
+
+Nesse estado, o servidor está preparado para receber solicitações de conexão.
+
+Exemplo:
+
+```text
+SERVIDOR
+
+127.0.0.1:4444
+      │
+      ▼
+   LISTEN
+      │
+      │
+      ├── cliente 1
+      ├── cliente 2
+      └── cliente 3
+```
+
+---
+
+## 11.4 `LISTEN` não significa que existe um cliente conectado
+
+Isso é importante.
+
+Quando fazemos:
+
+```python
+server.listen()
+```
+
+o servidor está preparado para conexões.
+
+Mas ainda pode não existir nenhum cliente conectado.
+
+Podemos ter:
+
+```text
+SERVIDOR
+   │
+   ▼
+LISTEN
+   │
+   │
+   └── nenhum cliente
+```
+
+Quando um cliente tenta se conectar:
+
+```text
+CLIENTE
+   │
+   │ connect()
+   ▼
+SERVIDOR
+   │
+   ▼
+LISTEN
+```
+
+o TCP começa o processo de estabelecimento da conexão.
+
+---
+
+## 11.5 `SYN-SENT`
+
+No lado do cliente, quando fazemos:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+o TCP precisa iniciar o estabelecimento da conexão.
+
+O cliente envia um segmento TCP contendo a flag:
+
+```text
+SYN
+```
+
+O cliente pode entrar no estado:
+
+```text
+SYN-SENT
+```
+
+Podemos imaginar:
+
+```text
+CLIENTE
+   │
+   │ SYN
+   ├────────────────►
+   │
+   │
+SYN-SENT
+```
+
+O significado é aproximadamente:
+
+> "Enviei uma solicitação de sincronização e estou aguardando uma resposta."
+
+---
+
+## 11.6 `SYN-RECEIVED`
+
+O servidor recebe o `SYN`.
+
+Ele responde com:
+
+```text
+SYN + ACK
+```
+
+Nesse processo, o lado servidor pode entrar no estado:
+
+```text
+SYN-RECEIVED
+```
+
+Visualmente:
+
+```text
+CLIENTE                         SERVIDOR
+
+SYN ───────────────────────────►
+                                │
+                                ▼
+                           SYN-RECEIVED
+                                │
+SYN-ACK ◄───────────────────────┤
+```
+
+Agora o servidor está aguardando a confirmação final do cliente.
+
+---
+
+## 11.7 `ESTABLISHED`
+
+O cliente recebe o:
+
+```text
+SYN-ACK
+```
+
+e envia:
+
+```text
+ACK
+```
+
+Temos então o famoso **three-way handshake**:
+
+```text
+CLIENTE                         SERVIDOR
+
+SYN ───────────────────────────►
+
+     ◄──────────────────── SYN-ACK
+
+ACK ───────────────────────────►
+
+       CONEXÃO ESTABELECIDA
+```
+
+Depois disso:
+
+```text
+CLIENTE                         SERVIDOR
+
+ESTABLISHED ◄───────────────► ESTABLISHED
+```
+
+Agora ambos podem trocar dados.
+
+---
+
+## 11.8 O que `connect()` representa nesse processo?
+
+Quando escrevemos:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+não significa simplesmente:
+
+> "marcar o socket como conectado."
+
+O Python solicita ao sistema operacional que estabeleça uma conexão TCP.
+
+O sistema operacional participa do handshake.
+
+Simplificando:
+
+```text
+Python
+  │
+  │ connect()
+  ▼
+Sistema operacional
+  │
+  │ TCP
+  ▼
+rede
+  │
+  ▼
+servidor
+```
+
+Por isso `connect()` pode bloquear enquanto o sistema operacional tenta estabelecer a conexão.
+
+---
+
+## 11.9 `accept()` e o estabelecimento da conexão
+
+No servidor temos:
+
+```python
+client, address = server.accept()
+```
+
+É importante entender que o `accept()` não realiza sozinho todo o handshake TCP.
+
+O kernel já participa do processamento das conexões recebidas.
+
+O `accept()` permite que a aplicação obtenha uma conexão que foi estabelecida e está disponível para ser atendida.
+
+Podemos visualizar:
+
+```text
+Cliente
+   │
+   │ SYN
+   ▼
+Kernel do servidor
+   │
+   │ SYN-ACK
+   ▼
+Cliente
+   │
+   │ ACK
+   ▼
+Kernel do servidor
+   │
+   ▼
+fila de conexões
+   │
+   ▼
+accept()
+   │
+   ▼
+aplicação Python
+```
+
+Isso explica por que existe uma diferença entre:
+
+```python
+server
+```
+
+e:
+
+```python
+client
+```
+
+retornado por:
+
+```python
+client, address = server.accept()
+```
+
+---
+
+## 11.10 O socket de escuta e o socket da conexão
+
+O servidor possui:
+
+```python
+server = socket.socket(...)
+```
+
+Depois:
+
+```python
+server.bind(...)
+server.listen()
+```
+
+Esse socket representa o endpoint que está aguardando conexões.
+
+Quando:
+
+```python
+client, address = server.accept()
+```
+
+é executado, recebemos outro socket.
+
+Visualmente:
+
+```text
+                 SERVIDOR
+
+        socket de escuta
+               │
+               │ LISTEN
+               │
+               ▼
+          server.accept()
+               │
+               ├──────────────► client 1
+               │
+               ├──────────────► client 2
+               │
+               └──────────────► client 3
+```
+
+Cada conexão aceita possui seu próprio socket para comunicação.
+
+---
+
+## 11.11 Uma conexão TCP é identificada por quatro informações
+
+Uma conexão TCP pode ser identificada pelo conjunto:
+
+```text
+IP de origem
+porta de origem
+IP de destino
+porta de destino
+```
+
+Por exemplo:
+
+```text
+Cliente:
+192.168.1.10:53021
+
+Servidor:
+192.168.1.20:4444
+```
+
+Temos:
+
+```text
+192.168.1.10:53021
+        │
+        │ TCP
+        ▼
+192.168.1.20:4444
+```
+
+Podemos representar a conexão como:
+
+```text
+(src IP, src port, dst IP, dst port)
+```
+
+ou:
+
+```text
+(192.168.1.10, 53021,
+ 192.168.1.20, 4444)
+```
+
+Esse conjunto é conhecido como **four-tuple**.
+
+---
+
+## 11.12 Por que vários clientes podem usar a mesma porta do servidor?
+
+Imagine um servidor:
+
+```text
+192.168.1.20:4444
+```
+
+recebendo conexões:
+
+```text
+192.168.1.10:53021
+192.168.1.11:53022
+192.168.1.12:53023
+```
+
+Todas estão conectadas à:
+
+```text
+192.168.1.20:4444
+```
+
+Isso é possível porque as conexões possuem combinações diferentes de origem e destino.
+
+Visualmente:
+
+```text
+192.168.1.10:53021 ─────► 192.168.1.20:4444
+192.168.1.11:53022 ─────► 192.168.1.20:4444
+192.168.1.12:53023 ─────► 192.168.1.20:4444
+```
+
+O servidor consegue distinguir as conexões.
+
+---
+
+## 11.13 A porta do cliente normalmente é temporária
+
+Quando fazemos:
+
+```python
+client.connect(("192.168.1.20", 4444))
+```
+
+normalmente não especificamos:
+
+```python
+client.bind(("192.168.1.10", 53021))
+```
+
+O sistema operacional escolhe uma **porta efêmera** para o cliente.
+
+Podemos ter:
+
+```text
+Cliente
+192.168.1.10:53021
+        │
+        ▼
+Servidor
+192.168.1.20:4444
+```
+
+Na próxima conexão, o cliente pode utilizar outra porta:
+
+```text
+192.168.1.10:53022
+```
+
+Isso permite que várias conexões sejam diferenciadas.
+
+---
+
+## 11.14 `TIME_WAIT`
+
+Durante o encerramento de uma conexão TCP, podemos encontrar o estado:
+
+```text
+TIME_WAIT
+```
+
+Esse estado é importante para o funcionamento correto do TCP.
+
+Ele ajuda a evitar que segmentos antigos de uma conexão anterior sejam confundidos com segmentos pertencentes a uma nova conexão.
+
+Visualmente:
+
+```text
+conexão ativa
+     │
+     ▼
+encerramento
+     │
+     ▼
+ TIME_WAIT
+     │
+     │ aguarda período
+     ▼
+ CLOSED
+```
+
+Por isso, depois de fechar um servidor, podemos observar algo relacionado à porta por algum tempo.
+
+Por exemplo:
+
+```bash
+ss -tan
+```
+
+pode mostrar estados como:
+
+```text
+TIME-WAIT
+```
+
+---
+
+## 11.15 `TIME_WAIT` não significa que o programa ainda está executando
+
+Isso é muito importante.
+
+Imagine que executamos:
+
+```python
+server.close()
+```
+
+e depois verificamos:
+
+```bash
+ss -tan
+```
+
+Podemos encontrar:
+
+```text
+TIME-WAIT
+```
+
+Isso não significa necessariamente que:
+
+```text
+python server.py
+```
+
+continua executando.
+
+São coisas diferentes:
+
+```text
+processo Python
+      ↓
+pode ter terminado
+
+estado TCP
+      ↓
+pode permanecer temporariamente
+```
+
+---
+
+## 11.16 Por que o TCP possui estados de encerramento?
+
+Uma conexão TCP precisa ser encerrada de maneira coordenada.
+
+Diferentemente de simplesmente remover um objeto Python da memória, os dois lados da conexão precisam trocar informações para que cada endpoint saiba o que está acontecendo.
+
+Um encerramento normal pode ser simplificado como:
+
+```text
+CLIENTE                         SERVIDOR
+
+FIN ──────────────────────────►
+
+     ◄────────────────────── ACK
+
+     ◄────────────────────── FIN
+
+ACK ──────────────────────────►
+
+       conexão encerrada
+```
+
+Aqui aparece outra flag importante:
+
+```text
+FIN
+```
+
+que indica que aquele lado terminou seu envio.
+
+---
+
+## 11.17 `FIN` representa encerramento de uma direção
+
+Lembre-se de que TCP possui comunicação bidirecional.
+
+```text
+CLIENTE ───────────────► SERVIDOR
+CLIENTE ◄─────────────── SERVIDOR
+```
+
+Quando um lado envia:
+
+```text
+FIN
+```
+
+ele está indicando que terminou de enviar dados naquela direção.
+
+Isso está relacionado diretamente ao conceito de:
+
+```python
+shutdown(socket.SHUT_WR)
+```
+
+Portanto:
+
+```text
+shutdown(SHUT_WR)
+        ↓
+indica fim do envio
+        ↓
+TCP pode realizar o encerramento daquela direção
+```
+
+O `close()` também participa do encerramento do socket, mas o comportamento completo depende do estado da conexão e do sistema operacional.
+
+---
+
+## 11.18 Estados de encerramento
+
+Existem vários estados relacionados ao encerramento, entre eles:
+
+```text
+FIN-WAIT-1
+FIN-WAIT-2
+CLOSE-WAIT
+CLOSING
+LAST-ACK
+TIME-WAIT
+CLOSED
+```
+
+Não é necessário decorar todos imediatamente.
+
+O mais importante neste momento é compreender a ideia:
+
+```text
+ESTABLISHED
+      │
+      │ encerramento
+      ▼
+estados de fechamento
+      │
+      ▼
+TIME-WAIT
+      │
+      ▼
+CLOSED
+```
+
+Posteriormente, esses estados podem ser estudados individualmente quando forem necessários para análise de rede.
+
+---
+
+## 11.19 `CLOSE-WAIT`
+
+Um estado particularmente interessante é:
+
+```text
+CLOSE-WAIT
+```
+
+Ele pode aparecer quando o outro lado já encerrou sua direção de envio, mas a aplicação local ainda não fechou seu socket.
+
+Podemos imaginar:
+
+```text
+CLIENTE                         SERVIDOR
+
+FIN ──────────────────────────►
+                                │
+                                ▼
+                           CLOSE-WAIT
+```
+
+Isso pode ser importante na análise de servidores.
+
+Se um processo apresentar muitas conexões permanentemente em:
+
+```text
+CLOSE-WAIT
+```
+
+pode existir um problema na aplicação que não está encerrando corretamente os sockets.
+
+---
+
+## 11.20 Verificando estados TCP no Linux
+
+Como estamos trabalhando com Linux, podemos observar as conexões usando:
+
+```bash
+ss -tan
+```
+
+Por exemplo:
+
+```text
+State       Local Address:Port      Peer Address:Port
+LISTEN      127.0.0.1:4444         0.0.0.0:*
+ESTAB       127.0.0.1:4444         127.0.0.1:53021
+```
+
+Aqui:
+
+```text
+LISTEN
+```
+
+indica um socket aguardando conexões.
+
+Enquanto:
+
+```text
+ESTAB
+```
+
+é a abreviação normalmente exibida pelo `ss` para:
+
+```text
+ESTABLISHED
+```
+
+Podemos também utilizar:
+
+```bash
+ss -tanp
+```
+
+O `-p` pode mostrar informações sobre o processo associado, quando disponíveis.
+
+---
+
+## 11.21 Observando um servidor Python
+
+Imagine este servidor:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+print("Servidor aguardando...")
+
+client, address = server.accept()
+
+print("Cliente conectado:", address)
+
+data = client.recv(1024)
+
+print(data.decode())
+
+client.close()
+server.close()
+```
+
+Enquanto o servidor estiver parado em:
+
+```python
+server.accept()
+```
+
+podemos verificar:
+
+```bash
+ss -ltn
+```
+
+e encontrar algo semelhante a:
+
+```text
+LISTEN  0  128  127.0.0.1:4444
+```
+
+Isso mostra que a porta está em estado de escuta.
+
+---
+
+## 11.22 Depois que o cliente conecta
+
+Quando um cliente executa:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+podemos observar uma conexão estabelecida:
+
+```bash
+ss -tan
+```
+
+Podemos encontrar algo semelhante a:
+
+```text
+ESTAB  0  0  127.0.0.1:4444   127.0.0.1:53021
+ESTAB  0  0  127.0.0.1:53021  127.0.0.1:4444
+```
+
+Temos então:
+
+```text
+127.0.0.1:53021
+        │
+        │ TCP
+        ▼
+127.0.0.1:4444
+```
+
+A porta:
+
+```text
+4444
+```
+
+é a porta do servidor.
+
+A porta:
+
+```text
+53021
+```
+
+é uma porta efêmera escolhida para aquela conexão do cliente.
+
+---
+
+## 11.23 Relação entre Python e os estados TCP
+
+É importante separar três camadas:
+
+```text
+APLICAÇÃO
+    │
+    │ Python
+    ▼
+SOCKET / SISTEMA OPERACIONAL
+    │
+    │ TCP
+    ▼
+REDE
+```
+
+Quando fazemos:
+
+```python
+client.connect(...)
+```
+
+estamos utilizando uma API Python.
+
+Por baixo:
+
+```text
+Python
+  ↓
+socket API
+  ↓
+kernel
+  ↓
+TCP
+  ↓
+rede
+```
+
+Da mesma forma:
+
+```python
+client.sendall(...)
+```
+
+não envia diretamente um pacote Ethernet.
+
+A aplicação entrega dados ao sistema operacional, e o kernel/TCP cuida das etapas necessárias para transportá-los pela rede.
+
+---
+
+## 11.24 Modelo mental completo do ciclo TCP
+
+Podemos reunir tudo:
+
+```text
+                    SERVIDOR
+
+                 socket()
+                    │
+                    ▼
+                  bind()
+                    │
+                    ▼
+                 LISTEN
+                    │
+                    │
+                    │
+                    │ SYN
+                    │◄──────────────── CLIENTE
+                    │                  socket()
+                    │                  connect()
+                    │
+                SYN-RECEIVED
+                    │
+                    │ SYN-ACK
+                    ├────────────────►
+                    │
+                    │                  ACK
+                    ◄──────────────────
+                    │
+                    ▼
+               ESTABLISHED
+                    │
+                    │
+             send / recv
+                    │
+                    │
+                    ▼
+                encerramento
+                    │
+                    ▼
+              estados TCP
+                    │
+                    ▼
+                TIME-WAIT
+                    │
+                    ▼
+                 CLOSED
+```
+
+---
+
+## Resumo da Parte
+
+### Principais estados
+
+```text
+CLOSED
+   ↓
+LISTEN
+   ↓
+SYN-RECEIVED
+   ↓
+ESTABLISHED
+   ↓
+encerramento
+   ↓
+TIME-WAIT
+   ↓
+CLOSED
+```
+
+No lado cliente, durante a conexão, também podemos encontrar:
+
+```text
+SYN-SENT
+```
+
+### `LISTEN`
+
+Indica que o servidor está aguardando conexões.
+
+### `SYN-SENT`
+
+Indica que o cliente enviou um `SYN` e está aguardando resposta.
+
+### `SYN-RECEIVED`
+
+Indica que o servidor recebeu o `SYN` e respondeu com `SYN-ACK`, aguardando a confirmação final.
+
+### `ESTABLISHED`
+
+Indica que a conexão TCP foi estabelecida e os dois lados podem trocar dados.
+
+### `FIN`
+
+É utilizado no encerramento de uma direção da conexão.
+
+### `TIME-WAIT`
+
+Estado temporário utilizado durante o encerramento da conexão TCP.
+
+### `CLOSE-WAIT`
+
+Pode aparecer quando o outro lado já encerrou sua direção de envio, mas a aplicação local ainda não fechou a conexão.
+
+### Four-tuple
+
+Uma conexão TCP pode ser identificada por:
+
+```text
+IP origem
+porta origem
+IP destino
+porta destino
+```
+
+Por exemplo:
+
+```text
+192.168.1.10:53021
+        ↓
+192.168.1.20:4444
+```
+
+### Comando útil no Linux
+
+```bash
+ss -tan
+```
+
+Para observar estados TCP.
+
+E:
+
+```bash
+ss -tanp
+```
+
+para obter também informações de processos quando disponíveis.
+
+### Conceito principal
+
+> **Uma conexão TCP possui um ciclo de vida controlado por uma máquina de estados. As chamadas Python como `connect()`, `listen()`, `accept()`, `send()`, `recv()` e `close()` são a interface da aplicação com o sistema operacional, enquanto o TCP mantém os estados e controla o estabelecimento, a transferência e o encerramento da conexão.**
+

@@ -12100,3 +12100,1261 @@ para obter também informações de processos quando disponíveis.
 
 > **Uma conexão TCP possui um ciclo de vida controlado por uma máquina de estados. As chamadas Python como `connect()`, `listen()`, `accept()`, `send()`, `recv()` e `close()` são a interface da aplicação com o sistema operacional, enquanto o TCP mantém os estados e controla o estabelecimento, a transferência e o encerramento da conexão.**
 
+---
+
+# 12. Bloqueio, timeout e modos de operação
+
+Até agora, vimos que várias operações de socket podem ficar aguardando.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+pode esperar até que existam dados disponíveis.
+
+Da mesma forma:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+pode aguardar enquanto o sistema operacional tenta estabelecer a conexão.
+
+Esse comportamento é chamado de **bloqueio** (_blocking_).
+
+Entender bloqueio, timeout e modo não bloqueante é fundamental para construir servidores e clientes que não fiquem presos indefinidamente esperando uma operação.
+
+---
+
+## 12.1 O que significa uma operação bloqueante?
+
+Uma operação bloqueante é uma operação que pode fazer o programa **esperar** até que alguma condição seja satisfeita.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+Se nenhum dado estiver disponível, a execução pode ficar parada nessa linha.
+
+Podemos visualizar:
+
+```text
+Programa
+   │
+   ▼
+recv(1024)
+   │
+   ▼
+aguardando dados
+   │
+   │
+   │ dados chegam
+   ▼
+continua execução
+```
+
+Enquanto o `recv()` estiver bloqueado, as próximas instruções daquele fluxo de execução não serão executadas.
+
+---
+
+## 12.2 O comportamento padrão dos sockets
+
+Por padrão, um socket Python é criado em **modo bloqueante**.
+
+Por exemplo:
+
+```python
+import socket
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+```
+
+Depois:
+
+```python
+data = client.recv(1024)
+```
+
+Se não houver dados disponíveis, o programa poderá esperar.
+
+Isso é conveniente para programas simples.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+
+print("Mensagem recebida:", data)
+```
+
+Podemos interpretar:
+
+```text
+recv()
+  ↓
+espera
+  ↓
+dados chegam
+  ↓
+retorna
+  ↓
+print()
+```
+
+---
+
+## 12.3 Por que o bloqueio pode ser útil?
+
+O bloqueio nem sempre é um problema.
+
+Em um programa simples, podemos querer exatamente esse comportamento.
+
+Por exemplo:
+
+```python
+print("Aguardando mensagem...")
+
+data = client.recv(1024)
+
+print("Mensagem recebida!")
+```
+
+Enquanto o cliente não enviar nada:
+
+```text
+Aguardando mensagem...
+       ↓
+      recv()
+       ↓
+   aguardando...
+```
+
+Quando os dados chegam:
+
+```text
+Aguardando mensagem...
+       ↓
+      recv()
+       ↓
+dados recebidos
+       ↓
+Mensagem recebida!
+```
+
+Isso torna o código relativamente simples de entender.
+
+---
+
+## 12.4 O problema do bloqueio infinito
+
+O problema aparece quando uma operação pode ficar aguardando indefinidamente.
+
+Imagine:
+
+```python
+data = client.recv(1024)
+```
+
+e o outro lado:
+
+- não envia dados;
+    
+- perdeu a conexão;
+    
+- travou;
+    
+- está muito lento;
+    
+- está esperando outra operação.
+    
+
+Dependendo da situação, nosso programa pode ficar preso aguardando.
+
+Por exemplo:
+
+```text
+SERVIDOR
+
+recv()
+  │
+  │
+  │
+  │ nenhum dado
+  │
+  │
+  │
+  └──────────────► continua aguardando
+```
+
+Em aplicações reais, normalmente precisamos controlar esse comportamento.
+
+---
+
+## 12.5 Timeout
+
+Um **timeout** define um período máximo de espera para determinadas operações.
+
+Em Python podemos utilizar:
+
+```python
+socket.settimeout(seconds)
+```
+
+Por exemplo:
+
+```python
+client.settimeout(5)
+```
+
+Isso significa que determinadas operações bloqueantes do socket terão um limite de aproximadamente:
+
+```text
+5 segundos
+```
+
+de espera.
+
+Podemos visualizar:
+
+```text
+recv()
+  │
+  ├── dados chegam antes de 5s
+  │       ↓
+  │    retorna dados
+  │
+  └── 5s passam sem progresso
+          ↓
+      timeout
+```
+
+---
+
+## 12.6 `settimeout()`
+
+Sintaxe:
+
+```python
+socket.settimeout(value)
+```
+
+### Parâmetro
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Comportamento|
+|---|---|---|---|---|
+|`value`|`float` ou `None`|Sim|—|Tempo máximo de espera em segundos|
+
+Exemplo:
+
+```python
+client.settimeout(5)
+```
+
+Podemos utilizar valores decimais:
+
+```python
+client.settimeout(2.5)
+```
+
+Nesse caso:
+
+```text
+2.5 segundos
+```
+
+---
+
+## 12.7 Timeout não significa que o socket será fechado
+
+Esse é um ponto importante.
+
+Se fizermos:
+
+```python
+client.settimeout(5)
+```
+
+e depois:
+
+```python
+data = client.recv(1024)
+```
+
+o timeout não significa:
+
+```text
+5 segundos
+   ↓
+socket.close()
+```
+
+Significa:
+
+```text
+5 segundos sem a operação conseguir prosseguir
+   ↓
+operação gera timeout
+```
+
+O socket ainda pode existir e, dependendo da situação, podemos continuar utilizando-o.
+
+---
+
+## 12.8 Exceção de timeout
+
+Quando uma operação excede o tempo configurado, podemos tratar o erro:
+
+```python
+import socket
+
+client.settimeout(5)
+
+try:
+    data = client.recv(1024)
+except socket.timeout:
+    print("Tempo de espera excedido.")
+```
+
+O fluxo fica:
+
+```text
+recv()
+  │
+  ▼
+aguarda
+  │
+  ├── dados chegam
+  │      ↓
+  │    continua
+  │
+  └── timeout
+         ↓
+socket.timeout
+         ↓
+except
+```
+
+Isso permite que o programa tome uma decisão em vez de ficar esperando indefinidamente.
+
+---
+
+## 12.9 Timeout no `connect()`
+
+Timeout também pode ser relevante durante uma conexão.
+
+Podemos fazer:
+
+```python
+client.settimeout(5)
+
+client.connect(("192.168.1.100", 4444))
+```
+
+Se a conexão não puder ser estabelecida dentro das condições e do período configurado, a operação poderá gerar uma exceção relacionada a timeout.
+
+Podemos tratar:
+
+```python
+try:
+    client.connect(("192.168.1.100", 4444))
+except socket.timeout:
+    print("Tempo limite para conexão excedido.")
+```
+
+---
+
+## 12.10 Definindo timeout diretamente
+
+Também existe uma função para configurar o timeout padrão utilizado na criação de novos sockets:
+
+```python
+socket.setdefaulttimeout(timeout)
+```
+
+Exemplo:
+
+```python
+socket.setdefaulttimeout(5)
+```
+
+Isso é diferente de:
+
+```python
+client.settimeout(5)
+```
+
+A primeira configuração estabelece um padrão para sockets criados posteriormente.
+
+Já:
+
+```python
+client.settimeout(5)
+```
+
+configura especificamente aquele socket.
+
+Para a maioria dos programas, é mais claro configurar o socket explicitamente:
+
+```python
+client.settimeout(5)
+```
+
+---
+
+## 12.11 Removendo o timeout
+
+Podemos voltar ao comportamento bloqueante padrão utilizando:
+
+```python
+client.settimeout(None)
+```
+
+Ou seja:
+
+```python
+client.settimeout(5)
+```
+
+define timeout.
+
+Depois:
+
+```python
+client.settimeout(None)
+```
+
+remove o timeout e retorna ao modo bloqueante.
+
+Visualmente:
+
+```text
+settimeout(5)
+     ↓
+modo com timeout
+
+settimeout(None)
+     ↓
+modo bloqueante
+```
+
+---
+
+## 12.12 Modo não bloqueante
+
+Além do modo bloqueante e do modo com timeout, podemos colocar o socket em **modo não bloqueante**.
+
+Para isso:
+
+```python
+socket.setblocking(False)
+```
+
+Exemplo:
+
+```python
+client.setblocking(False)
+```
+
+Agora uma operação que normalmente bloquearia não deve ficar esperando indefinidamente.
+
+Em vez disso, se a operação não puder ser realizada imediatamente, o sistema operacional pode indicar que a operação não está disponível naquele momento.
+
+---
+
+## 12.13 `setblocking()`
+
+Sintaxe:
+
+```python
+socket.setblocking(flag)
+```
+
+### Parâmetro
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Comportamento|
+|---|---|---|---|---|
+|`flag`|`bool`|Sim|—|`True` para bloqueante, `False` para não bloqueante|
+
+Exemplo bloqueante:
+
+```python
+client.setblocking(True)
+```
+
+Exemplo não bloqueante:
+
+```python
+client.setblocking(False)
+```
+
+---
+
+## 12.14 Bloqueante vs não bloqueante
+
+### Bloqueante
+
+```python
+client.setblocking(True)
+
+data = client.recv(1024)
+```
+
+Se não houver dados:
+
+```text
+recv()
+  ↓
+aguarda
+  ↓
+aguarda
+  ↓
+aguarda
+  ↓
+dados chegam
+  ↓
+retorna
+```
+
+### Não bloqueante
+
+```python
+client.setblocking(False)
+
+data = client.recv(1024)
+```
+
+Se não houver dados imediatamente:
+
+```text
+recv()
+  ↓
+não há dados
+  ↓
+retorna erro indicando que
+a operação bloquearia
+```
+
+A aplicação então pode decidir o que fazer.
+
+---
+
+## 12.15 `BlockingIOError`
+
+Em modo não bloqueante, operações que não podem ser realizadas imediatamente podem gerar:
+
+```python
+BlockingIOError
+```
+
+Exemplo:
+
+```python
+client.setblocking(False)
+
+try:
+    data = client.recv(1024)
+except BlockingIOError:
+    print("Nenhum dado disponível agora.")
+```
+
+O importante é entender a diferença:
+
+```text
+BLOQUEANTE
+    ↓
+espera até poder executar
+
+NÃO BLOQUEANTE
+    ↓
+não espera
+    ↓
+informa que não pode executar agora
+```
+
+---
+
+## 12.16 Por que usar modo não bloqueante?
+
+O modo não bloqueante pode ser útil quando uma aplicação precisa lidar com várias operações de I/O sem ficar parada esperando uma delas.
+
+Por exemplo, imagine um servidor com:
+
+```text
+Cliente A
+Cliente B
+Cliente C
+Cliente D
+```
+
+Se o servidor executar:
+
+```python
+recv()
+```
+
+bloqueando em um cliente que não envia nada, ele pode deixar de atender os outros.
+
+Em sistemas mais sofisticados, podemos utilizar mecanismos de multiplexação de I/O.
+
+---
+
+## 12.17 O problema de simplesmente usar `setblocking(False)`
+
+Um erro comum é pensar:
+
+> "Vou colocar todos os sockets como não bloqueantes e fazer um loop."
+
+Por exemplo:
+
+```python
+while True:
+    try:
+        data = client.recv(1024)
+    except BlockingIOError:
+        pass
+```
+
+Isso pode resultar em um **busy loop**.
+
+O programa pode ficar fazendo:
+
+```text
+recv()
+recv()
+recv()
+recv()
+recv()
+recv()
+recv()
+...
+```
+
+sem esperar adequadamente.
+
+Isso pode consumir CPU desnecessariamente.
+
+---
+
+## 12.18 Busy loop
+
+Imagine:
+
+```python
+while True:
+    try:
+        data = client.recv(1024)
+    except BlockingIOError:
+        continue
+```
+
+Se não houver dados, o loop pode executar repetidamente:
+
+```text
+CPU
+ │
+ ├── recv()
+ ├── erro
+ ├── recv()
+ ├── erro
+ ├── recv()
+ ├── erro
+ ├── recv()
+ ├── erro
+ └── ...
+```
+
+Isso pode resultar em uso elevado de CPU.
+
+Por isso, aplicações que precisam trabalhar com muitos sockets normalmente utilizam mecanismos específicos de espera por eventos.
+
+---
+
+## 12.19 Multiplexação de I/O
+
+Python fornece mecanismos para trabalhar com múltiplos sockets.
+
+Um dos principais módulos é:
+
+```python
+import selectors
+```
+
+Também existem mecanismos baseados em:
+
+```python
+select
+poll
+epoll
+kqueue
+```
+
+Dependendo do sistema operacional e da abstração utilizada.
+
+A ideia geral é:
+
+```text
+vários sockets
+      │
+      ▼
+mecanismo de I/O
+      │
+      ▼
+informa quais estão prontos
+      │
+      ▼
+aplicação processa apenas os necessários
+```
+
+Em vez de ficar perguntando continuamente:
+
+```text
+"Tem dado?"
+"Tem dado?"
+"Tem dado?"
+"Tem dado?"
+```
+
+podemos esperar até que o sistema informe que alguma operação está pronta.
+
+---
+
+## 12.20 Modelo mental da multiplexação
+
+Imagine:
+
+```text
+CLIENTE A ──┐
+CLIENTE B ──┤
+CLIENTE C ──┼──► mecanismo de multiplexação
+CLIENTE D ──┤
+CLIENTE E ──┘
+                    │
+                    ▼
+             quais estão prontos?
+                    │
+             ┌──────┴──────┐
+             ▼             ▼
+          cliente B     cliente D
+             │             │
+             ▼             ▼
+           recv()        recv()
+```
+
+Isso permite que uma aplicação trabalhe com vários sockets de maneira eficiente.
+
+---
+
+## 12.21 `selectors` em Python
+
+O módulo:
+
+```python
+selectors
+```
+
+fornece uma abstração de alto nível para multiplexação de I/O.
+
+Exemplo conceitual:
+
+```python
+import selectors
+
+selector = selectors.DefaultSelector()
+```
+
+Depois podemos registrar sockets:
+
+```python
+selector.register(server, selectors.EVENT_READ)
+```
+
+A aplicação pode então esperar eventos:
+
+```python
+events = selector.select()
+```
+
+A ideia é:
+
+```text
+socket 1 ──┐
+socket 2 ──┤
+socket 3 ──┼──► selector
+socket 4 ──┤
+socket 5 ──┘
+               │
+               ▼
+        aguarda eventos
+               │
+               ▼
+       socket disponível
+```
+
+Não é necessário dominar `selectors` ainda.
+
+O importante neste momento é entender **por que ele existe**.
+
+---
+
+## 12.22 Timeout não é a mesma coisa que não bloqueante
+
+Esses conceitos são relacionados, mas não são iguais.
+
+### Bloqueante
+
+```python
+socket.setblocking(True)
+```
+
+A operação pode esperar indefinidamente.
+
+### Timeout
+
+```python
+socket.settimeout(5)
+```
+
+A operação pode esperar, mas existe um limite.
+
+### Não bloqueante
+
+```python
+socket.setblocking(False)
+```
+
+A operação não fica esperando por dados.
+
+Podemos comparar:
+
+|Modo|Pode esperar?|Limite de tempo|
+|---|---|---|
+|Bloqueante|Sim|Nenhum|
+|Timeout|Sim|Definido|
+|Não bloqueante|Não|Não espera|
+
+---
+
+## 12.23 Relação entre `setblocking()` e `settimeout()`
+
+Existe uma relação importante.
+
+Quando fazemos:
+
+```python
+client.setblocking(False)
+```
+
+estamos essencialmente colocando o socket em um modo equivalente a timeout de:
+
+```python
+0
+```
+
+Conceitualmente:
+
+```text
+timeout = None
+    ↓
+bloqueante
+
+timeout > 0
+    ↓
+timeout
+
+timeout = 0
+    ↓
+não bloqueante
+```
+
+Por isso, Python permite controlar o comportamento de bloqueio através dessas configurações.
+
+---
+
+## 12.24 Exemplo com timeout em um servidor
+
+Podemos criar um servidor que não espere indefinidamente por um cliente:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+server.settimeout(10)
+
+try:
+    client, address = server.accept()
+    print("Cliente conectado:", address)
+
+except socket.timeout:
+    print("Nenhum cliente conectou dentro do tempo.")
+
+finally:
+    server.close()
+```
+
+O fluxo é:
+
+```text
+listen()
+   ↓
+accept()
+   ↓
+aguarda até 10 segundos
+   │
+   ├── cliente conecta
+   │      ↓
+   │   continua
+   │
+   └── timeout
+          ↓
+     socket.timeout
+```
+
+---
+
+## 12.25 Timeout também pode ser utilizado no `recv()`
+
+Exemplo:
+
+```python
+import socket
+
+client.settimeout(5)
+
+try:
+    data = client.recv(1024)
+
+except socket.timeout:
+    print("O cliente demorou demais para enviar.")
+```
+
+Isso é útil em situações nas quais não queremos permitir que uma conexão fique esperando indefinidamente.
+
+---
+
+## 12.26 Timeout não substitui tratamento de erros
+
+Mesmo utilizando:
+
+```python
+client.settimeout(5)
+```
+
+a comunicação ainda pode apresentar outros problemas.
+
+Por exemplo:
+
+```text
+timeout
+connection reset
+broken pipe
+connection refused
+network unreachable
+```
+
+Por isso, aplicações reais normalmente tratam diferentes exceções.
+
+Exemplo conceitual:
+
+```python
+try:
+    data = client.recv(1024)
+
+except socket.timeout:
+    print("Tempo excedido.")
+
+except ConnectionResetError:
+    print("Conexão foi resetada.")
+
+except OSError as error:
+    print("Erro de socket:", error)
+```
+
+Não devemos assumir que todo problema de rede será um timeout.
+
+---
+
+## 12.27 Timeout é especialmente importante em aplicações reais
+
+Imagine um servidor que mantém conexões de vários clientes.
+
+Se cada cliente puder ficar indefinidamente em uma operação bloqueante:
+
+```text
+Cliente 1 → aguardando
+Cliente 2 → aguardando
+Cliente 3 → aguardando
+Cliente 4 → aguardando
+...
+```
+
+a aplicação pode acabar mantendo muitos recursos ocupados.
+
+Timeouts, multiplexação e arquiteturas assíncronas são algumas das técnicas utilizadas para controlar esse tipo de situação.
+
+---
+
+## 12.28 O conceito de I/O
+
+Socket é uma forma de **I/O**, ou _Input/Output_.
+
+Nesse contexto:
+
+```text
+Input
+  ↓
+dados entrando na aplicação
+
+Output
+  ↓
+dados saindo da aplicação
+```
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+é uma operação de entrada.
+
+Enquanto:
+
+```python
+client.sendall(data)
+```
+
+é uma operação de saída.
+
+Podemos visualizar:
+
+```text
+REDE
+  │
+  │ dados
+  ▼
+recv()
+  │
+  ▼
+APLICAÇÃO
+  │
+  │ dados
+  ▼
+sendall()
+  │
+  ▼
+REDE
+```
+
+É por isso que sockets aparecem frequentemente em assuntos como:
+
+- I/O bloqueante;
+    
+- I/O não bloqueante;
+    
+- multiplexação;
+    
+- programação assíncrona.
+    
+
+---
+
+## 12.29 Relação com `asyncio`
+
+Python também possui o módulo:
+
+```python
+asyncio
+```
+
+que permite construir aplicações assíncronas.
+
+A ideia geral é diferente do modelo tradicional:
+
+```python
+data = client.recv(1024)
+```
+
+que pode bloquear o fluxo atual.
+
+Com programação assíncrona, podemos trabalhar com operações de I/O que permitem que outras tarefas sejam executadas enquanto aguardamos.
+
+Conceitualmente:
+
+```text
+Tarefa A
+   │
+   ├── aguardando rede
+   │
+   ▼
+Tarefa B executa
+   │
+   ▼
+Tarefa C executa
+   │
+   ▼
+dados da tarefa A chegam
+   │
+   ▼
+Tarefa A continua
+```
+
+Isso será estudado separadamente.
+
+Neste momento, o mais importante é entender que:
+
+> **bloqueio é uma propriedade do modo como a aplicação espera pelas operações de I/O.**
+
+---
+
+## 12.30 Modelo mental final desta parte
+
+Podemos reunir os três comportamentos:
+
+```text
+                 SOCKET
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+        ▼           ▼           ▼
+   BLOQUEANTE    TIMEOUT    NÃO BLOQUEANTE
+        │           │           │
+        │           │           │
+        ▼           ▼           ▼
+   espera até    espera até    não espera
+   operação      determinado   pela operação
+   prosseguir    limite
+```
+
+### Bloqueante
+
+```python
+client.setblocking(True)
+```
+
+```text
+recv()
+ ↓
+espera
+```
+
+### Timeout
+
+```python
+client.settimeout(5)
+```
+
+```text
+recv()
+ ↓
+espera
+ ↓
+máximo configurado
+ ↓
+socket.timeout
+```
+
+### Não bloqueante
+
+```python
+client.setblocking(False)
+```
+
+```text
+recv()
+ ↓
+dados disponíveis?
+ ├── sim → recebe
+ └── não → operação não pode prosseguir agora
+```
+
+---
+
+## Resumo da Parte
+
+### Bloqueante
+
+É o comportamento padrão.
+
+```python
+socket.setblocking(True)
+```
+
+A operação pode esperar indefinidamente.
+
+### Timeout
+
+Define um limite para a espera:
+
+```python
+socket.settimeout(5)
+```
+
+Pode gerar:
+
+```python
+socket.timeout
+```
+
+### Não bloqueante
+
+Configurado com:
+
+```python
+socket.setblocking(False)
+```
+
+A operação não fica esperando.
+
+Pode ocorrer:
+
+```python
+BlockingIOError
+```
+
+quando a operação não puder ser realizada naquele momento.
+
+### `setblocking()`
+
+Controla o modo de bloqueio:
+
+```python
+socket.setblocking(True)
+socket.setblocking(False)
+```
+
+### `settimeout()`
+
+Controla o tempo máximo de espera:
+
+```python
+socket.settimeout(5)
+socket.settimeout(None)
+```
+
+### Multiplexação
+
+Permite trabalhar com vários sockets sem bloquear individualmente em cada um:
+
+```text
+vários sockets
+      ↓
+select / poll / epoll / selectors
+      ↓
+eventos disponíveis
+      ↓
+processar sockets prontos
+```
+
+### Conceito principal
+
+> **Um socket bloqueante pode esperar indefinidamente, um socket com timeout pode esperar por um período limitado e um socket não bloqueante não espera pela operação. Essa diferença é fundamental para entender servidores que trabalham com múltiplas conexões e operações de I/O.**
+
+---

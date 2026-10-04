@@ -6414,3 +6414,1101 @@ server.accept()
     
 
 ---
+
+# 7. Aceitando conexões com `accept()`
+
+Depois de criar o socket, associá-lo a um endereço com `bind()` e colocá-lo em modo de escuta com `listen()`, o servidor está preparado para receber solicitações de conexão.
+
+A próxima operação é:
+
+```python
+server.accept()
+```
+
+O método `accept()` é responsável por **aceitar uma conexão que está aguardando no socket de escuta**.
+
+O fluxo do servidor TCP passa a ser:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+Podemos pensar nas responsabilidades dessa sequência:
+
+```text
+socket()
+   ↓
+criar o socket
+
+bind()
+   ↓
+definir endereço local
+
+listen()
+   ↓
+preparar para receber conexões
+
+accept()
+   ↓
+aceitar uma conexão
+```
+
+---
+
+## 7.1 Sintaxe de `accept()`
+
+A utilização básica é:
+
+```python
+client, address = server.accept()
+```
+
+O método retorna **dois valores**:
+
+```text
+socket da conexão
+        +
+endereço do cliente
+```
+
+Por exemplo:
+
+```python
+client, address = server.accept()
+```
+
+Podemos visualizar:
+
+```text
+server.accept()
+      ↓
+┌──────────────────────┐
+│ socket da conexão    │
+│ endereço do cliente  │
+└──────────────────────┘
+      ↓
+client, address
+```
+
+Isso é extremamente importante porque `accept()` não simplesmente retorna `True` ou `False`.
+
+Ele fornece um **novo objeto socket** que será utilizado para conversar com aquele cliente.
+
+---
+
+## 7.2 O retorno de `accept()`
+
+Considere:
+
+```python
+client, address = server.accept()
+```
+
+A variável:
+
+```python
+client
+```
+
+recebe um novo objeto socket.
+
+Enquanto:
+
+```python
+address
+```
+
+recebe o endereço do cliente.
+
+Em IPv4, normalmente teremos:
+
+```python
+("IP", porta)
+```
+
+Por exemplo:
+
+```python
+("127.0.0.1", 53142)
+```
+
+Então:
+
+```text
+client
+   ↓
+socket conectado ao cliente
+
+address
+   ↓
+("127.0.0.1", 53142)
+```
+
+---
+
+## 7.3 O socket de escuta não é o socket da comunicação
+
+Esse é um dos conceitos mais importantes de servidores TCP.
+
+Imagine:
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+client, address = server.accept()
+```
+
+Depois de `accept()`, temos dois sockets diferentes:
+
+```text
+server
+   ↓
+socket de escuta
+
+client
+   ↓
+socket da conexão com um cliente específico
+```
+
+Podemos representar:
+
+```text
+                 SERVIDOR
+
+          ┌─────────────────┐
+          │      server     │
+          │ listening socket│
+          └────────┬────────┘
+                   │
+                   │ accept()
+                   ▼
+          ┌─────────────────┐
+          │      client     │
+          │ connection sock │
+          └─────────────────┘
+                   │
+                   │ TCP
+                   ▼
+                Cliente
+```
+
+O socket `server` continua existindo para receber outras conexões.
+
+O socket `client` representa uma conexão específica.
+
+---
+
+## 7.4 Por que criar outro socket?
+
+Essa arquitetura permite que um único servidor tenha várias conexões.
+
+Imagine três clientes:
+
+```text
+Cliente A
+    │
+    ▼
+┌──────────────┐
+│              │
+│   SERVER     │
+│              │
+└──────────────┘
+    ▲
+    │
+Cliente B
+
+    ▲
+    │
+Cliente C
+```
+
+O socket de escuta:
+
+```text
+server
+```
+
+fica responsável por aceitar conexões.
+
+Para cada conexão aceita, o sistema fornece um socket diferente:
+
+```text
+server
+   │
+   ├── accept() → client_A
+   │
+   ├── accept() → client_B
+   │
+   └── accept() → client_C
+```
+
+Podemos visualizar:
+
+```text
+              SOCKET DE ESCUTA
+                     │
+          ┌──────────┼──────────┐
+          │          │          │
+          ▼          ▼          ▼
+       socket_A   socket_B   socket_C
+          │          │          │
+          ▼          ▼          ▼
+       Cliente A  Cliente B  Cliente C
+```
+
+Esse modelo é fundamental para servidores TCP.
+
+---
+
+## 7.5 `accept()` é bloqueante por padrão
+
+Por padrão, quando executamos:
+
+```python
+client, address = server.accept()
+```
+
+o programa pode ficar **bloqueado esperando uma conexão**.
+
+Por exemplo:
+
+```python
+print("Aguardando conexão...")
+
+client, address = server.accept()
+
+print("Cliente conectado!")
+```
+
+Se nenhum cliente se conectar, o programa normalmente permanecerá parado nesta linha:
+
+```python
+server.accept()
+```
+
+Podemos visualizar:
+
+```text
+Servidor
+   │
+   ▼
+accept()
+   │
+   │
+   │ nenhuma conexão
+   │
+   │
+   └──────→ esperando...
+```
+
+Quando um cliente chega:
+
+```text
+Servidor
+   │
+   ▼
+accept()
+   │
+   │ conexão disponível
+   ▼
+retorna socket + endereço
+```
+
+---
+
+## 7.6 O que significa "bloqueante"?
+
+Uma operação bloqueante é uma operação que pode fazer o fluxo atual do programa **esperar até que alguma condição necessária aconteça**.
+
+No caso de:
+
+```python
+server.accept()
+```
+
+a condição é:
+
+```text
+uma conexão disponível para ser aceita
+```
+
+Então:
+
+```text
+accept()
+   ↓
+há conexão?
+   │
+   ├── não → espera
+   │
+   └── sim → retorna
+```
+
+Isso será importante futuramente quando estudarmos:
+
+- `setblocking()`;
+    
+- timeouts;
+    
+- sockets não bloqueantes;
+    
+- `select`;
+    
+- `selectors`;
+    
+- programação concorrente;
+    
+- threads;
+    
+- `asyncio`.
+    
+
+Neste momento, basta entender que o comportamento padrão é bloqueante.
+
+---
+
+## 7.7 Exemplo mínimo usando `accept()`
+
+Podemos montar nosso primeiro servidor TCP completo até o ponto de aceitar uma conexão:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Aguardando conexão...")
+
+client, address = server.accept()
+
+print("Cliente conectado!")
+print("Endereço:", address)
+
+client.close()
+server.close()
+```
+
+O fluxo é:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+client
+   ↓
+close()
+```
+
+---
+
+## 7.8 O que acontece quando o cliente conecta?
+
+Suponha que o servidor esteja executando:
+
+```python
+server.accept()
+```
+
+Agora um cliente executa:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+O processo pode ser representado assim:
+
+```text
+CLIENTE                         SERVIDOR
+
+socket()                        socket()
+   │                               │
+   │                               │
+connect() ──────────────────────► │
+                                   │
+                                   │ accept()
+                                   ▼
+                              conexão aceita
+```
+
+Depois que a conexão é aceita:
+
+```text
+client
+   ↓
+socket da conexão
+```
+
+e:
+
+```text
+address
+   ↓
+endereço do cliente
+```
+
+são retornados pelo servidor.
+
+---
+
+## 7.9 O endereço retornado por `accept()`
+
+Em IPv4:
+
+```python
+client, address = server.accept()
+```
+
+pode produzir:
+
+```python
+address = ("127.0.0.1", 53142)
+```
+
+Isso significa:
+
+```text
+IP do cliente:
+127.0.0.1
+
+Porta do cliente:
+53142
+```
+
+A porta pode ser diferente da porta do servidor.
+
+Por exemplo:
+
+```text
+Servidor:
+127.0.0.1:4444
+
+Cliente:
+127.0.0.1:53142
+```
+
+A conexão pode ser representada como:
+
+```text
+127.0.0.1:53142
+       │
+       │ TCP
+       ▼
+127.0.0.1:4444
+```
+
+Portanto, não devemos confundir:
+
+```text
+4444
+```
+
+com a porta do cliente.
+
+---
+
+## 7.10 O servidor normalmente possui uma porta conhecida
+
+Em nosso exemplo:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+a porta:
+
+```text
+4444
+```
+
+é conhecida pelo cliente.
+
+Por isso o cliente pode fazer:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+O cliente sabe:
+
+```text
+IP do servidor
++
+porta do servidor
+```
+
+O sistema operacional pode escolher automaticamente uma porta local para o cliente.
+
+Assim:
+
+```text
+CLIENTE
+127.0.0.1:53142
+       │
+       │
+       ▼
+SERVIDOR
+127.0.0.1:4444
+```
+
+---
+
+## 7.11 `accept()` e o TCP
+
+É importante entender que `accept()` trabalha com o modelo de conexão do TCP.
+
+O fluxo simplificado é:
+
+```text
+Cliente
+   │
+   │ solicitação de conexão
+   ▼
+Servidor
+   │
+   │ conexão processada
+   ▼
+listen/filas
+   │
+   │ accept()
+   ▼
+socket conectado
+```
+
+A comunicação de dados ocorrerá depois através do socket retornado:
+
+```python
+client
+```
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+ou:
+
+```python
+client.sendall(b"Hello")
+```
+
+Portanto:
+
+```text
+server
+   ↓
+aceita conexões
+
+client
+   ↓
+troca dados com aquele cliente
+```
+
+---
+
+## 7.12 `accept()` não recebe os dados da aplicação
+
+Outro ponto importante:
+
+```python
+client, address = server.accept()
+```
+
+não significa:
+
+```text
+"receba os dados enviados pelo cliente"
+```
+
+`accept()` aceita a **conexão**.
+
+Para receber os dados da aplicação, utilizamos métodos como:
+
+```python
+client.recv(...)
+```
+
+Portanto:
+
+```text
+accept()
+   ↓
+aceita conexão
+
+recv()
+   ↓
+recebe dados
+```
+
+Da mesma forma:
+
+```text
+send()
+sendall()
+   ↓
+envia dados
+```
+
+Essa separação é essencial.
+
+---
+
+## 7.13 Um servidor TCP básico completo
+
+Podemos agora montar um servidor que aceita uma conexão:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+print(f"Cliente conectado: {address}")
+
+client.close()
+server.close()
+```
+
+A sequência é:
+
+```text
+1. socket()
+      ↓
+2. bind()
+      ↓
+3. listen()
+      ↓
+4. accept()
+      ↓
+5. client
+      ↓
+6. close()
+```
+
+Esse servidor aceita uma conexão e depois fecha os sockets.
+
+Ele ainda não possui um loop para aceitar vários clientes.
+
+---
+
+## 7.14 Aceitando vários clientes
+
+Para aceitar várias conexões, podemos colocar `accept()` dentro de um loop:
+
+```python
+while True:
+    client, address = server.accept()
+
+    print(f"Cliente conectado: {address}")
+
+    client.close()
+```
+
+O fluxo passa a ser:
+
+```text
+server
+   │
+   ▼
+accept()
+   │
+   ▼
+cliente 1
+   │
+   ▼
+close()
+   │
+   ▼
+accept()
+   │
+   ▼
+cliente 2
+   │
+   ▼
+close()
+   │
+   ▼
+accept()
+   │
+   ▼
+...
+```
+
+Esse modelo permite que o servidor aceite conexões repetidamente.
+
+Porém, existe uma limitação importante.
+
+Se fizermos:
+
+```python
+client, address = server.accept()
+
+client.recv(...)
+```
+
+e ficarmos ocupados tratando aquele cliente, o programa poderá deixar de aceitar outros clientes enquanto estiver bloqueado naquela comunicação.
+
+Isso será importante quando estudarmos concorrência.
+
+---
+
+## 7.15 Socket de escuta e sockets de clientes
+
+Podemos montar uma visão mais completa:
+
+```text
+                         SERVIDOR
+
+                    ┌───────────────┐
+                    │     server    │
+                    │ listening sock│
+                    └───────┬───────┘
+                            │
+                         accept()
+                            │
+             ┌──────────────┼──────────────┐
+             │              │              │
+             ▼              ▼              ▼
+         client_A       client_B       client_C
+             │              │              │
+             ▼              ▼              ▼
+         Cliente A      Cliente B      Cliente C
+```
+
+O socket:
+
+```text
+server
+```
+
+não deve ser utilizado para trocar os dados da aplicação com cada cliente.
+
+Os sockets:
+
+```text
+client_A
+client_B
+client_C
+```
+
+representam as conexões individuais.
+
+---
+
+## 7.16 Por que isso é importante para servidores reais?
+
+Imagine um servidor web.
+
+Milhares de clientes podem solicitar conexões.
+
+O servidor não cria um único socket para representar todas as conversas.
+
+Existe um socket responsável por escutar:
+
+```text
+listening socket
+```
+
+E cada conexão aceita possui seu próprio contexto de comunicação.
+
+Simplificando:
+
+```text
+                SERVIDOR
+
+              listening
+                 socket
+                   │
+       ┌───────────┼───────────┐
+       │           │           │
+       ▼           ▼           ▼
+    conexão 1   conexão 2   conexão 3
+       │           │           │
+       ▼           ▼           ▼
+    cliente A   cliente B   cliente C
+```
+
+É essa arquitetura que permite que um servidor trabalhe com múltiplas conexões.
+
+A forma como essas conexões são processadas — sequencialmente, com threads, processos, `select`, `selectors` ou `asyncio` — é outro assunto.
+
+---
+
+## 7.17 `accept()` retorna uma tupla de dois elementos
+
+Podemos verificar diretamente:
+
+```python
+result = server.accept()
+
+print(type(result))
+```
+
+O resultado é uma tupla contendo:
+
+```text
+(socket, endereço)
+```
+
+Por isso podemos fazer:
+
+```python
+client, address = server.accept()
+```
+
+Isso é chamado de **desempacotamento de tupla** em Python.
+
+É equivalente conceitualmente a:
+
+```python
+result = server.accept()
+
+client = result[0]
+address = result[1]
+```
+
+Mas a forma mais comum e legível é:
+
+```python
+client, address = server.accept()
+```
+
+---
+
+## 7.18 Verificando o socket retornado
+
+Podemos verificar o tipo:
+
+```python
+print(type(client))
+```
+
+O resultado será semelhante a:
+
+```text
+<class 'socket.socket'>
+```
+
+Isso confirma que `accept()` retorna outro objeto socket.
+
+Portanto:
+
+```text
+server
+   ↓
+socket de escuta
+
+client
+   ↓
+socket conectado
+```
+
+Os dois são objetos da mesma classe:
+
+```python
+socket.socket
+```
+
+mas possuem **papéis diferentes** no servidor.
+
+---
+
+## 7.19 Uma analogia útil
+
+Podemos imaginar um servidor como uma recepção.
+
+```text
+Recepção
+   ↓
+socket de escuta
+```
+
+A recepção não conversa detalhadamente com todos os visitantes ao mesmo tempo.
+
+Ela recebe uma pessoa:
+
+```text
+accept()
+   ↓
+"Próximo."
+```
+
+E cria o contexto necessário para atender aquela pessoa:
+
+```text
+client socket
+   ↓
+conversa com aquele cliente
+```
+
+Enquanto a recepção continua existindo para receber outras pessoas.
+
+A analogia não representa todos os detalhes internos do TCP, mas ajuda a entender a separação entre:
+
+```text
+escutar conexões
+```
+
+e:
+
+```text
+comunicar-se com uma conexão aceita
+```
+
+---
+
+## 7.20 Modelo mental definitivo de `accept()`
+
+Podemos resumir:
+
+```text
+socket()
+   ↓
+cria socket
+
+bind()
+   ↓
+define endereço local
+
+listen()
+   ↓
+prepara socket para conexões
+
+accept()
+   ↓
+aceita uma conexão
+
+       ↓
+
+(socket, endereço)
+       ↓
+socket específico para comunicação
+```
+
+Ou visualmente:
+
+```text
+              SERVIDOR
+
+       ┌──────────────────┐
+       │ listening socket │
+       └────────┬─────────┘
+                │
+                │ accept()
+                ▼
+       ┌──────────────────┐
+       │ connected socket │
+       └────────┬─────────┘
+                │
+                │ recv()/send()
+                ▼
+             CLIENTE
+```
+
+Essa separação entre **socket de escuta** e **socket de conexão** é um dos fundamentos mais importantes de servidores TCP.
+
+---
+
+## Resumo
+
+- `accept()` aceita uma conexão recebida por um socket TCP em modo de escuta.
+    
+- A utilização comum é:
+    
+    ```python
+    client, address = server.accept()
+    ```
+    
+- `accept()` retorna:
+    
+    ```text
+    socket da conexão
+    +
+    endereço do cliente
+    ```
+    
+- O socket retornado por `accept()` é diferente do socket de escuta.
+    
+- O socket de escuta continua disponível para aceitar outras conexões.
+    
+- `accept()` é bloqueante por padrão.
+    
+- `accept()` aceita a conexão, mas não recebe os dados da aplicação.
+    
+- Para receber dados utilizamos métodos como:
+    
+    ```python
+    recv()
+    ```
+    
+- Para enviar dados utilizamos métodos como:
+    
+    ```python
+    send()
+    sendall()
+    ```
+    
+- Um servidor pode chamar `accept()` repetidamente para aceitar vários clientes.
+    
+- O endereço retornado normalmente contém:
+    
+    ```python
+    (IP, porta)
+    ```
+    
+- A porta do cliente normalmente é diferente da porta conhecida do servidor.
+    
+- O fluxo básico de um servidor TCP agora é:
+    
+    ```text
+    socket()
+        ↓
+    bind()
+        ↓
+    listen()
+        ↓
+    accept()
+        ↓
+    recv()/send()
+    ```
+    
+- O socket de escuta é responsável por aceitar conexões.
+    
+- O socket retornado por `accept()` é utilizado para a comunicação com um cliente específico.
+    
+
+---

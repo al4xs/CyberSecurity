@@ -35339,3 +35339,1172 @@ encerramento
 ```
 
 ---
+
+# 32. Segurança em aplicações de rede
+
+Até aqui aprendemos a construir e estruturar servidores TCP. Agora precisamos tratar de uma questão fundamental:
+
+> **Um servidor de rede recebe dados de máquinas que não controlamos.**
+
+Isso muda completamente a forma como devemos pensar sobre segurança.
+
+Quando uma aplicação aceita uma conexão:
+
+```text
+Internet / Rede
+      │
+      ▼
+┌─────────────┐
+│   Cliente   │
+└──────┬──────┘
+       │
+       │ dados não confiáveis
+       ▼
+┌─────────────┐
+│   Servidor  │
+└─────────────┘
+```
+
+Tudo que chega pelo socket deve ser considerado **entrada não confiável**.
+
+---
+
+## 32.1 O socket não valida os dados da aplicação
+
+Imagine que o servidor espera:
+
+```text
+LOGIN usuario senha
+```
+
+O TCP garante algumas propriedades de transporte, mas não verifica se a mensagem é válida.
+
+O cliente poderia enviar:
+
+```text
+LOGIN
+```
+
+ou:
+
+```text
+LOGIN usuario
+```
+
+ou:
+
+```text
+LOGIN usuario senha extra
+```
+
+ou até milhares de bytes inesperados.
+
+Para o TCP, tudo isso continua sendo apenas:
+
+```text
+bytes
+```
+
+Portanto:
+
+```text
+TCP
+↓
+entrega bytes
+
+Aplicação
+↓
+precisa validar esses bytes
+```
+
+---
+
+# 32.2 Nunca confie no cliente
+
+Uma das regras mais importantes de segurança de aplicações de rede é:
+
+> **Nunca presuma que o cliente é confiável.**
+
+Mesmo que você tenha criado o cliente oficial da aplicação, alguém pode criar outro programa:
+
+```python
+import socket
+
+client = socket.socket()
+
+client.connect(("servidor", 4444))
+
+client.sendall(b"qualquer coisa\n")
+```
+
+O servidor não deve pensar:
+
+```text
+"Meu cliente oficial nunca enviaria isso."
+```
+
+Porque qualquer pessoa pode implementar seu próprio cliente.
+
+---
+
+## 32.3 Validação de entrada
+
+Suponha que o protocolo aceite:
+
+```text
+ADD 10 20
+```
+
+O servidor precisa verificar:
+
+```text
+A mensagem possui o formato correto?
+Os valores são realmente números?
+Os números estão dentro dos limites?
+O usuário possui permissão?
+A operação é permitida nesse estado?
+```
+
+Podemos imaginar:
+
+```python
+parts = message.split()
+
+if len(parts) != 3:
+    return b"INVALID\n"
+
+command, a, b = parts
+
+if command != "ADD":
+    return b"UNKNOWN_COMMAND\n"
+
+if not a.isdigit() or not b.isdigit():
+    return b"INVALID_ARGUMENT\n"
+```
+
+A validação precisa acontecer **antes** da operação.
+
+---
+
+# 32.4 Nunca use entrada do cliente diretamente
+
+Imagine que o cliente envie um nome de arquivo:
+
+```text
+GET arquivo.txt
+```
+
+Uma implementação ingênua poderia fazer:
+
+```python
+open(filename, "rb")
+```
+
+O problema é que o cliente pode tentar enviar:
+
+```text
+../../../../etc/passwd
+```
+
+ou:
+
+```text
+../../../segredo.txt
+```
+
+Isso é um exemplo de **path traversal**.
+
+O servidor precisa controlar quais caminhos podem ser acessados.
+
+Uma proteção básica:
+
+```python
+from pathlib import Path
+
+filename = Path(received_name).name
+```
+
+Isso remove componentes de caminho.
+
+Mas, dependendo da aplicação, a solução correta pode exigir uma validação ainda mais rigorosa.
+
+---
+
+# 32.5 O servidor deve controlar o diretório permitido
+
+Uma abordagem melhor é definir uma área específica:
+
+```text
+servidor/
+└── files/
+    ├── documento.txt
+    ├── imagem.png
+    └── arquivo.pdf
+```
+
+O cliente solicita:
+
+```text
+GET documento.txt
+```
+
+O servidor deve garantir que o arquivo esteja dentro da área permitida.
+
+Um conceito importante é:
+
+```text
+entrada do cliente
+       ↓
+normalização
+       ↓
+validação
+       ↓
+verificação de permissão
+       ↓
+acesso ao recurso
+```
+
+Nunca:
+
+```text
+entrada do cliente
+       ↓
+acesso direto ao recurso
+```
+
+---
+
+# 32.6 Limite de tamanho das mensagens
+
+Um atacante pode tentar enviar:
+
+```text
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...
+```
+
+continuamente.
+
+Se o servidor simplesmente fizer:
+
+```python
+buffer += data
+```
+
+sem limite:
+
+```text
+cliente malicioso
+       ↓
+dados
+       ↓
+buffer cresce
+       ↓
+memória cresce
+       ↓
+servidor pode ficar sem memória
+```
+
+Por isso precisamos estabelecer limites.
+
+Por exemplo:
+
+```python
+MAX_MESSAGE_SIZE = 1024 * 1024
+```
+
+Depois:
+
+```python
+if len(buffer) > MAX_MESSAGE_SIZE:
+    raise ValueError("Mensagem muito grande")
+```
+
+O tamanho adequado depende do protocolo.
+
+---
+
+# 32.7 Limites precisam existir em várias camadas
+
+Não basta limitar somente mensagens.
+
+Uma aplicação pode precisar limitar:
+
+```text
+tamanho da mensagem
+tamanho do arquivo
+quantidade de arquivos
+quantidade de requisições
+quantidade de conexões
+tempo de conexão
+tempo sem atividade
+número de tentativas de autenticação
+```
+
+Por exemplo:
+
+```text
+MAX_MESSAGE_SIZE = 1 MB
+MAX_FILE_SIZE = 100 MB
+IDLE_TIMEOUT = 60 segundos
+MAX_LOGIN_ATTEMPTS = 5
+```
+
+Esses limites reduzem a superfície para ataques de negação de serviço.
+
+---
+
+# 32.8 Timeout é também uma medida de segurança
+
+Imagine:
+
+```text
+cliente
+   │
+   │ conecta
+   ▼
+servidor
+   │
+   │ esperando recv()
+   ▼
+cliente não envia nada
+```
+
+Se não houver timeout, a conexão pode permanecer aberta indefinidamente.
+
+Com milhares de conexões:
+
+```text
+cliente 1 → esperando
+cliente 2 → esperando
+cliente 3 → esperando
+...
+cliente 5000 → esperando
+```
+
+Isso pode consumir recursos.
+
+Por isso podemos utilizar:
+
+```python
+client.settimeout(30)
+```
+
+Agora uma conexão que ficar inativa por tempo excessivo pode ser encerrada.
+
+---
+
+# 32.9 TLS protege a comunicação
+
+TCP sozinho não oferece criptografia.
+
+Sem TLS:
+
+```text
+Cliente
+   │
+   │ dados
+   ▼
+  TCP
+   │
+   ▼
+ Rede
+```
+
+Dependendo do ambiente, alguém com capacidade de observar o tráfego pode conseguir visualizar os dados.
+
+Com TLS:
+
+```text
+Cliente
+   │
+   ▼
+ TLS
+   │
+   ▼
+ TCP
+   │
+   ▼
+ Rede
+```
+
+TLS fornece, entre outras propriedades:
+
+- confidencialidade;
+    
+- integridade;
+    
+- autenticação do servidor através de certificados.
+    
+
+---
+
+# 32.10 TLS não substitui autenticação da aplicação
+
+É importante não confundir:
+
+```text
+TLS
+```
+
+com:
+
+```text
+LOGIN
+```
+
+TLS pode provar ao cliente que ele está falando com determinado servidor.
+
+Mas isso não significa que o servidor saiba quem é o usuário.
+
+Podemos ter:
+
+```text
+TLS
+ ↓
+conexão segura
+
+Autenticação
+ ↓
+quem é o usuário?
+
+Autorização
+ ↓
+o usuário pode fazer isso?
+```
+
+São responsabilidades diferentes.
+
+---
+
+# 32.11 Autenticação
+
+Uma aplicação pode ter:
+
+```text
+LOGIN usuario senha
+```
+
+O servidor recebe:
+
+```text
+LOGIN allan senha123
+```
+
+Mas nunca devemos tratar autenticação como simplesmente:
+
+```python
+if username == "allan" and password == "senha123":
+    ...
+```
+
+Em aplicações reais, senhas precisam ser armazenadas usando mecanismos apropriados de **hash de senha**, com salt e funções projetadas para esse propósito.
+
+Exemplos comuns incluem:
+
+- Argon2;
+    
+- bcrypt;
+    
+- scrypt;
+    
+- PBKDF2.
+    
+
+O objetivo é evitar armazenar a senha original.
+
+---
+
+# 32.12 Hash não é criptografia
+
+Essa distinção é extremamente importante.
+
+### Criptografia
+
+```text
+texto
+   ↓
+criptografia
+   ↓
+dados cifrados
+   ↓
+descriptografia
+   ↓
+texto
+```
+
+Existe uma operação inversa.
+
+---
+
+### Hash
+
+```text
+senha
+   ↓
+hash
+   ↓
+resultado
+```
+
+O objetivo não é simplesmente permitir recuperar a senha original.
+
+Para autenticar:
+
+```text
+senha fornecida
+      ↓
+mesmo algoritmo
+      ↓
+hash
+      ↓
+comparação
+```
+
+Além disso, sistemas de senha devem usar algoritmos apropriados para esse propósito, não simplesmente `sha256(senha)`.
+
+---
+
+# 32.13 Autorização
+
+Autenticação responde:
+
+> Quem é você?
+
+Autorização responde:
+
+> O que você pode fazer?
+
+Por exemplo:
+
+```text
+Usuário:
+    pode GET
+
+Administrador:
+    pode GET
+    pode DELETE
+    pode CREATE
+```
+
+O servidor precisa verificar isso antes da operação.
+
+```text
+Cliente
+   │
+   ▼
+Autenticação
+   │
+   ▼
+Identidade
+   │
+   ▼
+Autorização
+   │
+   ▼
+Operação permitida?
+```
+
+Não basta o cliente dizer:
+
+```text
+USER admin
+```
+
+O servidor precisa determinar a identidade de forma confiável.
+
+---
+
+# 32.14 Nunca confie em permissões enviadas pelo cliente
+
+Um protocolo inseguro poderia permitir:
+
+```text
+SET_ROLE ADMIN
+```
+
+Se o servidor aceitar isso diretamente:
+
+```text
+cliente
+   │
+   └── SET_ROLE ADMIN
+             │
+             ▼
+          servidor
+             │
+             ▼
+          ADMIN
+```
+
+qualquer cliente poderia se tornar administrador.
+
+A decisão de autorização deve ser feita pelo servidor.
+
+---
+
+# 32.15 Rate limiting
+
+Outra proteção importante é limitar a frequência das requisições.
+
+Imagine:
+
+```text
+Cliente
+   │
+   ├── LOGIN
+   ├── LOGIN
+   ├── LOGIN
+   ├── LOGIN
+   ├── LOGIN
+   ├── LOGIN
+   ├── LOGIN
+   └── ...
+```
+
+Isso pode ser usado para abuso ou tentativa automatizada de credenciais.
+
+O servidor pode estabelecer limites:
+
+```text
+máximo de tentativas
+por usuário
+por IP
+por conexão
+por janela de tempo
+```
+
+Por exemplo, conceitualmente:
+
+```text
+5 tentativas
+↓
+bloqueio temporário
+↓
+aguardar
+↓
+permitir novamente
+```
+
+Rate limiting não resolve todos os ataques, mas reduz abuso.
+
+---
+
+# 32.16 Cuidado com mensagens de erro
+
+Uma aplicação pode acabar revelando informações internas.
+
+Exemplo ruim:
+
+```text
+FileNotFoundError:
+[Errno 2] No such file or directory:
+'/home/servidor/secrets/database/passwords.txt'
+```
+
+O cliente não precisa conhecer o caminho interno do servidor.
+
+Melhor:
+
+```text
+ERROR FILE_NOT_FOUND
+```
+
+Internamente:
+
+```text
+log:
+arquivo solicitado não encontrado
+```
+
+Portanto, existe uma diferença entre:
+
+```text
+erro para o cliente
+```
+
+e:
+
+```text
+erro detalhado para o administrador
+```
+
+---
+
+# 32.17 Logs também precisam ser protegidos
+
+Logs são extremamente úteis:
+
+```python
+logging.info("Cliente conectado: %s", address)
+```
+
+Mas não devemos registrar indiscriminadamente:
+
+```text
+senhas
+tokens
+chaves privadas
+cookies
+dados pessoais desnecessários
+credenciais
+```
+
+Imagine:
+
+```text
+LOGIN allan minha_senha_123
+```
+
+e isso aparecer em:
+
+```text
+server.log
+```
+
+Agora o log se tornou uma fonte de vazamento.
+
+Regra prática:
+
+> **Registre o suficiente para diagnosticar, mas não registre segredos desnecessariamente.**
+
+---
+
+# 32.18 Ataques de negação de serviço
+
+Um servidor de rede pode sofrer DoS de várias formas.
+
+Por exemplo:
+
+```text
+muitas conexões
+```
+
+ou:
+
+```text
+mensagens gigantes
+```
+
+ou:
+
+```text
+conexões lentas
+```
+
+ou:
+
+```text
+requisições excessivas
+```
+
+ou:
+
+```text
+operações muito pesadas
+```
+
+Podemos representar:
+
+```text
+Atacante
+   │
+   ├── muitas conexões
+   ├── mensagens grandes
+   ├── requisições rápidas
+   └── conexões lentas
+            │
+            ▼
+        Servidor
+            │
+            ▼
+        recursos
+            │
+            ▼
+          limite
+            │
+            ▼
+       indisponibilidade
+```
+
+Por isso entram em cena:
+
+- timeouts;
+    
+- limites;
+    
+- rate limiting;
+    
+- filas;
+    
+- controle de concorrência;
+    
+- validação;
+    
+- monitoramento.
+    
+
+---
+
+# 32.19 Cuidado com `recv()` ilimitado
+
+Nunca devemos criar um protocolo que dependa de:
+
+```python
+data = client.recv(10_000_000_000)
+```
+
+sem pensar nas consequências.
+
+Mesmo que o sistema operacional não entregue tudo imediatamente, o design já está indicando uma expectativa perigosa.
+
+O ideal é definir limites claros:
+
+```text
+Tamanho máximo do header
+Tamanho máximo da mensagem
+Tamanho máximo do arquivo
+```
+
+E rejeitar entradas fora do protocolo.
+
+---
+
+# 32.20 Segurança também envolve o sistema operacional
+
+Mesmo que o código Python esteja correto, o processo do servidor pode ter permissões excessivas.
+
+Imagine um servidor que só precisa acessar:
+
+```text
+/opt/meu_servidor/files/
+```
+
+Mas está executando com permissões que permitem modificar praticamente todo o sistema.
+
+Se existir uma vulnerabilidade:
+
+```text
+vulnerabilidade
+      ↓
+processo comprometido
+      ↓
+permissões excessivas
+      ↓
+impacto maior
+```
+
+Por isso existe o princípio do:
+
+> **menor privilégio**
+
+O processo deve possuir somente as permissões necessárias para executar sua função.
+
+---
+
+# 32.21 Exposição da interface de rede
+
+Outro ponto importante é o endereço usado no `bind()`.
+
+Se o servidor fizer:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+ele fica acessível somente localmente.
+
+```text
+localhost
+   │
+   ▼
+servidor
+```
+
+Já:
+
+```python
+server.bind(("0.0.0.0", 4444))
+```
+
+normalmente significa escutar em todas as interfaces IPv4 disponíveis.
+
+Isso pode tornar o serviço acessível pela rede.
+
+Portanto:
+
+```text
+127.0.0.1
+```
+
+e:
+
+```text
+0.0.0.0
+```
+
+possuem implicações de exposição diferentes.
+
+O mesmo raciocínio vale para IPv6:
+
+```text
+::
+```
+
+pode expor o serviço em interfaces IPv6.
+
+---
+
+# 32.22 Segurança por camadas
+
+Não existe uma única função que transforme uma aplicação em segura.
+
+Podemos pensar em várias camadas:
+
+```text
+┌─────────────────────────────┐
+│ Autorização                 │
+├─────────────────────────────┤
+│ Autenticação                │
+├─────────────────────────────┤
+│ Validação de entrada        │
+├─────────────────────────────┤
+│ Limites / Rate limiting     │
+├─────────────────────────────┤
+│ TLS                         │
+├─────────────────────────────┤
+│ TCP                         │
+├─────────────────────────────┤
+│ Sistema operacional         │
+├─────────────────────────────┤
+│ Firewall / rede             │
+└─────────────────────────────┘
+```
+
+Cada camada resolve problemas diferentes.
+
+---
+
+# 32.23 Exemplo de fluxo seguro
+
+Imagine um cliente solicitando:
+
+```text
+GET documento.pdf
+```
+
+O fluxo ideal seria aproximadamente:
+
+```text
+Cliente
+   │
+   ▼
+TLS
+   │
+   ▼
+Socket
+   │
+   ▼
+Receber bytes
+   │
+   ▼
+Verificar tamanho
+   │
+   ▼
+Interpretar protocolo
+   │
+   ▼
+Validar comando
+   │
+   ▼
+Validar argumento
+   │
+   ▼
+Verificar autenticação
+   │
+   ▼
+Verificar autorização
+   │
+   ▼
+Validar caminho
+   │
+   ▼
+Acessar recurso
+   │
+   ▼
+Enviar resposta
+```
+
+Perceba quantas decisões acontecem antes do acesso ao arquivo.
+
+Isso é segurança em profundidade.
+
+---
+
+# 32.24 O servidor deve assumir que o cliente pode ser malicioso
+
+Esse é provavelmente o conceito mais importante desta parte.
+
+Não pense:
+
+```text
+"Meu cliente manda isso."
+```
+
+Pense:
+
+```text
+"Qualquer pessoa pode conectar e mandar qualquer coisa."
+```
+
+Então:
+
+```text
+entrada externa
+      ↓
+não confiável
+      ↓
+validar
+      ↓
+normalizar
+      ↓
+autorizar
+      ↓
+processar
+```
+
+---
+
+# 32.25 Checklist básico de segurança
+
+Antes de considerar um servidor minimamente robusto, pergunte:
+
+```text
+[ ] As entradas são validadas?
+[ ] Existe tamanho máximo para mensagens?
+[ ] Existem timeouts?
+[ ] Existe limite de conexões?
+[ ] Existe rate limiting quando necessário?
+[ ] O servidor usa TLS quando precisa de confidencialidade?
+[ ] Certificados são validados corretamente?
+[ ] Autenticação é implementada corretamente?
+[ ] Autorização é verificada no servidor?
+[ ] Senhas não são armazenadas em texto puro?
+[ ] Caminhos de arquivos são validados?
+[ ] Erros internos não são expostos ao cliente?
+[ ] Logs não armazenam segredos?
+[ ] O processo possui apenas as permissões necessárias?
+[ ] O serviço está exposto somente nas interfaces necessárias?
+[ ] Conexões e recursos são encerrados corretamente?
+```
+
+Esse checklist não garante segurança total, mas ajuda a evitar muitos erros básicos.
+
+---
+
+# 32.26 Modelo mental de segurança
+
+Ao construir uma aplicação de sockets, pense:
+
+```text
+                CLIENTE
+                   │
+                   │
+                   ▼
+             DADOS EXTERNOS
+                   │
+                   ▼
+             ┌───────────┐
+             │ VALIDAÇÃO │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │ PROTOCOLO │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌────────────┐
+             │ AUTENTICAR │
+             └──────┬─────┘
+                    │
+                    ▼
+             ┌─────────────┐
+             │ AUTORIZAR   │
+             └──────┬──────┘
+                    │
+                    ▼
+             ┌─────────────┐
+             │ PROCESSAR   │
+             └──────┬──────┘
+                    │
+                    ▼
+                RESPOSTA
+```
+
+O socket fornece o transporte.
+
+**A segurança precisa ser construída pela aplicação e pelas outras camadas do sistema.**
+
+---
+
+## Resumo da Parte
+
+- Tudo recebido de um cliente deve ser considerado **não confiável**.
+    
+- TCP não valida o significado dos dados da aplicação.
+    
+- O servidor precisa validar comandos, argumentos, tamanhos e estados.
+    
+- Nunca devemos confiar em caminhos, permissões ou identidades enviados pelo cliente.
+    
+- Entradas relacionadas a arquivos podem causar **path traversal** se forem tratadas incorretamente.
+    
+- Limites de tamanho ajudam a reduzir ataques de consumo de memória.
+    
+- Timeouts evitam conexões inativas ocupando recursos indefinidamente.
+    
+- Rate limiting reduz abuso e tentativas excessivas.
+    
+- TLS protege a comunicação, mas não substitui autenticação e autorização.
+    
+- Autenticação determina **quem é o usuário**.
+    
+- Autorização determina **o que o usuário pode fazer**.
+    
+- Senhas devem ser armazenadas usando mecanismos apropriados de hashing de senha.
+    
+- Hash não é o mesmo que criptografia.
+    
+- Mensagens de erro não devem revelar informações internas desnecessárias.
+    
+- Logs devem evitar senhas, tokens e outros segredos.
+    
+- O princípio do menor privilégio reduz o impacto de possíveis comprometimentos.
+    
+- `127.0.0.1`, `0.0.0.0` e `::` possuem níveis diferentes de exposição.
+    
+- Segurança deve ser tratada em várias camadas, não como uma única proteção.
+    
+
+**Modelo principal:**
+
+```text
+Tudo que vem da rede
+        ↓
+não confiável
+        ↓
+validar
+        ↓
+limitar
+        ↓
+autenticar
+        ↓
+autorizar
+        ↓
+processar
+        ↓
+responder
+```
+
+---
+

@@ -18532,3 +18532,1205 @@ comunicação
 ```
 
 ---
+
+# 18. Resolvendo nomes e endereços com a biblioteca `socket`
+
+Até agora, trabalhamos principalmente com endereços IP diretamente:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+Porém, na prática, aplicações normalmente não recebem um endereço IP diretamente do usuário.
+
+É muito mais comum utilizarmos um **nome de host**:
+
+```text
+google.com
+example.com
+meuservidor.local
+```
+
+O sistema precisa então descobrir qual endereço IP está associado àquele nome.
+
+É nesse processo que entra a **resolução de nomes**.
+
+---
+
+## 18.1 O que é resolução de nomes?
+
+Resolução de nomes é o processo de transformar um nome de host em um endereço que possa ser utilizado para comunicação.
+
+Por exemplo:
+
+```text
+example.com
+     ↓
+192.0.2.10
+```
+
+O programa conhece:
+
+```text
+example.com
+```
+
+mas para estabelecer uma conexão IP, ele precisa chegar a um endereço como:
+
+```text
+192.0.2.10
+```
+
+Esse processo normalmente envolve o **DNS (Domain Name System)**.
+
+---
+
+## 18.2 O papel do DNS
+
+O DNS funciona, de forma simplificada, como um sistema de resolução de nomes.
+
+Podemos pensar em:
+
+```text
+Nome
+ ↓
+DNS
+ ↓
+Endereço IP
+```
+
+Por exemplo:
+
+```text
+www.exemplo.com
+        ↓
+      DNS
+        ↓
+  203.0.113.20
+```
+
+Depois que o endereço é obtido, o socket pode utilizar esse endereço para estabelecer a comunicação:
+
+```text
+hostname
+   ↓
+resolução DNS
+   ↓
+IP
+   ↓
+connect()
+   ↓
+TCP
+```
+
+É importante separar essas etapas.
+
+**DNS não é TCP.**
+
+DNS é utilizado para descobrir endereços.
+
+TCP é utilizado posteriormente para estabelecer uma comunicação confiável quando a aplicação escolhe TCP.
+
+---
+
+# 18.3 `socket.gethostbyname()`
+
+A biblioteca `socket` possui funções para realizar resolução de nomes.
+
+Uma das mais simples é:
+
+```python
+socket.gethostbyname(hostname)
+```
+
+Exemplo:
+
+```python
+import socket
+
+ip = socket.gethostbyname("example.com")
+
+print(ip)
+```
+
+O resultado será um endereço IPv4.
+
+Por exemplo:
+
+```text
+192.0.2.10
+```
+
+O endereço retornado pode variar dependendo do domínio e da infraestrutura DNS.
+
+---
+
+## 18.4 Parâmetro de `gethostbyname()`
+
+A função possui uma utilização simples:
+
+```python
+socket.gethostbyname(hostname)
+```
+
+|Parâmetro|Tipo|Obrigatório|Comportamento|
+|---|---|---|---|
+|`hostname`|`str`|Sim|Nome do host que será resolvido|
+
+Exemplo:
+
+```python
+import socket
+
+hostname = "example.com"
+
+ip = socket.gethostbyname(hostname)
+
+print(f"{hostname} -> {ip}")
+```
+
+Possível resultado:
+
+```text
+example.com -> 192.0.2.10
+```
+
+---
+
+# 18.5 `gethostbyname()` trabalha com IPv4
+
+Uma limitação importante:
+
+```python
+socket.gethostbyname()
+```
+
+é voltada para resolução de endereços **IPv4**.
+
+IPv4 utiliza endereços como:
+
+```text
+192.168.1.10
+10.0.0.5
+8.8.8.8
+```
+
+IPv6 utiliza outro formato:
+
+```text
+2001:db8::1
+```
+
+Por isso, para aplicações modernas que precisam trabalhar de forma mais geral com IPv4 e IPv6, normalmente utilizamos:
+
+```python
+socket.getaddrinfo()
+```
+
+---
+
+# 18.6 `socket.gethostbyname_ex()`
+
+Existe também:
+
+```python
+socket.gethostbyname_ex(hostname)
+```
+
+Ela fornece mais informações do que `gethostbyname()`.
+
+Exemplo:
+
+```python
+import socket
+
+result = socket.gethostbyname_ex("example.com")
+
+print(result)
+```
+
+O resultado possui uma estrutura semelhante a:
+
+```python
+(
+    "example.com",
+    [],
+    ["192.0.2.10"]
+)
+```
+
+Essa estrutura contém:
+
+```text
+canonical name
+      ↓
+aliases
+      ↓
+addresses
+```
+
+Podemos separar:
+
+```python
+hostname, aliases, addresses = socket.gethostbyname_ex("example.com")
+```
+
+E então:
+
+```python
+print(hostname)
+print(aliases)
+print(addresses)
+```
+
+---
+
+# 18.7 Por que um domínio pode possuir vários IPs?
+
+Um erro comum é imaginar que:
+
+```text
+domínio → um único IP
+```
+
+Isso não é necessariamente verdade.
+
+Um domínio pode possuir vários endereços:
+
+```text
+example.com
+     ↓
+ ┌───┴────┐
+ ↓        ↓
+IP 1     IP 2
+```
+
+Por exemplo:
+
+```text
+example.com
+    ↓
+192.0.2.10
+192.0.2.11
+192.0.2.12
+```
+
+Isso pode ser utilizado para:
+
+- distribuição de carga;
+    
+- redundância;
+    
+- disponibilidade;
+    
+- servidores em diferentes localidades;
+    
+- balanceamento de tráfego.
+    
+
+Por isso, aplicações de rede não devem assumir que um hostname sempre corresponde a um único endereço.
+
+---
+
+# 18.8 `socket.getaddrinfo()`
+
+Para aplicações modernas, uma das funções mais importantes da biblioteca `socket` é:
+
+```python
+socket.getaddrinfo()
+```
+
+Ela é mais geral que:
+
+```python
+gethostbyname()
+```
+
+e pode fornecer informações necessárias para trabalhar com:
+
+- IPv4;
+    
+- IPv6;
+    
+- TCP;
+    
+- UDP;
+    
+- diferentes famílias de endereço;
+    
+- diferentes tipos de socket.
+    
+
+Sua assinatura simplificada é:
+
+```python
+socket.getaddrinfo(
+    host,
+    port,
+    family=0,
+    type=0,
+    proto=0,
+    flags=0
+)
+```
+
+---
+
+# 18.9 Parâmetros de `getaddrinfo()`
+
+|Parâmetro|Tipo|Obrigatório|Comportamento|
+|---|---|---|---|
+|`host`|`str` ou endereço|Sim|Hostname ou endereço a ser resolvido|
+|`port`|`int` ou `str`|Sim|Porta ou serviço|
+|`family`|constante `socket`|Não|Restringe a família de endereços|
+|`type`|constante `socket`|Não|Restringe o tipo de socket|
+|`proto`|`int`|Não|Restringe o protocolo|
+|`flags`|`int`|Não|Modifica o comportamento da resolução|
+
+Um exemplo simples:
+
+```python
+import socket
+
+results = socket.getaddrinfo("example.com", 80)
+
+for result in results:
+    print(result)
+```
+
+---
+
+# 18.10 Entendendo o resultado de `getaddrinfo()`
+
+Cada resultado retornado possui informações que podem ser utilizadas para criar um socket.
+
+Uma entrada possui aproximadamente esta estrutura:
+
+```python
+(
+    family,
+    type,
+    proto,
+    canonname,
+    sockaddr
+)
+```
+
+Por exemplo:
+
+```python
+(
+    socket.AF_INET,
+    socket.SOCK_STREAM,
+    6,
+    "",
+    ("192.0.2.10", 80)
+)
+```
+
+Podemos interpretar:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+socket orientado a fluxo
+
+6
+   ↓
+TCP
+
+""
+   ↓
+nome canônico
+
+("192.0.2.10", 80)
+   ↓
+endereço de destino
+```
+
+Isso é muito importante porque o `getaddrinfo()` não retorna apenas um IP.
+
+Ele retorna informações suficientes para ajudar a determinar **como o socket deve ser utilizado**.
+
+---
+
+# 18.11 Usando `AF_UNSPEC`
+
+Quando queremos aceitar tanto IPv4 quanto IPv6, podemos utilizar:
+
+```python
+socket.AF_UNSPEC
+```
+
+Exemplo:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    family=socket.AF_UNSPEC,
+    type=socket.SOCK_STREAM
+)
+
+for result in results:
+    print(result)
+```
+
+A ideia é:
+
+```text
+AF_UNSPEC
+   ↓
+não restringir para IPv4 ou IPv6
+   ↓
+retornar possibilidades disponíveis
+```
+
+Assim, a aplicação pode trabalhar com diferentes famílias de endereços.
+
+---
+
+# 18.12 Restringindo para IPv4
+
+Podemos solicitar especificamente IPv4:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    family=socket.AF_INET,
+    type=socket.SOCK_STREAM
+)
+
+for result in results:
+    print(result)
+```
+
+Agora estamos dizendo:
+
+```text
+Quero:
+    IPv4
+    +
+    SOCK_STREAM
+```
+
+---
+
+# 18.13 Restringindo para IPv6
+
+Também podemos solicitar IPv6:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    family=socket.AF_INET6,
+    type=socket.SOCK_STREAM
+)
+
+for result in results:
+    print(result)
+```
+
+Agora:
+
+```text
+AF_INET6
+   ↓
+IPv6
+```
+
+---
+
+# 18.14 Obtendo somente combinações TCP
+
+Podemos especificar:
+
+```python
+type=socket.SOCK_STREAM
+```
+
+Por exemplo:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    type=socket.SOCK_STREAM
+)
+
+for result in results:
+    print(result)
+```
+
+Isso ajuda a filtrar os resultados para sockets orientados a fluxo, normalmente associados ao TCP.
+
+---
+
+# 18.15 Obtendo combinações UDP
+
+Para UDP:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    53,
+    type=socket.SOCK_DGRAM
+)
+
+for result in results:
+    print(result)
+```
+
+Nesse caso:
+
+```text
+SOCK_DGRAM
+    ↓
+datagramas
+    ↓
+normalmente UDP
+```
+
+---
+
+# 18.16 Usando o resultado para criar um socket
+
+Uma das grandes vantagens de `getaddrinfo()` é que podemos utilizar diretamente os valores retornados para criar um socket.
+
+Exemplo:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    type=socket.SOCK_STREAM
+)
+
+family, socktype, proto, canonname, sockaddr = results[0]
+
+client = socket.socket(
+    family,
+    socktype,
+    proto
+)
+
+client.connect(sockaddr)
+
+print("Conectado!")
+
+client.close()
+```
+
+Observe o fluxo:
+
+```text
+example.com
+     ↓
+getaddrinfo()
+     ↓
+family
+type
+protocol
+address
+     ↓
+socket()
+     ↓
+connect()
+```
+
+Isso é muito mais geral do que simplesmente pegar um IPv4 com:
+
+```python
+gethostbyname()
+```
+
+---
+
+# 18.17 Por que `getaddrinfo()` é tão importante?
+
+Considere:
+
+```python
+client.connect(("example.com", 80))
+```
+
+O Python pode trabalhar com o hostname e realizar a resolução necessária internamente.
+
+Ou seja, você não precisa necessariamente fazer:
+
+```python
+ip = socket.gethostbyname("example.com")
+
+client.connect((ip, 80))
+```
+
+O próprio sistema pode resolver o hostname utilizado na conexão.
+
+Então:
+
+```python
+client.connect(("example.com", 80))
+```
+
+pode envolver conceitualmente:
+
+```text
+example.com
+      ↓
+resolução de nome
+      ↓
+endereço IP
+      ↓
+TCP connect
+      ↓
+conexão
+```
+
+---
+
+# 18.18 Resolução de nome e `connect()` são operações diferentes
+
+É importante não confundir:
+
+```python
+socket.getaddrinfo()
+```
+
+com:
+
+```python
+socket.connect()
+```
+
+A primeira está relacionada à **descoberta/resolução do endereço**.
+
+A segunda está relacionada ao **estabelecimento da comunicação**.
+
+Podemos pensar:
+
+```text
+getaddrinfo()
+     ↓
+"Para onde devo conectar?"
+     ↓
+IP + porta
+     ↓
+connect()
+     ↓
+"Vou estabelecer a conexão."
+```
+
+No caso de TCP:
+
+```text
+DNS
+ ↓
+IP
+ ↓
+connect()
+ ↓
+SYN
+ ↓
+SYN-ACK
+ ↓
+ACK
+ ↓
+ESTABLISHED
+```
+
+---
+
+# 18.19 `socket.gethostname()`
+
+Também podemos descobrir o hostname da máquina local utilizando:
+
+```python
+socket.gethostname()
+```
+
+Exemplo:
+
+```python
+import socket
+
+hostname = socket.gethostname()
+
+print(hostname)
+```
+
+Possível resultado:
+
+```text
+mafiaboy
+```
+
+Isso representa o nome de host configurado para a máquina.
+
+---
+
+# 18.20 `socket.getfqdn()`
+
+Existe também:
+
+```python
+socket.getfqdn()
+```
+
+FQDN significa:
+
+```text
+Fully Qualified Domain Name
+```
+
+Ou:
+
+```text
+Nome de domínio totalmente qualificado
+```
+
+Exemplo:
+
+```python
+import socket
+
+name = socket.getfqdn()
+
+print(name)
+```
+
+O resultado depende da configuração da máquina e da resolução de nomes disponível.
+
+---
+
+# 18.21 Resolução reversa com `getnameinfo()`
+
+Até agora fizemos:
+
+```text
+hostname → IP
+```
+
+Também podemos realizar o caminho inverso:
+
+```text
+IP → nome
+```
+
+Para isso existe:
+
+```python
+socket.getnameinfo()
+```
+
+Exemplo:
+
+```python
+import socket
+
+result = socket.getnameinfo(
+    ("8.8.8.8", 53),
+    0
+)
+
+print(result)
+```
+
+A resposta depende da existência de resolução reversa configurada para aquele endereço.
+
+Portanto, não devemos assumir que:
+
+```text
+IP → sempre terá hostname
+```
+
+Isso não é obrigatório.
+
+---
+
+# 18.22 Erro `socket.gaierror`
+
+Quando uma resolução de nome falha, podemos encontrar:
+
+```python
+socket.gaierror
+```
+
+Por exemplo:
+
+```python
+import socket
+
+try:
+    ip = socket.gethostbyname("dominio-que-nao-existe.example")
+    print(ip)
+
+except socket.gaierror as error:
+    print(f"Erro de resolução: {error}")
+```
+
+Esse erro está relacionado à resolução de endereços.
+
+Por exemplo:
+
+```text
+hostname inválido
+       ↓
+DNS não consegue resolver
+       ↓
+socket.gaierror
+```
+
+É diferente de um erro de conexão.
+
+Por exemplo:
+
+```text
+resolução funcionou
+       ↓
+IP encontrado
+       ↓
+connect()
+       ↓
+servidor inacessível
+       ↓
+outro tipo de erro
+```
+
+Essa distinção é importante para diagnosticar problemas de rede.
+
+---
+
+# 18.23 DNS pode bloquear a aplicação
+
+A resolução de nomes não deve ser considerada uma operação instantânea.
+
+Quando fazemos:
+
+```python
+socket.getaddrinfo("example.com", 80)
+```
+
+o processo pode precisar consultar serviços de resolução de nomes.
+
+Portanto:
+
+```python
+getaddrinfo()
+```
+
+pode bloquear.
+
+Isso é importante principalmente em aplicações:
+
+- servidores;
+    
+- ferramentas de rede;
+    
+- automações;
+    
+- aplicações concorrentes;
+    
+- aplicações assíncronas.
+    
+
+Uma aplicação que realiza várias resoluções de nomes de forma síncrona pode ficar esperando essas operações.
+
+---
+
+# 18.24 Hostname pode resultar em vários endereços
+
+Outro ponto importante:
+
+```python
+results = socket.getaddrinfo(...)
+```
+
+pode retornar várias opções.
+
+Por exemplo:
+
+```text
+example.com
+     ↓
+ ┌───┼─────────┐
+ ↓   ↓         ↓
+IPv4 IPv4      IPv6
+```
+
+A aplicação pode então tentar os endereços disponíveis.
+
+Uma estratégia comum é percorrer os resultados:
+
+```python
+import socket
+
+results = socket.getaddrinfo(
+    "example.com",
+    80,
+    type=socket.SOCK_STREAM
+)
+
+for family, socktype, proto, canonname, sockaddr in results:
+    print(sockaddr)
+```
+
+Assim conseguimos visualizar os possíveis destinos retornados.
+
+---
+
+# 18.25 Modelo mental completo
+
+Podemos juntar tudo que aprendemos:
+
+```text
+Hostname
+   │
+   ▼
+Resolução de nomes
+   │
+   ├── DNS
+   │
+   ▼
+getaddrinfo()
+   │
+   ├── família
+   ├── tipo
+   ├── protocolo
+   └── endereço
+          │
+          ▼
+      socket()
+          │
+          ▼
+      connect()
+          │
+          ▼
+     Comunicação
+```
+
+Ou, de forma ainda mais simples:
+
+```text
+"example.com"
+      ↓
+"Qual endereço corresponde a esse nome?"
+      ↓
+IP + porta
+      ↓
+"Como devo criar o socket?"
+      ↓
+AF_INET / AF_INET6
+SOCK_STREAM / SOCK_DGRAM
+      ↓
+socket()
+      ↓
+connect() / sendto()
+```
+
+---
+
+# 18.26 `gethostbyname()` vs `getaddrinfo()`
+
+|Característica|`gethostbyname()`|`getaddrinfo()`|
+|---|---|---|
+|IPv4|Sim|Sim|
+|IPv6|Não é a opção geral|Sim|
+|Retorna múltiplas informações de socket|Não|Sim|
+|Família do endereço|Não|Sim|
+|Tipo do socket|Não|Sim|
+|Protocolo|Não|Sim|
+|API mais geral|Não|Sim|
+|Uso moderno|Limitado|Preferível|
+
+Para código novo que precisa ser flexível, normalmente devemos pensar primeiro em:
+
+```python
+socket.getaddrinfo()
+```
+
+---
+
+# 18.27 Exemplo prático completo
+
+Um exemplo simples utilizando `getaddrinfo()`:
+
+```python
+import socket
+
+host = "example.com"
+port = 80
+
+results = socket.getaddrinfo(
+    host,
+    port,
+    type=socket.SOCK_STREAM
+)
+
+for family, socktype, proto, canonname, sockaddr in results:
+    print(f"Família: {family}")
+    print(f"Tipo: {socktype}")
+    print(f"Protocolo: {proto}")
+    print(f"Endereço: {sockaddr}")
+    print()
+```
+
+A aplicação agora possui as informações necessárias para decidir como criar o socket.
+
+---
+
+# 18.28 Relação com ferramentas de rede
+
+Esse conceito aparece constantemente em ferramentas de rede.
+
+Por exemplo:
+
+```text
+ping example.com
+```
+
+ou:
+
+```text
+curl https://example.com
+```
+
+ou:
+
+```text
+nmap example.com
+```
+
+Antes de realizar determinadas operações, o programa pode precisar descobrir quais endereços correspondem ao nome informado.
+
+Por isso, em redes, devemos distinguir:
+
+```text
+nome
+↓
+resolução
+↓
+endereço
+↓
+comunicação
+```
+
+O nome é uma forma conveniente para humanos.
+
+O endereço é utilizado na comunicação da rede.
+
+---
+
+# 18.29 Erro conceitual comum
+
+Não devemos pensar:
+
+> "DNS conecta meu programa ao servidor."
+
+O DNS não estabelece a conexão da aplicação com o serviço final.
+
+Ele responde, de forma simplificada:
+
+> "Esse nome corresponde a estes endereços."
+
+Depois disso, outro protocolo e outra operação realizam a comunicação.
+
+Por exemplo:
+
+```text
+DNS
+ ↓
+descobre IP
+ ↓
+TCP
+ ↓
+estabelece conexão
+ ↓
+HTTP
+ ↓
+troca dados da aplicação
+```
+
+Temos, portanto, diferentes camadas desempenhando funções diferentes.
+
+---
+
+# 18.30 Resumo da Parte
+
+A biblioteca `socket` possui várias funções relacionadas à resolução de nomes e endereços.
+
+As principais estudadas foram:
+
+```python
+socket.gethostbyname()
+```
+
+Resolve um hostname para um endereço IPv4.
+
+```python
+socket.gethostbyname_ex()
+```
+
+Retorna informações adicionais e possíveis endereços IPv4.
+
+```python
+socket.getaddrinfo()
+```
+
+É a API mais geral para obter informações de endereçamento e configuração de sockets, podendo trabalhar com IPv4, IPv6, TCP e UDP.
+
+```python
+socket.gethostname()
+```
+
+Obtém o hostname local.
+
+```python
+socket.getfqdn()
+```
+
+Obtém o nome de domínio totalmente qualificado, quando disponível.
+
+```python
+socket.getnameinfo()
+```
+
+Pode realizar resolução reversa de endereço para nome.
+
+O conceito principal desta parte é:
+
+```text
+Hostname
+   ↓
+Resolução de nomes
+   ↓
+Endereço
+   ↓
+socket
+   ↓
+connect/sendto
+   ↓
+Comunicação
+```
+
+E o principal ponto para guardar:
+
+> **Resolver um nome e estabelecer uma conexão são operações diferentes.**
+

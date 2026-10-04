@@ -20949,3 +20949,1396 @@ TCP entrega um fluxo de bytes.
 A aplicação define como esses bytes representam mensagens.
 ```
 
+---
+
+# 20. Transferência de arquivos através de sockets
+
+Agora que entendemos como controlar o envio e recebimento de bytes, podemos aplicar esses conceitos a uma situação muito comum em redes:
+
+> **transferir arquivos entre duas máquinas através de sockets.**
+
+À primeira vista, parece simples:
+
+```text
+arquivo
+   ↓
+socket
+   ↓
+rede
+   ↓
+socket
+   ↓
+arquivo
+```
+
+Mas uma transferência de arquivos correta precisa resolver vários problemas:
+
+- como informar que uma transferência começou;
+    
+- como informar o nome do arquivo;
+    
+- como informar o tamanho;
+    
+- como enviar os dados em blocos;
+    
+- como detectar o fim do arquivo;
+    
+- como evitar receber dados incompletos;
+    
+- como detectar erros;
+    
+- como validar se o arquivo recebido está completo.
+    
+
+Por isso, transferência de arquivos é um excelente exemplo para entender como um **protocolo de aplicação** é construído sobre TCP.
+
+---
+
+# 20.1 O problema básico
+
+Imagine que temos:
+
+```text
+Cliente
+    │
+    │ arquivo.txt
+    ▼
+Servidor
+```
+
+O cliente possui:
+
+```text
+arquivo.txt
+```
+
+e deseja enviá-lo ao servidor.
+
+Uma implementação extremamente simples poderia fazer:
+
+```python
+with open("arquivo.txt", "rb") as file:
+    data = file.read()
+
+sock.sendall(data)
+```
+
+Porém, isso possui um problema:
+
+> Como o servidor sabe quantos bytes pertencem ao arquivo?
+
+O servidor poderia fazer:
+
+```python
+data = sock.recv(4096)
+```
+
+mas isso não significa:
+
+```text
+"receba o arquivo inteiro"
+```
+
+Significa apenas:
+
+```text
+"receba até 4096 bytes nesta operação"
+```
+
+---
+
+# 20.2 Não devemos carregar arquivos gigantes na memória
+
+Outra abordagem seria:
+
+```python
+with open("arquivo.iso", "rb") as file:
+    data = file.read()
+
+sock.sendall(data)
+```
+
+Isso funciona para arquivos pequenos.
+
+Mas imagine:
+
+```text
+arquivo.iso
+    ↓
+10 GB
+```
+
+O programa tentaria carregar uma quantidade enorme de dados na memória.
+
+Isso é desnecessário.
+
+A abordagem correta é trabalhar com **chunks**, ou blocos.
+
+```text
+arquivo
+   ↓
+┌────────┬────────┬────────┬────────┐
+│ chunk  │ chunk  │ chunk  │ chunk  │
+└────────┴────────┴────────┴────────┘
+   ↓        ↓        ↓        ↓
+ socket   socket   socket   socket
+```
+
+---
+
+# 20.3 Lendo o arquivo em blocos
+
+Podemos utilizar:
+
+```python
+with open("arquivo.bin", "rb") as file:
+    while True:
+        chunk = file.read(4096)
+
+        if not chunk:
+            break
+
+        sock.sendall(chunk)
+```
+
+Aqui:
+
+```python
+file.read(4096)
+```
+
+lê no máximo:
+
+```text
+4096 bytes
+```
+
+por vez.
+
+O processo será:
+
+```text
+arquivo
+   ↓
+read(4096)
+   ↓
+chunk
+   ↓
+sendall()
+   ↓
+read(4096)
+   ↓
+chunk
+   ↓
+sendall()
+   ↓
+...
+```
+
+---
+
+# 20.4 Por que usar `rb`?
+
+Observe:
+
+```python
+open("arquivo.bin", "rb")
+```
+
+O modo:
+
+```text
+rb
+```
+
+significa:
+
+```text
+r = read
+b = binary
+```
+
+Ou seja:
+
+> abrir para leitura em modo binário.
+
+Isso é importante porque um arquivo pode conter qualquer sequência de bytes.
+
+Por exemplo:
+
+```text
+imagem
+vídeo
+executável
+ZIP
+PDF
+ISO
+banco de dados
+```
+
+Todos esses arquivos são compostos por bytes.
+
+Não devemos tratá-los como texto:
+
+```python
+open("arquivo.bin", "r")
+```
+
+quando a intenção é realizar uma transferência binária genérica.
+
+---
+
+# 20.5 Recebendo os chunks
+
+No servidor podemos fazer:
+
+```python
+with open("recebido.bin", "wb") as file:
+    while True:
+        chunk = sock.recv(4096)
+
+        if not chunk:
+            break
+
+        file.write(chunk)
+```
+
+O modo:
+
+```text
+wb
+```
+
+significa:
+
+```text
+w = write
+b = binary
+```
+
+Então:
+
+```text
+socket
+   ↓
+recv()
+   ↓
+bytes
+   ↓
+file.write()
+   ↓
+disco
+```
+
+---
+
+# 20.6 Mas como sabemos quando o arquivo terminou?
+
+Aqui temos novamente o problema do protocolo.
+
+Se o cliente fizer:
+
+```python
+sock.sendall(chunk1)
+sock.sendall(chunk2)
+sock.sendall(chunk3)
+```
+
+o servidor não sabe automaticamente que:
+
+```text
+chunk3
+```
+
+foi o último.
+
+TCP não possui um conceito de:
+
+```text
+"último chunk do arquivo"
+```
+
+Para TCP, tudo é apenas:
+
+```text
+fluxo de bytes
+```
+
+Precisamos criar uma regra.
+
+---
+
+# 20.7 Primeira solução: fechar a conexão
+
+Uma solução simples é:
+
+```text
+Cliente
+   │
+   │ arquivo
+   ▼
+Servidor
+   │
+   │ b""
+   ▼
+fim
+```
+
+O cliente envia o arquivo e depois fecha a conexão:
+
+```python
+with open("arquivo.bin", "rb") as file:
+    while True:
+        chunk = file.read(4096)
+
+        if not chunk:
+            break
+
+        sock.sendall(chunk)
+
+sock.shutdown(socket.SHUT_WR)
+```
+
+O servidor continua recebendo:
+
+```python
+while True:
+    chunk = sock.recv(4096)
+
+    if not chunk:
+        break
+
+    file.write(chunk)
+```
+
+Quando receber:
+
+```python
+b""
+```
+
+sabe que o fluxo foi encerrado.
+
+---
+
+# 20.8 O problema dessa solução
+
+Essa abordagem pode funcionar para um protocolo muito simples.
+
+Mas imagine que queremos:
+
+```text
+conexão TCP
+   ↓
+enviar arquivo
+   ↓
+receber resposta
+   ↓
+enviar outro arquivo
+   ↓
+continuar comunicação
+```
+
+Não queremos fechar a conexão depois do primeiro arquivo.
+
+Portanto:
+
+```text
+fim da conexão ≠ fim do arquivo
+```
+
+Precisamos de um protocolo melhor.
+
+---
+
+# 20.9 Segunda solução: enviar o tamanho do arquivo
+
+Uma abordagem mais robusta é:
+
+```text
+[TAMANHO][ARQUIVO]
+```
+
+Por exemplo:
+
+```text
+arquivo = 1.500.000 bytes
+```
+
+O cliente envia primeiro:
+
+```text
+1500000
+```
+
+e depois:
+
+```text
+1.500.000 bytes
+```
+
+O servidor então sabe:
+
+> "Preciso receber exatamente 1.500.000 bytes."
+
+---
+
+# 20.10 Estrutura do protocolo
+
+Podemos definir:
+
+```text
+┌──────────────────┬───────────────────────────┐
+│ TAMANHO DO ARQUIVO │ DADOS DO ARQUIVO       │
+└──────────────────┴───────────────────────────┘
+       HEADER                  PAYLOAD
+```
+
+Por exemplo:
+
+```text
+HEADER = 8 bytes
+PAYLOAD = N bytes
+```
+
+Podemos utilizar um inteiro de 64 bits:
+
+```python
+struct.pack("!Q", file_size)
+```
+
+O `Q` representa um inteiro sem sinal de 8 bytes.
+
+Assim podemos representar arquivos muito grandes.
+
+---
+
+# 20.11 Descobrindo o tamanho do arquivo
+
+Podemos utilizar:
+
+```python
+import os
+
+file_size = os.path.getsize("arquivo.bin")
+```
+
+Por exemplo:
+
+```python
+import os
+
+size = os.path.getsize("arquivo.bin")
+
+print(size)
+```
+
+Resultado:
+
+```text
+15728640
+```
+
+Isso significa:
+
+```text
+15.728.640 bytes
+```
+
+---
+
+# 20.12 Enviando o cabeçalho
+
+Agora podemos fazer:
+
+```python
+import os
+import struct
+
+file_size = os.path.getsize("arquivo.bin")
+
+header = struct.pack("!Q", file_size)
+
+sock.sendall(header)
+```
+
+O protocolo começa:
+
+```text
+Cliente
+   │
+   │ 8 bytes: tamanho
+   ▼
+Servidor
+```
+
+---
+
+# 20.13 Enviando o arquivo
+
+Depois:
+
+```python
+with open("arquivo.bin", "rb") as file:
+    while True:
+        chunk = file.read(4096)
+
+        if not chunk:
+            break
+
+        sock.sendall(chunk)
+```
+
+Agora temos:
+
+```text
+HEADER
+   ↓
+PAYLOAD
+```
+
+---
+
+# 20.14 Recebendo o tamanho
+
+No servidor:
+
+```python
+header = recv_exactly(sock, 8)
+
+file_size = struct.unpack("!Q", header)[0]
+```
+
+Agora:
+
+```text
+file_size
+```
+
+contém a quantidade de bytes esperada.
+
+Por exemplo:
+
+```text
+15000000
+```
+
+O servidor sabe que precisa receber:
+
+```text
+15.000.000 bytes
+```
+
+---
+
+# 20.15 Recebendo exatamente o tamanho informado
+
+Podemos fazer:
+
+```python
+remaining = file_size
+
+with open("recebido.bin", "wb") as file:
+    while remaining > 0:
+        chunk = sock.recv(min(4096, remaining))
+
+        if not chunk:
+            raise ConnectionError("Conexão encerrada antes do fim do arquivo")
+
+        file.write(chunk)
+        remaining -= len(chunk)
+```
+
+Observe:
+
+```python
+min(4096, remaining)
+```
+
+Se ainda faltarem:
+
+```text
+10000 bytes
+```
+
+pedimos:
+
+```text
+4096
+```
+
+Depois:
+
+```text
+4096
+```
+
+Depois:
+
+```text
+1808
+```
+
+E assim por diante.
+
+---
+
+# 20.16 Por que `remaining` é importante?
+
+Temos:
+
+```python
+remaining = file_size
+```
+
+Depois de cada recebimento:
+
+```python
+remaining -= len(chunk)
+```
+
+Então:
+
+```text
+10000
+ ↓
+5904
+ ↓
+1808
+ ↓
+0
+```
+
+Quando chegar:
+
+```text
+0
+```
+
+sabemos que recebemos exatamente o tamanho anunciado.
+
+---
+
+# 20.17 O que acontece se a conexão cair?
+
+Imagine:
+
+```text
+arquivo = 10 MB
+```
+
+O cliente conseguiu enviar:
+
+```text
+7 MB
+```
+
+e então a conexão caiu.
+
+O servidor possui:
+
+```text
+7 MB
+```
+
+mas esperava:
+
+```text
+10 MB
+```
+
+Quando fizer:
+
+```python
+chunk = sock.recv(...)
+```
+
+e receber:
+
+```python
+b""
+```
+
+antes de chegar aos 10 MB, devemos considerar a transferência incompleta.
+
+Por isso:
+
+```python
+if not chunk:
+    raise ConnectionError(
+        "Conexão encerrada antes do fim do arquivo"
+    )
+```
+
+é importante.
+
+---
+
+# 20.18 O tamanho informado não deve ser confiado cegamente
+
+Existe outro problema.
+
+Imagine que um cliente malicioso envie:
+
+```text
+file_size = 999999999999999999
+```
+
+e nunca envie realmente esse volume de dados.
+
+O servidor pode ficar esperando indefinidamente ou manter recursos ocupados.
+
+Portanto, protocolos reais precisam impor limites.
+
+Por exemplo:
+
+```python
+MAX_FILE_SIZE = 100 * 1024 * 1024
+```
+
+Ou seja:
+
+```text
+100 MB
+```
+
+Depois:
+
+```python
+if file_size > MAX_FILE_SIZE:
+    raise ValueError("Arquivo muito grande")
+```
+
+---
+
+# 20.19 Validação do tamanho
+
+Podemos fazer:
+
+```python
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
+file_size = struct.unpack("!Q", header)[0]
+
+if file_size > MAX_FILE_SIZE:
+    raise ValueError("Tamanho de arquivo não permitido")
+```
+
+Assim:
+
+```text
+cliente
+   ↓
+informa tamanho
+   ↓
+servidor valida
+   ↓
+aceita ou rejeita
+```
+
+Nunca devemos assumir que os dados recebidos são confiáveis apenas porque vieram através de TCP.
+
+---
+
+# 20.20 Nome do arquivo
+
+Agora surge outro problema:
+
+> Qual será o nome do arquivo recebido?
+
+Podemos incluir isso no protocolo.
+
+Por exemplo:
+
+```text
+[HEADER][NOME][ARQUIVO]
+```
+
+Ou:
+
+```text
+[TAMANHO DO NOME]
+[NOME]
+[TAMANHO DO ARQUIVO]
+[ARQUIVO]
+```
+
+Exemplo:
+
+```text
+┌────────────┬──────────────┬────────────┬──────────────┐
+│ nome_size  │ nome         │ file_size │ dados        │
+└────────────┴──────────────┴────────────┴──────────────┘
+```
+
+---
+
+# 20.21 Nunca devemos confiar cegamente no nome recebido
+
+Imagine um cliente enviando:
+
+```text
+../../../../etc/passwd
+```
+
+Se o servidor simplesmente fizer:
+
+```python
+open(nome, "wb")
+```
+
+poderíamos acabar escrevendo fora do diretório destinado aos uploads.
+
+Esse tipo de vulnerabilidade é conhecido como **Path Traversal**.
+
+Portanto, nomes de arquivos recebidos pela rede devem ser tratados como entrada não confiável.
+
+---
+
+# 20.22 Gerando um nome seguro
+
+Uma abordagem simples é utilizar:
+
+```python
+from pathlib import Path
+
+name = Path(received_name).name
+```
+
+Por exemplo:
+
+```text
+../../arquivo.txt
+```
+
+poderia ser reduzido para:
+
+```text
+arquivo.txt
+```
+
+Isso remove os componentes de diretório.
+
+Mesmo assim, aplicações reais devem aplicar uma política adequada para nomes de arquivos.
+
+Uma opção ainda mais segura é gerar o nome internamente:
+
+```text
+upload/
+    8f91c2d4.bin
+```
+
+e não permitir que o cliente escolha diretamente o caminho de armazenamento.
+
+---
+
+# 20.23 Verificando a integridade do arquivo
+
+Receber a quantidade correta de bytes não garante que o conteúdo seja o esperado.
+
+Podemos utilizar um hash.
+
+Por exemplo:
+
+```python
+import hashlib
+
+sha256 = hashlib.sha256()
+```
+
+Durante o recebimento:
+
+```python
+while remaining > 0:
+    chunk = sock.recv(min(4096, remaining))
+
+    if not chunk:
+        raise ConnectionError("Transferência incompleta")
+
+    file.write(chunk)
+    sha256.update(chunk)
+
+    remaining -= len(chunk)
+```
+
+No final:
+
+```python
+digest = sha256.hexdigest()
+
+print(digest)
+```
+
+Agora temos uma identificação criptográfica do conteúdo recebido.
+
+---
+
+# 20.24 Comparando hashes
+
+O cliente pode calcular:
+
+```text
+SHA-256 do arquivo original
+```
+
+e enviar esse valor ao servidor.
+
+O servidor calcula:
+
+```text
+SHA-256 do arquivo recebido
+```
+
+Depois compara:
+
+```text
+hash original
+      ↓
+      =
+hash recebido
+```
+
+Se forem iguais:
+
+```text
+conteúdo provavelmente corresponde ao mesmo arquivo
+```
+
+Se forem diferentes:
+
+```text
+conteúdo diferente
+```
+
+Isso permite detectar corrupção ou alteração dos dados.
+
+---
+
+# 20.25 Hash não é criptografia
+
+É importante não confundir:
+
+```text
+SHA-256
+```
+
+com:
+
+```text
+criptografia
+```
+
+Um hash é uma função de resumo.
+
+Por exemplo:
+
+```text
+arquivo
+   ↓
+SHA-256
+   ↓
+256 bits
+```
+
+Ele não é utilizado para recuperar o arquivo original a partir do hash.
+
+Também não fornece, sozinho, confidencialidade.
+
+Se precisamos proteger o conteúdo durante o transporte, precisamos de mecanismos como **TLS**.
+
+---
+
+# 20.26 TCP não criptografa arquivos
+
+Um erro comum seria pensar:
+
+> "Estou usando TCP, então meu arquivo está seguro."
+
+Não.
+
+TCP fornece características de transporte, como:
+
+- entrega ordenada;
+    
+- controle de fluxo;
+    
+- retransmissão;
+    
+- confiabilidade do fluxo.
+    
+
+Mas TCP não fornece:
+
+```text
+criptografia
+autenticação do servidor
+confidencialidade
+integridade criptográfica da aplicação
+```
+
+Para isso podemos utilizar:
+
+```text
+TLS
+```
+
+Então:
+
+```text
+Aplicação
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+IP
+```
+
+---
+
+# 20.27 Exemplo completo de envio
+
+Um cliente simples:
+
+```python
+import os
+import struct
+
+def send_file(sock, filename):
+    file_size = os.path.getsize(filename)
+
+    header = struct.pack("!Q", file_size)
+    sock.sendall(header)
+
+    with open(filename, "rb") as file:
+        while True:
+            chunk = file.read(4096)
+
+            if not chunk:
+                break
+
+            sock.sendall(chunk)
+```
+
+Uso:
+
+```python
+send_file(sock, "arquivo.bin")
+```
+
+Fluxo:
+
+```text
+arquivo
+   ↓
+getsize()
+   ↓
+tamanho
+   ↓
+header
+   ↓
+sendall()
+   ↓
+chunks
+   ↓
+sendall()
+```
+
+---
+
+# 20.28 Exemplo completo de recebimento
+
+Servidor:
+
+```python
+import struct
+
+def recv_exactly(sock, size):
+    chunks = []
+    received = 0
+
+    while received < size:
+        chunk = sock.recv(size - received)
+
+        if not chunk:
+            raise ConnectionError("Conexão encerrada")
+
+        chunks.append(chunk)
+        received += len(chunk)
+
+    return b"".join(chunks)
+
+
+def recv_file(sock, filename):
+    header = recv_exactly(sock, 8)
+
+    file_size = struct.unpack("!Q", header)[0]
+
+    remaining = file_size
+
+    with open(filename, "wb") as file:
+        while remaining > 0:
+            chunk = sock.recv(min(4096, remaining))
+
+            if not chunk:
+                raise ConnectionError(
+                    "Conexão encerrada antes do fim do arquivo"
+                )
+
+            file.write(chunk)
+            remaining -= len(chunk)
+```
+
+Agora temos:
+
+```text
+HEADER
+  ↓
+file_size
+  ↓
+receber exatamente file_size bytes
+  ↓
+salvar no disco
+```
+
+---
+
+# 20.29 O protocolo completo
+
+Nosso protocolo simplificado pode ser representado assim:
+
+```text
+┌──────────────────────┬──────────────────────────────┐
+│ 8 bytes              │ N bytes                     │
+│ tamanho do arquivo   │ conteúdo do arquivo         │
+└──────────────────────┴──────────────────────────────┘
+        HEADER                    PAYLOAD
+```
+
+Fluxo do cliente:
+
+```text
+open()
+  ↓
+getsize()
+  ↓
+pack()
+  ↓
+sendall(header)
+  ↓
+read chunk
+  ↓
+sendall(chunk)
+  ↓
+read chunk
+  ↓
+sendall(chunk)
+  ↓
+...
+```
+
+Fluxo do servidor:
+
+```text
+recv_exactly(8)
+  ↓
+unpack()
+  ↓
+descobre tamanho
+  ↓
+recv()
+  ↓
+write()
+  ↓
+recv()
+  ↓
+write()
+  ↓
+...
+  ↓
+remaining == 0
+  ↓
+arquivo completo
+```
+
+---
+
+# 20.30 O protocolo pode evoluir
+
+Nosso protocolo atualmente possui apenas:
+
+```text
+[TAMANHO][ARQUIVO]
+```
+
+Mas poderíamos evoluí-lo para:
+
+```text
+[VERSÃO]
+[COMANDO]
+[NOME]
+[TAMANHO]
+[HASH]
+[DADOS]
+```
+
+Por exemplo:
+
+```text
+┌────────┬─────────┬──────┬────────┬──────────┬──────────┐
+│ versão │ comando │ nome │ tamanho│ hash     │ dados    │
+└────────┴─────────┴──────┴────────┴──────────┴──────────┘
+```
+
+Agora o servidor poderia saber:
+
+```text
+versão: 1
+comando: UPLOAD
+nome: foto.jpg
+tamanho: 500000
+hash: ...
+dados: ...
+```
+
+Isso já começa a se parecer com um protocolo de aplicação real.
+
+---
+
+# 20.31 Transferência de arquivos não é apenas `sendall()`
+
+Uma implementação ingênua:
+
+```python
+file = open("arquivo", "rb")
+sock.sendall(file.read())
+```
+
+ignora vários problemas.
+
+Uma implementação mais correta precisa pensar em:
+
+```text
+┌──────────────────────────────┐
+│ tamanho                      │
+├──────────────────────────────┤
+│ limites                      │
+├──────────────────────────────┤
+│ chunks                       │
+├──────────────────────────────┤
+│ encerramento                 │
+├──────────────────────────────┤
+│ erros                        │
+├──────────────────────────────┤
+│ integridade                  │
+├──────────────────────────────┤
+│ nome seguro                  │
+├──────────────────────────────┤
+│ autenticação/autorização     │
+├──────────────────────────────┤
+│ criptografia                 │
+└──────────────────────────────┘
+```
+
+É exatamente por isso que protocolos de transferência de arquivos reais possuem muito mais regras.
+
+---
+
+# 20.32 Modelo mental final
+
+A transferência pode ser entendida assim:
+
+```text
+                 CLIENTE
+                    │
+                    │
+              ┌─────▼─────┐
+              │   HEADER  │
+              │ tamanho   │
+              └─────┬─────┘
+                    │
+                    │
+              ┌─────▼─────┐
+              │  PAYLOAD  │
+              │  arquivo  │
+              └─────┬─────┘
+                    │
+                    ▼
+                  TCP
+                    │
+                    ▼
+              ┌───────────┐
+              │  SOCKET   │
+              └─────┬─────┘
+                    │
+                    ▼
+                 SERVIDOR
+                    │
+              lê o header
+                    │
+              descobre N bytes
+                    │
+              recebe N bytes
+                    │
+              grava no disco
+```
+
+A ideia central é:
+
+> **O TCP transporta bytes; o protocolo da aplicação define como esses bytes representam um arquivo.**
+
+---
+
+# 20.33 Resumo da Parte
+
+Nesta parte construímos o raciocínio necessário para realizar transferência de arquivos através de sockets TCP.
+
+Aprendemos que:
+
+- arquivos devem normalmente ser tratados em modo binário;
+    
+- arquivos grandes não devem ser carregados completamente na memória;
+    
+- devemos trabalhar com chunks;
+    
+- TCP não informa automaticamente o fim de um arquivo;
+    
+- fechar a conexão pode indicar fim, mas limita o protocolo;
+    
+- uma solução melhor é enviar o tamanho antes dos dados;
+    
+- `struct.pack()` e `struct.unpack()` podem ser utilizados para representar o tamanho em formato binário;
+    
+- `recv_exactly()` pode ser utilizado quando precisamos receber uma quantidade exata de bytes;
+    
+- o tamanho recebido deve ser validado;
+    
+- nomes de arquivos vindos da rede são entrada não confiável;
+    
+- hashes podem ajudar a verificar integridade;
+    
+- TCP não fornece criptografia;
+    
+- TLS pode ser utilizado para proteger a comunicação.
+    
+
+O modelo principal desta parte:
+
+```text
+ARQUIVO
+   ↓
+TAMANHO
+   ↓
+HEADER
+   ↓
+CHUNKS
+   ↓
+TCP
+   ↓
+CHUNKS
+   ↓
+TAMANHO ESPERADO
+   ↓
+ARQUIVO
+```
+

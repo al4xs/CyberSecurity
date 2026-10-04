@@ -36508,3 +36508,1406 @@ responder
 
 ---
 
+# 33. Projeto prático: cliente e servidor TCP completos
+
+Agora vamos juntar os principais conceitos estudados em um projeto prático.
+
+A ideia não é simplesmente escrever um `echo server` pequeno, mas construir um **cliente e um servidor TCP com um protocolo próprio**, contendo:
+
+- conexão TCP;
+    
+- framing;
+    
+- mensagens delimitadas;
+    
+- múltiplos comandos;
+    
+- validação;
+    
+- tratamento de erros;
+    
+- timeout;
+    
+- logging;
+    
+- concorrência;
+    
+- encerramento correto;
+    
+- separação entre servidor, cliente e protocolo.
+    
+
+O objetivo é transformar o conhecimento das partes anteriores em um sistema que você consiga executar, modificar e estudar.
+
+---
+
+## 33.1 O projeto
+
+Vamos criar uma aplicação simples chamada:
+
+```text
+TCP Command Server
+```
+
+O cliente poderá enviar comandos para o servidor.
+
+Inicialmente teremos:
+
+```text
+PING
+INFO
+ECHO mensagem
+QUIT
+```
+
+O servidor responderá:
+
+```text
+PING
+→ PONG
+
+INFO
+→ informações do servidor
+
+ECHO hello
+→ hello
+
+QUIT
+→ BYE
+```
+
+---
+
+## 33.2 Arquitetura
+
+O projeto terá três arquivos:
+
+```text
+tcp_server/
+│
+├── server.py
+├── client.py
+└── protocol.py
+```
+
+A responsabilidade será:
+
+```text
+protocol.py
+    │
+    └── regras das mensagens
+
+
+server.py
+    │
+    ├── socket
+    ├── bind
+    ├── listen
+    ├── accept
+    └── clientes
+
+
+client.py
+    │
+    ├── connect
+    ├── send
+    └── recv
+```
+
+Isso evita colocar tudo em um único arquivo.
+
+---
+
+# 33.3 Nosso protocolo
+
+Vamos definir uma regra simples:
+
+> **Cada mensagem termina com `\n`.**
+
+Exemplo:
+
+```text
+PING\n
+```
+
+Ou:
+
+```text
+ECHO hello mundo\n
+```
+
+O servidor pode receber:
+
+```text
+PING\nECHO hello\nINFO\n
+```
+
+ou:
+
+```text
+PI
+```
+
+e depois:
+
+```text
+NG\n
+```
+
+Por isso teremos um buffer.
+
+---
+
+# 33.4 Criando o protocolo
+
+Primeiro:
+
+```python
+# protocol.py
+
+MAX_MESSAGE_SIZE = 4096
+
+
+def encode_message(message):
+    if not isinstance(message, str):
+        raise TypeError("message deve ser str")
+
+    data = message.encode("utf-8")
+
+    if len(data) > MAX_MESSAGE_SIZE:
+        raise ValueError("Mensagem muito grande")
+
+    return data + b"\n"
+```
+
+Essa função transforma:
+
+```text
+"PING"
+```
+
+em:
+
+```text
+b"PING\n"
+```
+
+---
+
+# 33.5 Por que verificar o tamanho depois do `encode()`?
+
+Porque caracteres e bytes não são necessariamente equivalentes.
+
+Por exemplo, em UTF-8:
+
+```text
+"a"
+```
+
+ocupa:
+
+```text
+1 byte
+```
+
+Mas alguns caracteres podem ocupar vários bytes.
+
+Portanto, se o protocolo trabalha com bytes, o limite deve ser aplicado aos bytes:
+
+```python
+data = message.encode("utf-8")
+
+if len(data) > MAX_MESSAGE_SIZE:
+    ...
+```
+
+e não somente:
+
+```python
+if len(message) > MAX_MESSAGE_SIZE:
+```
+
+---
+
+# 33.6 Decodificando uma mensagem
+
+Agora podemos criar:
+
+```python
+def decode_message(data):
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Mensagem não está em UTF-8")
+```
+
+Isso transforma:
+
+```text
+b"PING"
+```
+
+em:
+
+```text
+"PING"
+```
+
+---
+
+# 33.7 Extraindo mensagens do buffer
+
+Precisamos de uma função que consiga retirar mensagens completas.
+
+```python
+def extract_messages(buffer):
+    messages = []
+
+    while b"\n" in buffer:
+        raw_message, buffer = buffer.split(b"\n", 1)
+
+        if len(raw_message) > MAX_MESSAGE_SIZE:
+            raise ValueError("Mensagem muito grande")
+
+        messages.append(decode_message(raw_message))
+
+    return messages, buffer
+```
+
+A função retorna duas coisas:
+
+```text
+mensagens completas
+        +
+restante do buffer
+```
+
+---
+
+# 33.8 Exemplo do parser
+
+Imagine:
+
+```python
+buffer = b"PING\nECHO hello\nINF"
+```
+
+Chamamos:
+
+```python
+messages, buffer = extract_messages(buffer)
+```
+
+Resultado:
+
+```text
+messages:
+[
+    "PING",
+    "ECHO hello"
+]
+
+buffer:
+b"INF"
+```
+
+O `INF` não é descartado.
+
+Ele permanece no buffer esperando os próximos bytes.
+
+Se chegarem:
+
+```text
+O\n
+```
+
+teremos:
+
+```text
+buffer:
+b"INFO\n"
+```
+
+e finalmente:
+
+```text
+INFO
+```
+
+---
+
+# 33.9 Criando o servidor
+
+Agora podemos começar o `server.py`.
+
+```python
+# server.py
+
+import logging
+import socket
+import threading
+
+from protocol import encode_message, extract_messages
+
+
+HOST = "127.0.0.1"
+PORT = 4444
+CLIENT_TIMEOUT = 30
+```
+
+Estamos centralizando algumas configurações:
+
+```text
+HOST
+PORT
+TIMEOUT
+```
+
+Isso facilita alterações futuras.
+
+---
+
+# 33.10 Processando comandos
+
+Agora precisamos de uma função que interprete as mensagens.
+
+```python
+def process_command(message):
+    if message == "PING":
+        return "PONG"
+
+    if message == "INFO":
+        return "TCP Command Server"
+
+    if message == "QUIT":
+        return "BYE"
+
+    if message.startswith("ECHO "):
+        return message[5:]
+
+    return "ERROR UNKNOWN_COMMAND"
+```
+
+Temos uma separação importante:
+
+```text
+socket
+  ↓
+recebe bytes
+
+protocol.py
+  ↓
+transforma em mensagem
+
+process_command()
+  ↓
+interpreta o comando
+```
+
+A função `process_command()` não precisa saber nada sobre sockets.
+
+Isso é uma boa separação de responsabilidades.
+
+---
+
+# 33.11 O handler de cliente
+
+Agora podemos criar:
+
+```python
+def handle_client(client, address):
+    logging.info("Cliente conectado: %s", address)
+
+    client.settimeout(CLIENT_TIMEOUT)
+
+    buffer = b""
+
+    try:
+        while True:
+            data = client.recv(4096)
+
+            if not data:
+                logging.info(
+                    "Cliente desconectou: %s",
+                    address,
+                )
+                break
+
+            buffer += data
+
+            messages, buffer = extract_messages(buffer)
+
+            for message in messages:
+                logging.info(
+                    "Comando recebido de %s: %s",
+                    address,
+                    message,
+                )
+
+                response = process_command(message)
+
+                client.sendall(
+                    encode_message(response)
+                )
+
+                if message == "QUIT":
+                    return
+
+    except socket.timeout:
+        logging.info(
+            "Timeout do cliente: %s",
+            address,
+        )
+
+    except ConnectionResetError:
+        logging.info(
+            "Conexão resetada: %s",
+            address,
+        )
+
+    except ValueError as error:
+        logging.warning(
+            "Mensagem inválida de %s: %s",
+            address,
+            error,
+        )
+
+    except OSError:
+        logging.exception(
+            "Erro de socket com %s",
+            address,
+        )
+
+    finally:
+        client.close()
+
+        logging.info(
+            "Conexão encerrada: %s",
+            address,
+        )
+```
+
+Aqui estamos combinando diversos conceitos que estudamos anteriormente.
+
+---
+
+# 33.12 O que acontece dentro do handler?
+
+O fluxo é:
+
+```text
+recv()
+  │
+  ▼
+bytes
+  │
+  ▼
+buffer
+  │
+  ▼
+extract_messages()
+  │
+  ▼
+mensagens completas
+  │
+  ▼
+process_command()
+  │
+  ▼
+resposta
+  │
+  ▼
+encode_message()
+  │
+  ▼
+sendall()
+```
+
+Isso é praticamente a arquitetura de um pequeno servidor de protocolo.
+
+---
+
+# 33.13 Por que usamos `buffer += data`?
+
+Porque TCP não preserva mensagens.
+
+Imagine que o cliente faça:
+
+```python
+sendall(b"PING\n")
+sendall(b"INFO\n")
+```
+
+O servidor pode receber:
+
+```text
+PING\nINFO\n
+```
+
+em um único `recv()`.
+
+Também pode receber:
+
+```text
+PING\n
+```
+
+e depois:
+
+```text
+INFO\n
+```
+
+Ou:
+
+```text
+PI
+```
+
+e:
+
+```text
+NG\n
+```
+
+O buffer permite tratar todos esses casos corretamente.
+
+---
+
+# 33.14 Criando o socket de escuta
+
+Agora:
+
+```python
+def run_server():
+    server = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM,
+    )
+
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1,
+    )
+
+    server.bind((HOST, PORT))
+    server.listen()
+
+    logging.info(
+        "Servidor ouvindo em %s:%s",
+        HOST,
+        PORT,
+    )
+```
+
+A sequência é:
+
+```text
+socket()
+   ↓
+setsockopt()
+   ↓
+bind()
+   ↓
+listen()
+```
+
+---
+
+# 33.15 Aceitando clientes
+
+Depois:
+
+```python
+    try:
+        while True:
+            client, address = server.accept()
+
+            thread = threading.Thread(
+                target=handle_client,
+                args=(client, address),
+                daemon=True,
+            )
+
+            thread.start()
+
+    except KeyboardInterrupt:
+        logging.info("Servidor encerrado")
+
+    finally:
+        server.close()
+```
+
+Agora temos concorrência:
+
+```text
+                 servidor
+                    │
+                 accept()
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+      Thread A  Thread B  Thread C
+          │         │         │
+       Cliente A Cliente B Cliente C
+```
+
+---
+
+# 33.16 Código completo do servidor
+
+Juntando as partes:
+
+```python
+# server.py
+
+import logging
+import socket
+import threading
+
+from protocol import encode_message, extract_messages
+
+
+HOST = "127.0.0.1"
+PORT = 4444
+CLIENT_TIMEOUT = 30
+
+
+def process_command(message):
+    if message == "PING":
+        return "PONG"
+
+    if message == "INFO":
+        return "TCP Command Server"
+
+    if message == "QUIT":
+        return "BYE"
+
+    if message.startswith("ECHO "):
+        return message[5:]
+
+    return "ERROR UNKNOWN_COMMAND"
+
+
+def handle_client(client, address):
+    logging.info("Cliente conectado: %s", address)
+
+    client.settimeout(CLIENT_TIMEOUT)
+
+    buffer = b""
+
+    try:
+        while True:
+            data = client.recv(4096)
+
+            if not data:
+                logging.info(
+                    "Cliente desconectou: %s",
+                    address,
+                )
+                break
+
+            buffer += data
+
+            messages, buffer = extract_messages(buffer)
+
+            for message in messages:
+                logging.info(
+                    "Comando recebido de %s: %s",
+                    address,
+                    message,
+                )
+
+                response = process_command(message)
+
+                client.sendall(
+                    encode_message(response)
+                )
+
+                if message == "QUIT":
+                    return
+
+    except socket.timeout:
+        logging.info(
+            "Timeout do cliente: %s",
+            address,
+        )
+
+    except ConnectionResetError:
+        logging.info(
+            "Conexão resetada: %s",
+            address,
+        )
+
+    except ValueError as error:
+        logging.warning(
+            "Mensagem inválida de %s: %s",
+            address,
+            error,
+        )
+
+    except OSError:
+        logging.exception(
+            "Erro de socket com %s",
+            address,
+        )
+
+    finally:
+        client.close()
+
+        logging.info(
+            "Conexão encerrada: %s",
+            address,
+        )
+
+
+def run_server():
+    server = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM,
+    )
+
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1,
+    )
+
+    server.bind((HOST, PORT))
+    server.listen()
+
+    logging.info(
+        "Servidor ouvindo em %s:%s",
+        HOST,
+        PORT,
+    )
+
+    try:
+        while True:
+            client, address = server.accept()
+
+            thread = threading.Thread(
+                target=handle_client,
+                args=(client, address),
+                daemon=True,
+            )
+
+            thread.start()
+
+    except KeyboardInterrupt:
+        logging.info("Servidor encerrado")
+
+    finally:
+        server.close()
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+run_server()
+```
+
+---
+
+# 33.17 Criando o cliente
+
+Agora precisamos de um cliente.
+
+```python
+# client.py
+
+import socket
+
+from protocol import encode_message
+```
+
+Configuração:
+
+```python
+HOST = "127.0.0.1"
+PORT = 4444
+```
+
+Conexão:
+
+```python
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM,
+)
+
+client.connect((HOST, PORT))
+```
+
+Agora o cliente está conectado.
+
+---
+
+# 33.18 Enviando comandos
+
+Podemos criar:
+
+```python
+def send_command(client, command):
+    client.sendall(
+        encode_message(command)
+    )
+
+    data = client.recv(4096)
+
+    if not data:
+        return None
+
+    return data.decode("utf-8").rstrip("\n")
+```
+
+Uso:
+
+```python
+response = send_command(client, "PING")
+
+print(response)
+```
+
+Resultado:
+
+```text
+PONG
+```
+
+---
+
+# 33.19 Um problema interessante no cliente
+
+Nosso servidor usa framing por `\n`.
+
+Porém:
+
+```python
+data = client.recv(4096)
+```
+
+também não garante que recebemos exatamente uma resposta.
+
+Isso significa que o cliente também deveria possuir um buffer.
+
+Esse detalhe é muito importante:
+
+> **Framing não é apenas responsabilidade do servidor.**
+
+Os dois lados do protocolo precisam respeitar as mesmas regras.
+
+---
+
+# 33.20 Cliente com buffer
+
+Podemos criar uma função:
+
+```python
+def recv_message(client, buffer):
+    while b"\n" not in buffer:
+        data = client.recv(4096)
+
+        if not data:
+            raise ConnectionError(
+                "Servidor desconectou"
+            )
+
+        buffer += data
+
+    message, buffer = buffer.split(
+        b"\n",
+        1,
+    )
+
+    return message.decode("utf-8"), buffer
+```
+
+Agora o cliente consegue preservar dados que chegaram além da primeira mensagem.
+
+---
+
+# 33.21 Cliente completo
+
+```python
+# client.py
+
+import socket
+
+from protocol import encode_message
+
+
+HOST = "127.0.0.1"
+PORT = 4444
+
+
+def recv_message(client, buffer):
+    while b"\n" not in buffer:
+        data = client.recv(4096)
+
+        if not data:
+            raise ConnectionError(
+                "Servidor desconectou"
+            )
+
+        buffer += data
+
+    message, buffer = buffer.split(
+        b"\n",
+        1,
+    )
+
+    return message.decode("utf-8"), buffer
+
+
+def send_command(client, buffer, command):
+    client.sendall(
+        encode_message(command)
+    )
+
+    return recv_message(
+        client,
+        buffer,
+    )
+
+
+def main():
+    client = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM,
+    )
+
+    client.settimeout(30)
+
+    client.connect((HOST, PORT))
+
+    buffer = b""
+
+    try:
+        while True:
+            command = input("> ")
+
+            response, buffer = send_command(
+                client,
+                buffer,
+                command,
+            )
+
+            print(response)
+
+            if command == "QUIT":
+                break
+
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+# 33.22 Executando o projeto
+
+Primeiro iniciamos o servidor:
+
+```bash
+python3 server.py
+```
+
+Podemos receber:
+
+```text
+Servidor ouvindo em 127.0.0.1:4444
+```
+
+Em outro terminal:
+
+```bash
+python3 client.py
+```
+
+Agora:
+
+```text
+> PING
+PONG
+
+> INFO
+TCP Command Server
+
+> ECHO hello
+hello
+
+> ECHO Python sockets
+Python sockets
+
+> QUIT
+BYE
+```
+
+---
+
+# 33.23 Testando múltiplos clientes
+
+Podemos abrir vários terminais:
+
+```text
+Terminal 1
+    ↓
+python3 client.py
+
+Terminal 2
+    ↓
+python3 client.py
+
+Terminal 3
+    ↓
+python3 client.py
+```
+
+O servidor terá algo semelhante a:
+
+```text
+Servidor
+│
+├── Thread → Cliente 1
+├── Thread → Cliente 2
+└── Thread → Cliente 3
+```
+
+Cada cliente possui:
+
+- socket próprio;
+    
+- buffer próprio;
+    
+- estado próprio;
+    
+- thread própria.
+    
+
+---
+
+# 33.24 O que esse projeto já implementa?
+
+Esse pequeno projeto já utiliza muitos conceitos estudados:
+
+```text
+AF_INET
+SOCK_STREAM
+socket()
+setsockopt()
+SO_REUSEADDR
+bind()
+listen()
+accept()
+connect()
+recv()
+sendall()
+close()
+timeout
+threading
+framing
+buffer
+protocolo
+validação
+logging
+tratamento de erros
+```
+
+Ou seja, não estamos mais apenas estudando funções isoladas.
+
+Estamos usando essas funções dentro de uma arquitetura.
+
+---
+
+# 33.25 O que ainda poderia ser melhorado?
+
+Esse servidor ainda não é um servidor de produção.
+
+Poderíamos adicionar:
+
+```text
+TLS
+autenticação
+autorização
+rate limiting
+limite de conexões
+ThreadPoolExecutor
+selectors
+asyncio
+IPv6
+protocolo binário
+transferência de arquivos
+hash de integridade
+shutdown mais sofisticado
+métricas
+testes automatizados
+```
+
+Isso é importante porque desenvolvimento de rede é incremental.
+
+Começamos:
+
+```text
+socket básico
+```
+
+Depois:
+
+```text
+protocolo
+```
+
+Depois:
+
+```text
+concorrência
+```
+
+Depois:
+
+```text
+segurança
+```
+
+Depois:
+
+```text
+observabilidade
+```
+
+---
+
+# 33.26 O que você deve observar no código
+
+Não memorize apenas:
+
+```python
+socket.socket(...)
+```
+
+O mais importante é entender o fluxo:
+
+```text
+server.py
+│
+├── cria socket
+│
+├── configura socket
+│
+├── bind
+│
+├── listen
+│
+└── accept
+     │
+     ▼
+   client
+     │
+     ▼
+ handle_client()
+     │
+     ├── recv()
+     │
+     ├── buffer
+     │
+     ├── parser
+     │
+     ├── comando
+     │
+     ├── resposta
+     │
+     └── sendall()
+```
+
+E do outro lado:
+
+```text
+client.py
+│
+├── socket
+├── connect
+├── encode
+├── sendall
+├── recv
+└── decode
+```
+
+---
+
+# 33.27 O projeto como modelo mental
+
+Podemos resumir todo o projeto assim:
+
+```text
+                 ┌──────────────┐
+                 │   CLIENTE    │
+                 └──────┬───────┘
+                        │
+                     TCP/TLS
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │   SOCKET     │
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │    BUFFER    │
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │   PROTOCOLO  │
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │  COMANDO     │
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │  APLICAÇÃO   │
+                 └──────┬───────┘
+                        │
+                        ▼
+                    RESPOSTA
+                        │
+                        ▼
+                     TCP/TLS
+                        │
+                        ▼
+                    CLIENTE
+```
+
+Esse modelo aparece em inúmeros sistemas de rede, mesmo quando a implementação concreta é muito mais sofisticada.
+
+---
+
+# 33.28 O que aprendemos de verdade
+
+O objetivo desta parte não é decorar o código.
+
+É conseguir olhar para um programa de sockets e identificar:
+
+```text
+Onde o socket é criado?
+Onde ocorre o bind?
+Onde o servidor começa a escutar?
+Onde novas conexões são aceitas?
+Onde os bytes são recebidos?
+Onde o framing acontece?
+Onde o protocolo é interpretado?
+Onde a lógica da aplicação é executada?
+Onde a resposta é criada?
+Onde ela é enviada?
+Onde os erros são tratados?
+Onde a conexão é encerrada?
+Como vários clientes são atendidos?
+```
+
+Se você consegue responder essas perguntas, já começou a enxergar sockets como **arquitetura de rede**, e não apenas como uma lista de funções Python.
+
+---
+
+## Resumo da Parte
+
+- Construímos um cliente e servidor TCP completos.
+    
+- Criamos um protocolo simples baseado em mensagens terminadas por `\n`.
+    
+- Implementamos framing através de buffers.
+    
+- O servidor utiliza:
+    
+    - `socket()`;
+        
+    - `setsockopt()`;
+        
+    - `bind()`;
+        
+    - `listen()`;
+        
+    - `accept()`;
+        
+    - `recv()`;
+        
+    - `sendall()`;
+        
+    - `close()`.
+        
+- O cliente utiliza:
+    
+    - `socket()`;
+        
+    - `connect()`;
+        
+    - `sendall()`;
+        
+    - `recv()`;
+        
+    - `close()`.
+        
+- Criamos separação entre:
+    
+    - protocolo;
+        
+    - servidor;
+        
+    - cliente;
+        
+    - lógica dos comandos.
+        
+- Utilizamos threads para atender múltiplos clientes.
+    
+- Implementamos timeout e tratamento de desconexões.
+    
+- O cliente também precisa respeitar o framing.
+    
+- TCP continua sendo apenas um fluxo de bytes; o protocolo da aplicação define o significado.
+    
+- O projeto pode evoluir para TLS, autenticação, autorização, rate limiting, IPv6, `selectors`, `asyncio` e transferência de arquivos.
+    
+
+**Modelo final:**
+
+```text
+CLIENTE
+   │
+   │ connect()
+   ▼
+SERVIDOR
+   │
+   │ accept()
+   ▼
+CONEXÃO
+   │
+   │ recv()
+   ▼
+BUFFER
+   │
+   ▼
+FRAMING
+   │
+   ▼
+PROTOCOLO
+   │
+   ▼
+LÓGICA
+   │
+   ▼
+RESPOSTA
+   │
+   │ sendall()
+   ▼
+CLIENTE
+```
+
+---

@@ -19734,3 +19734,1218 @@ E o principal ponto para guardar:
 
 > **Resolver um nome e estabelecer uma conexão são operações diferentes.**
 
+---
+
+# 19. Enviando e recebendo dados de forma segura e eficiente
+
+Até agora já vimos como:
+
+- criar sockets;
+    
+- associar endereços com `bind()`;
+    
+- colocar servidores em escuta com `listen()`;
+    
+- aceitar clientes com `accept()`;
+    
+- conectar clientes com `connect()`;
+    
+- enviar dados com `send()` e `sendall()`;
+    
+- receber dados com `recv()`;
+    
+- trabalhar com UDP;
+    
+- configurar opções com `setsockopt()`;
+    
+- resolver nomes com `getaddrinfo()`.
+    
+
+Agora precisamos aprofundar um dos pontos mais importantes da programação com sockets:
+
+> **Como controlar corretamente o envio e o recebimento de dados.**
+
+Isso é especialmente importante porque uma conexão TCP é um **fluxo contínuo de bytes**, e não uma sequência automática de mensagens.
+
+---
+
+# 19.1 TCP não sabe onde uma mensagem termina
+
+Imagine que o cliente envie:
+
+```python
+client.sendall(b"OLA")
+```
+
+e depois:
+
+```python
+client.sendall(b"MUNDO")
+```
+
+O servidor pode receber:
+
+```python
+b"OLA"
+```
+
+depois:
+
+```python
+b"MUNDO"
+```
+
+Mas também pode receber:
+
+```python
+b"OLAMUNDO"
+```
+
+ou:
+
+```python
+b"OL"
+```
+
+e depois:
+
+```python
+b"AMUNDO"
+```
+
+Isso acontece porque TCP trabalha com um **fluxo de bytes**.
+
+Portanto:
+
+```text
+send()
+send()
+send()
+```
+
+não significa:
+
+```text
+mensagem
+mensagem
+mensagem
+```
+
+No TCP temos:
+
+```text
+fluxo de bytes
+```
+
+---
+
+# 19.2 O tamanho passado para `recv()` não é o tamanho da mensagem
+
+Considere:
+
+```python
+data = client.recv(1024)
+```
+
+Isso significa:
+
+> "Retorne no máximo 1024 bytes que estiverem disponíveis."
+
+Não significa:
+
+> "Espere até receber exatamente 1024 bytes."
+
+Por exemplo, se existem apenas 50 bytes disponíveis:
+
+```python
+data = client.recv(1024)
+```
+
+pode retornar:
+
+```text
+50 bytes
+```
+
+Se existem 700:
+
+```text
+700 bytes
+```
+
+E se existirem 1024 ou mais:
+
+```text
+até 1024 bytes
+```
+
+Portanto:
+
+```text
+recv(1024)
+     ↓
+até 1024 bytes
+```
+
+---
+
+# 19.3 `recv()` pode retornar menos dados do que você espera
+
+Imagine que o cliente queira enviar:
+
+```text
+"ABCDEFGHIJ"
+```
+
+São 10 bytes.
+
+O servidor faz:
+
+```python
+data = client.recv(10)
+```
+
+Não existe garantia de que receberá:
+
+```python
+b"ABCDEFGHIJ"
+```
+
+Pode receber:
+
+```python
+b"ABC"
+```
+
+e depois:
+
+```python
+b"DEFGHIJ"
+```
+
+Por isso, quando o protocolo exige uma quantidade específica de bytes, precisamos controlar explicitamente essa quantidade.
+
+---
+
+# 19.4 Criando uma função para receber exatamente N bytes
+
+Podemos criar uma função:
+
+```python
+def recv_exactly(sock, size):
+    data = b""
+
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+
+        if chunk == b"":
+            raise ConnectionError("Conexão encerrada")
+
+        data += chunk
+
+    return data
+```
+
+Agora:
+
+```python
+data = recv_exactly(client, 10)
+```
+
+significa:
+
+> Tente receber exatamente 10 bytes.
+
+O fluxo será:
+
+```text
+recv_exactly(10)
+       ↓
+recebe alguns bytes
+       ↓
+ainda faltam?
+       ↓
+sim
+       ↓
+recv()
+       ↓
+continua
+       ↓
+10 bytes recebidos
+       ↓
+retorna
+```
+
+---
+
+# 19.5 Por que verificamos `b""`?
+
+Observe:
+
+```python
+if chunk == b"":
+    raise ConnectionError("Conexão encerrada")
+```
+
+Isso é fundamental.
+
+Quando uma conexão TCP é encerrada de forma ordenada pelo outro lado:
+
+```python
+recv()
+```
+
+retorna:
+
+```python
+b""
+```
+
+Isso não significa:
+
+```text
+"recebi uma mensagem vazia"
+```
+
+No contexto de TCP, significa que o fluxo chegou ao fim.
+
+Podemos visualizar:
+
+```text
+Cliente
+   │
+   │ FIN
+   ▼
+Servidor
+   │
+   │ recv()
+   ▼
+b""
+```
+
+---
+
+# 19.6 O perigo de fazer `data += chunk` repetidamente
+
+A função anterior funciona conceitualmente:
+
+```python
+data += chunk
+```
+
+Porém, para grandes quantidades de dados, concatenar bytes repetidamente pode ser ineficiente.
+
+Por exemplo:
+
+```python
+data = b""
+
+while ...:
+    data += chunk
+```
+
+Cada concatenação pode precisar criar um novo objeto `bytes`.
+
+Para pequenas mensagens isso normalmente não é um problema.
+
+Para grandes volumes de dados, podemos utilizar uma lista:
+
+```python
+chunks = []
+
+while ...:
+    chunks.append(chunk)
+
+data = b"".join(chunks)
+```
+
+Assim:
+
+```text
+chunk 1
+chunk 2
+chunk 3
+chunk 4
+   ↓
+lista
+   ↓
+b"".join()
+   ↓
+bytes final
+```
+
+---
+
+# 19.7 Exemplo mais eficiente
+
+Podemos reescrever:
+
+```python
+def recv_exactly(sock, size):
+    chunks = []
+    received = 0
+
+    while received < size:
+        chunk = sock.recv(size - received)
+
+        if chunk == b"":
+            raise ConnectionError("Conexão encerrada")
+
+        chunks.append(chunk)
+        received += len(chunk)
+
+    return b"".join(chunks)
+```
+
+Agora:
+
+```python
+data = recv_exactly(client, 1024)
+```
+
+garante que a função só termine quando:
+
+```text
+1024 bytes
+```
+
+forem recebidos, ou quando ocorrer um erro/encerramento.
+
+---
+
+# 19.8 Limite de `recv()` e memória
+
+Outro cuidado importante:
+
+```python
+sock.recv(1000000000)
+```
+
+não significa necessariamente que o Python receberá 1 GB imediatamente.
+
+O valor passado para `recv()` representa o tamanho máximo solicitado para aquela operação.
+
+Mesmo assim, devemos evitar valores absurdamente grandes sem necessidade.
+
+Por exemplo:
+
+```python
+sock.recv(4096)
+```
+
+ou:
+
+```python
+sock.recv(8192)
+```
+
+são tamanhos comuns em muitos programas.
+
+O tamanho adequado depende do protocolo e da aplicação.
+
+---
+
+# 19.9 Recebendo arquivos
+
+Imagine que queremos transferir um arquivo.
+
+Uma abordagem simples é enviar o arquivo em blocos:
+
+```python
+with open("arquivo.bin", "rb") as file:
+    while True:
+        chunk = file.read(4096)
+
+        if not chunk:
+            break
+
+        sock.sendall(chunk)
+```
+
+O arquivo é dividido em pedaços:
+
+```text
+arquivo
+   ↓
+┌────────┬────────┬────────┬────────┐
+│ 4096 B │ 4096 B │ 4096 B │ ...    │
+└────────┴────────┴────────┴────────┘
+```
+
+Cada bloco é enviado através do socket.
+
+---
+
+# 19.10 Recebendo um arquivo
+
+No outro lado:
+
+```python
+with open("recebido.bin", "wb") as file:
+    while True:
+        chunk = sock.recv(4096)
+
+        if not chunk:
+            break
+
+        file.write(chunk)
+```
+
+O fluxo é:
+
+```text
+socket
+  ↓
+recv()
+  ↓
+chunk
+  ↓
+arquivo.write()
+  ↓
+disco
+```
+
+Porém, existe um problema importante:
+
+> **Como o receptor sabe onde o arquivo termina?**
+
+---
+
+# 19.11 O encerramento da conexão não deve ser o protocolo
+
+Uma solução ingênua seria:
+
+```text
+enviar arquivo
+↓
+fechar conexão
+↓
+receiver recebe b""
+↓
+arquivo terminou
+```
+
+Isso pode funcionar em uma aplicação extremamente simples.
+
+Mas é uma abordagem limitada.
+
+Se quisermos continuar utilizando a mesma conexão para outras operações:
+
+```text
+arquivo
+↓
+mensagem
+↓
+comando
+↓
+outro arquivo
+```
+
+não podemos usar o fechamento da conexão como delimitador de cada mensagem.
+
+Precisamos de um protocolo.
+
+---
+
+# 19.12 Enviando o tamanho antes dos dados
+
+Uma solução é informar primeiro o tamanho do conteúdo.
+
+Por exemplo:
+
+```text
+[TAMANHO][DADOS]
+```
+
+Imagine que temos:
+
+```text
+10000 bytes
+```
+
+Podemos enviar:
+
+```text
+[10000][conteúdo]
+```
+
+O receptor primeiro lê o tamanho:
+
+```text
+10000
+```
+
+e então sabe exatamente quanto precisa receber.
+
+Fluxo:
+
+```text
+Cliente
+   │
+   │ tamanho = 10000
+   ▼
+Servidor
+   │
+   │ espera 10000 bytes
+   ▼
+dados
+```
+
+---
+
+# 19.13 Cabeçalho e payload
+
+Essa estrutura é muito comum em protocolos.
+
+Podemos chamar:
+
+```text
+HEADER
+```
+
+a parte que descreve a mensagem.
+
+E:
+
+```text
+PAYLOAD
+```
+
+os dados propriamente ditos.
+
+Por exemplo:
+
+```text
+┌───────────────┬─────────────────────────┐
+│ HEADER        │ PAYLOAD                 │
+│ tamanho: 1000│ 1000 bytes de dados     │
+└───────────────┴─────────────────────────┘
+```
+
+O receptor primeiro interpreta o header.
+
+Depois sabe como interpretar o payload.
+
+---
+
+# 19.14 Usando `struct`
+
+Python possui a biblioteca:
+
+```python
+import struct
+```
+
+que pode ser utilizada para converter valores entre Python e uma representação binária.
+
+Por exemplo:
+
+```python
+header = struct.pack("!I", len(data))
+```
+
+Aqui:
+
+```text
+!
+```
+
+indica ordem de bytes de rede (**big-endian**).
+
+E:
+
+```text
+I
+```
+
+representa um inteiro sem sinal de 4 bytes.
+
+Portanto:
+
+```python
+struct.pack("!I", 1000)
+```
+
+produz uma representação binária de:
+
+```text
+1000
+```
+
+---
+
+# 19.15 Enviando uma mensagem com tamanho
+
+Podemos criar:
+
+```python
+import struct
+
+data = b"Hello, world!"
+
+header = struct.pack("!I", len(data))
+
+sock.sendall(header)
+sock.sendall(data)
+```
+
+O protocolo agora é:
+
+```text
+┌──────────────┬────────────────┐
+│ 4 bytes      │ N bytes        │
+│ tamanho      │ dados          │
+└──────────────┴────────────────┘
+```
+
+---
+
+# 19.16 Recebendo a mensagem
+
+O receptor pode fazer:
+
+```python
+import struct
+
+header = recv_exactly(sock, 4)
+
+length = struct.unpack("!I", header)[0]
+
+data = recv_exactly(sock, length)
+```
+
+O processo é:
+
+```text
+recv 4 bytes
+     ↓
+interpreta tamanho
+     ↓
+descobre N
+     ↓
+recv exatamente N bytes
+     ↓
+mensagem completa
+```
+
+---
+
+# 19.17 Esse modelo é extremamente importante
+
+Essa estrutura:
+
+```text
+HEADER
++
+PAYLOAD
+```
+
+aparece em inúmeros protocolos.
+
+Por exemplo:
+
+```text
+┌──────────────┬──────────────────┐
+│ comprimento  │ conteúdo         │
+└──────────────┴──────────────────┘
+```
+
+Ou:
+
+```text
+┌──────────────┬─────────┬─────────┐
+│ versão       │ tipo    │ payload │
+└──────────────┴─────────┴─────────┘
+```
+
+Ou:
+
+```text
+┌────────┬──────────┬─────────────┐
+│ versão │ comando  │ dados       │
+└────────┴──────────┴─────────────┘
+```
+
+Esse conceito será muito importante quando estudarmos protocolos de rede mais profundamente.
+
+---
+
+# 19.18 Enviando vários campos
+
+Imagine um protocolo simples:
+
+```text
+[VERSÃO][TIPO][TAMANHO][DADOS]
+```
+
+Poderíamos ter:
+
+```text
+VERSION = 1
+TYPE = 2
+LENGTH = 100
+```
+
+seguido por:
+
+```text
+100 bytes
+```
+
+O receptor lê:
+
+```text
+1. versão
+2. tipo
+3. tamanho
+4. payload
+```
+
+Isso transforma uma sequência de bytes em uma estrutura que a aplicação consegue interpretar.
+
+---
+
+# 19.19 O socket não entende seu protocolo
+
+É importante entender onde cada responsabilidade está.
+
+O socket não sabe que:
+
+```text
+4 bytes = tamanho
+```
+
+Isso é uma regra criada pela aplicação.
+
+O socket apenas transmite:
+
+```text
+bytes
+```
+
+Então:
+
+```text
+Aplicação
+   ↓
+protocolo
+   ↓
+bytes
+   ↓
+socket
+   ↓
+TCP
+   ↓
+rede
+```
+
+No outro lado:
+
+```text
+rede
+   ↓
+TCP
+   ↓
+socket
+   ↓
+bytes
+   ↓
+protocolo
+   ↓
+aplicação
+```
+
+---
+
+# 19.20 Envio parcial com `send()`
+
+Já vimos que:
+
+```python
+sock.send(data)
+```
+
+pode enviar apenas uma parte.
+
+Por exemplo:
+
+```python
+data = b"A" * 10000
+
+sent = sock.send(data)
+
+print(sent)
+```
+
+Pode acontecer:
+
+```text
+10000
+```
+
+mas também:
+
+```text
+4096
+```
+
+ou outro valor menor.
+
+Por isso, para enviar todos os dados:
+
+```python
+sock.sendall(data)
+```
+
+normalmente é mais conveniente.
+
+---
+
+# 19.21 Quando `send()` é útil?
+
+`send()` ainda é importante.
+
+Ele é útil quando queremos controlar manualmente o processo de envio.
+
+Por exemplo:
+
+```python
+view = memoryview(data)
+
+while view:
+    sent = sock.send(view)
+    view = view[sent:]
+```
+
+Aqui estamos implementando manualmente a lógica de envio parcial.
+
+O processo é:
+
+```text
+dados
+ ↓
+send()
+ ↓
+quantos bytes foram enviados?
+ ↓
+remove os enviados
+ ↓
+envia o restante
+```
+
+`sendall()` já encapsula esse comportamento para nós.
+
+---
+
+# 19.22 `memoryview`
+
+A classe:
+
+```python
+memoryview
+```
+
+permite trabalhar com uma visão sobre um objeto de bytes sem necessariamente criar cópias do conteúdo para cada operação.
+
+Exemplo:
+
+```python
+data = b"ABCDEFGHIJ"
+
+view = memoryview(data)
+
+print(view[:5].tobytes())
+```
+
+Resultado:
+
+```text
+b'ABCDE'
+```
+
+Isso pode ser útil em código de rede de maior desempenho.
+
+Porém, para aplicações simples:
+
+```python
+sendall()
+```
+
+normalmente é suficiente.
+
+---
+
+# 19.23 Tratando erros durante envio e recebimento
+
+Operações de rede podem falhar.
+
+Por exemplo:
+
+```python
+try:
+    sock.sendall(data)
+
+except BrokenPipeError:
+    print("O outro lado fechou a conexão.")
+
+except ConnectionResetError:
+    print("A conexão foi resetada.")
+```
+
+Para recebimento:
+
+```python
+try:
+    data = sock.recv(4096)
+
+except TimeoutError:
+    print("Tempo limite atingido.")
+
+except ConnectionResetError:
+    print("Conexão resetada.")
+```
+
+Isso é importante em aplicações reais.
+
+---
+
+# 19.24 Timeout durante `recv()`
+
+Se configurarmos:
+
+```python
+sock.settimeout(5)
+```
+
+então:
+
+```python
+sock.recv(4096)
+```
+
+não ficará bloqueado indefinidamente.
+
+Se nada acontecer durante o período configurado, poderá ocorrer:
+
+```python
+socket.timeout
+```
+
+Exemplo:
+
+```python
+import socket
+
+sock.settimeout(5)
+
+try:
+    data = sock.recv(4096)
+
+except socket.timeout:
+    print("Nenhum dado recebido dentro do prazo.")
+```
+
+---
+
+# 19.25 Timeout não significa conexão encerrada
+
+É importante diferenciar:
+
+```text
+timeout
+```
+
+de:
+
+```text
+b""
+```
+
+Timeout:
+
+```text
+não chegou dado dentro do prazo
+```
+
+`b""`:
+
+```text
+peer encerrou o fluxo de forma ordenada
+```
+
+Portanto:
+
+```python
+if data == b"":
+    ...
+```
+
+não deve ser tratado simplesmente como:
+
+```text
+"timeout"
+```
+
+São situações diferentes.
+
+---
+
+# 19.26 Modelo mental de recebimento
+
+Quando fazemos:
+
+```python
+data = sock.recv(4096)
+```
+
+devemos pensar:
+
+```text
+Há bytes disponíveis?
+       │
+       ├── sim → retorna alguns bytes
+       │
+       └── não
+             │
+             ├── blocking → espera
+             │
+             ├── timeout → lança exceção
+             │
+             └── non-blocking → BlockingIOError
+```
+
+E se o peer encerrou a conexão:
+
+```text
+recv()
+  ↓
+b""
+```
+
+Esse modelo é muito mais preciso do que pensar:
+
+> "`recv()` pega uma mensagem."
+
+---
+
+# 19.27 Fluxo completo de uma mensagem TCP
+
+Podemos visualizar:
+
+```text
+APLICAÇÃO
+    │
+    │ mensagem
+    ▼
+PROTOCOLO DA APLICAÇÃO
+    │
+    │ framing
+    ▼
+BYTES
+    │
+    ▼
+sendall()
+    │
+    ▼
+SOCKET
+    │
+    ▼
+TCP
+    │
+    ▼
+REDE
+    │
+    ▼
+TCP
+    │
+    ▼
+SOCKET
+    │
+    ▼
+recv()
+    │
+    ▼
+BYTES
+    │
+    ▼
+PROTOCOLO
+    │
+    ▼
+MENSAGEM
+```
+
+O TCP garante a entrega ordenada do fluxo dentro das propriedades do protocolo, mas **não sabe onde a mensagem da aplicação começa ou termina**.
+
+Essa responsabilidade continua sendo da aplicação.
+
+---
+
+# 19.28 Resumo da Parte
+
+Nesta parte aprofundamos o envio e recebimento de dados.
+
+Os principais conceitos foram:
+
+```python
+sock.recv(size)
+```
+
+Recebe **até** `size` bytes.
+
+```python
+sock.send(data)
+```
+
+Pode enviar apenas uma parte dos dados.
+
+```python
+sock.sendall(data)
+```
+
+Tenta enviar todos os dados.
+
+Também vimos que:
+
+```text
+TCP = fluxo de bytes
+```
+
+e não:
+
+```text
+TCP = mensagens
+```
+
+Quando precisamos saber exatamente onde uma mensagem termina, devemos criar um mecanismo de **framing**, como:
+
+```text
+[HEADER][PAYLOAD]
+```
+
+ou:
+
+```text
+[TAMANHO][DADOS]
+```
+
+Também aprendemos a importância de:
+
+```python
+b""
+```
+
+como indicação de encerramento ordenado do fluxo, e de:
+
+```python
+socket.timeout
+```
+
+para indicar que uma operação ultrapassou o tempo limite configurado.
+
+O modelo mental principal desta parte é:
+
+```text
+TCP entrega um fluxo de bytes.
+A aplicação define como esses bytes representam mensagens.
+```
+

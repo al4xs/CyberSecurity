@@ -9994,3 +9994,969 @@ normalmente significa que o outro lado encerrou a conexão de forma ordenada.
 
 > **TCP entrega um fluxo de bytes. `send()`/`sendall()` colocam bytes nesse fluxo e `recv()` retira bytes desse fluxo. O TCP não sabe onde uma mensagem da aplicação começa ou termina.**
 
+---
+
+# 10. Encerrando conexões
+
+Depois de estabelecer uma conexão e trocar dados, chega o momento de encerrá-la.
+
+Em Python, existem principalmente dois métodos relacionados ao encerramento de um socket:
+
+```python
+socket.close()
+```
+
+e:
+
+```python
+socket.shutdown()
+```
+
+Apesar de ambos estarem relacionados ao encerramento, eles possuem **funções diferentes**.
+
+O modelo mental inicial é:
+
+```text
+shutdown()
+    ↓
+controla como a comunicação será encerrada
+
+close()
+    ↓
+fecha o socket localmente
+```
+
+---
+
+## 10.1 `close()`
+
+O método `close()` fecha o socket.
+
+Sintaxe:
+
+```python
+socket.close()
+```
+
+Exemplo:
+
+```python
+client.close()
+```
+
+Depois disso, aquele socket não deve mais ser utilizado para comunicação.
+
+Um fluxo simples pode ser:
+
+```python
+client.sendall(b"Olá servidor!")
+
+data = client.recv(1024)
+
+client.close()
+```
+
+O fluxo é:
+
+```text
+socket conectado
+      ↓
+envia dados
+      ↓
+recebe dados
+      ↓
+close()
+      ↓
+socket fechado
+```
+
+---
+
+## 10.2 O que acontece quando usamos `close()`?
+
+Quando chamamos:
+
+```python
+client.close()
+```
+
+estamos informando ao sistema operacional que a aplicação terminou de utilizar aquele socket.
+
+Podemos imaginar:
+
+```text
+Aplicação
+   │
+   │ close()
+   ▼
+Socket
+   │
+   ▼
+Sistema operacional
+   │
+   ▼
+recursos liberados
+```
+
+Isso é importante porque sockets consomem recursos do sistema operacional.
+
+Assim como devemos fechar arquivos depois de utilizá-los:
+
+```python
+arquivo.close()
+```
+
+também devemos fechar sockets quando não precisamos mais deles:
+
+```python
+socket.close()
+```
+
+---
+
+## 10.3 `close()` não é apenas "desconectar"
+
+É comum pensar:
+
+> `close()` simplesmente desconecta o socket.
+
+A ideia é próxima, mas tecnicamente o método também encerra o **descritor/recurso local associado ao socket**.
+
+Em sistemas Unix/Linux, o socket está associado a um descritor de arquivo.
+
+Por isso:
+
+```python
+client.close()
+```
+
+faz com que o programa deixe de possuir aquele socket como um recurso utilizável.
+
+---
+
+## 10.4 `close()` depois de `accept()`
+
+No servidor TCP podemos ter:
+
+```python
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+client, address = server.accept()
+```
+
+Agora temos dois sockets:
+
+```text
+server
+   ↓
+socket de escuta
+
+client
+   ↓
+socket da conexão
+```
+
+Podemos fechar apenas a conexão com aquele cliente:
+
+```python
+client.close()
+```
+
+enquanto mantemos:
+
+```python
+server
+```
+
+aberto.
+
+Assim:
+
+```text
+server
+   │
+   ├── continua escutando
+   │
+   └── client.close()
+          ↓
+      cliente atual desconectado
+```
+
+Isso é extremamente importante em servidores que atendem vários clientes.
+
+---
+
+## 10.5 Fechar o socket do cliente não significa fechar o servidor
+
+Por exemplo:
+
+```python
+client.close()
+```
+
+não significa:
+
+```text
+servidor inteiro encerrado
+```
+
+Significa:
+
+```text
+socket daquela conexão
+        ↓
+       fechado
+```
+
+O socket:
+
+```python
+server
+```
+
+pode continuar funcionando.
+
+Exemplo:
+
+```python
+while True:
+    client, address = server.accept()
+
+    data = client.recv(1024)
+
+    print(data)
+
+    client.sendall(b"OK")
+
+    client.close()
+```
+
+Aqui:
+
+```text
+server
+  │
+  ├── accept()
+  │
+  ├── atende cliente
+  │
+  ├── close() conexão
+  │
+  └── volta para accept()
+```
+
+Esse padrão permite que o servidor continue aceitando novos clientes.
+
+---
+
+## 10.6 Fechando o socket do servidor
+
+Quando o servidor realmente terminar:
+
+```python
+server.close()
+```
+
+Exemplo:
+
+```python
+client.close()
+server.close()
+```
+
+Podemos pensar:
+
+```text
+client.close()
+    ↓
+fecha conexão específica
+
+server.close()
+    ↓
+fecha socket de escuta
+```
+
+Depois de:
+
+```python
+server.close()
+```
+
+o servidor não poderá continuar utilizando aquele socket para:
+
+```python
+server.accept()
+```
+
+---
+
+## 10.7 `shutdown()`
+
+O método `shutdown()` possui uma finalidade diferente.
+
+Sintaxe:
+
+```python
+socket.shutdown(how)
+```
+
+O parâmetro `how` determina **qual direção da comunicação será encerrada**.
+
+Os valores normalmente utilizados são:
+
+```python
+socket.SHUT_RD
+socket.SHUT_WR
+socket.SHUT_RDWR
+```
+
+---
+
+## 10.8 `SHUT_RD`
+
+```python
+socket.shutdown(socket.SHUT_RD)
+```
+
+Indica que a aplicação não deseja mais receber dados através daquele socket.
+
+Podemos visualizar:
+
+```text
+        SOCKET
+
+   envio       recebimento
+     │              │
+     │              X
+     │         bloqueado
+```
+
+Ou:
+
+```text
+SHUT_RD
+   ↓
+encerra a direção de leitura
+```
+
+---
+
+## 10.9 `SHUT_WR`
+
+```python
+socket.shutdown(socket.SHUT_WR)
+```
+
+Indica que a aplicação não deseja mais enviar dados.
+
+Visualmente:
+
+```text
+        SOCKET
+
+   envio       recebimento
+     X              │
+ bloqueado           │
+```
+
+Ou:
+
+```text
+SHUT_WR
+   ↓
+encerra a direção de escrita
+```
+
+Isso é útil quando queremos dizer:
+
+> "Terminei de enviar dados, mas ainda quero receber dados."
+
+---
+
+## 10.10 `SHUT_RDWR`
+
+```python
+socket.shutdown(socket.SHUT_RDWR)
+```
+
+Encerra ambas as direções:
+
+```text
+        SOCKET
+
+   envio       recebimento
+     X              X
+```
+
+Ou:
+
+```text
+SHUT_RDWR
+    ↓
+encerra leitura + escrita
+```
+
+---
+
+## 10.11 `shutdown()` não é igual a `close()`
+
+Essa diferença é importante.
+
+### `shutdown()`
+
+Controla a comunicação:
+
+```text
+shutdown()
+    ↓
+encerra leitura/escrita
+```
+
+### `close()`
+
+Fecha o socket localmente:
+
+```text
+close()
+   ↓
+libera o socket/recurso
+```
+
+Podemos resumir:
+
+|Método|Função principal|
+|---|---|
+|`shutdown()`|Controla o encerramento das direções de comunicação|
+|`close()`|Fecha o socket e libera o recurso local|
+
+---
+
+## 10.12 Um exemplo de `shutdown(SHUT_WR)`
+
+Imagine um protocolo em que o cliente envia vários dados e depois precisa informar ao servidor:
+
+> "Terminei de enviar, agora vou apenas receber."
+
+Podemos fazer:
+
+```python
+client.sendall(b"Primeira parte")
+client.sendall(b"Segunda parte")
+
+client.shutdown(socket.SHUT_WR)
+
+data = client.recv(1024)
+```
+
+O fluxo é:
+
+```text
+CLIENTE
+   │
+   │ send
+   ▼
+SERVIDOR
+   │
+   │ send
+   ▼
+CLIENTE
+   │
+   │ shutdown(SHUT_WR)
+   ▼
+fim dos envios
+   │
+   │ ainda pode receber
+   ▼
+recv()
+```
+
+Isso é chamado de **half-close** ou encerramento parcial da conexão.
+
+---
+
+## 10.13 Half-close
+
+Uma conexão TCP possui duas direções independentes:
+
+```text
+CLIENTE ───────────────► SERVIDOR
+        direção de envio
+
+CLIENTE ◄─────────────── SERVIDOR
+        direção de recebimento
+```
+
+Podemos encerrar apenas uma delas.
+
+Por exemplo:
+
+```python
+client.shutdown(socket.SHUT_WR)
+```
+
+Isso significa:
+
+```text
+CLIENTE ───────X───────► SERVIDOR
+        envio encerrado
+
+CLIENTE ◄─────────────── SERVIDOR
+        recebimento continua
+```
+
+O cliente não enviará mais dados, mas ainda poderá receber.
+
+Essa característica pode ser útil em protocolos específicos.
+
+---
+
+## 10.14 Por que não usar somente `close()`?
+
+Na maioria dos programas simples:
+
+```python
+client.close()
+```
+
+é suficiente.
+
+Não precisamos necessariamente utilizar:
+
+```python
+client.shutdown(...)
+```
+
+antes de todo `close()`.
+
+Por exemplo:
+
+```python
+client.sendall(b"Olá")
+
+data = client.recv(1024)
+
+client.close()
+```
+
+é perfeitamente normal.
+
+`shutdown()` se torna interessante quando precisamos controlar **separadamente** o encerramento do envio e do recebimento.
+
+---
+
+## 10.15 `with` para fechar automaticamente
+
+Assim como arquivos podem ser utilizados com:
+
+```python
+with open(...) as arquivo:
+    ...
+```
+
+sockets também podem ser utilizados com `with`.
+
+Exemplo:
+
+```python
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+    client.connect(("127.0.0.1", 4444))
+
+    client.sendall(b"Olá servidor!")
+
+    data = client.recv(1024)
+```
+
+Quando o bloco termina, o socket é fechado automaticamente.
+
+Podemos visualizar:
+
+```text
+with socket(...)
+       │
+       ▼
+socket criado
+       │
+       ▼
+operações
+       │
+       ▼
+fim do bloco
+       │
+       ▼
+socket fechado
+```
+
+Isso reduz a chance de esquecer:
+
+```python
+client.close()
+```
+
+---
+
+## 10.16 Exemplo com servidor utilizando `with`
+
+Também podemos utilizar:
+
+```python
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+    server.bind(("127.0.0.1", 4444))
+    server.listen()
+
+    client, address = server.accept()
+
+    with client:
+        data = client.recv(1024)
+
+        print(data.decode("utf-8"))
+
+        client.sendall(b"Mensagem recebida!")
+```
+
+Aqui existem dois contextos:
+
+```text
+with server
+    │
+    ├── bind()
+    ├── listen()
+    └── accept()
+          │
+          ▼
+      with client
+          │
+          ├── recv()
+          ├── sendall()
+          │
+          ▼
+      client fechado
+    │
+    ▼
+server fechado
+```
+
+Essa abordagem deixa explícito o ciclo de vida dos sockets.
+
+---
+
+## 10.17 O ciclo de vida de um socket TCP
+
+Agora podemos visualizar praticamente tudo que aprendemos até aqui.
+
+### Servidor
+
+```text
+socket()
+   │
+   ▼
+bind()
+   │
+   ▼
+listen()
+   │
+   ▼
+accept()
+   │
+   ▼
+recv() / sendall()
+   │
+   ▼
+close()
+```
+
+### Cliente
+
+```text
+socket()
+   │
+   ▼
+connect()
+   │
+   ▼
+sendall() / recv()
+   │
+   ▼
+close()
+```
+
+Em uma representação conjunta:
+
+```text
+                    SERVIDOR
+                       │
+                    socket()
+                       │
+                     bind()
+                       │
+                    listen()
+                       │
+                    accept()
+                       │
+                       │
+                       │
+CLIENTE                │
+   │                   │
+socket()               │
+   │                   │
+connect() ─────────────┤
+   │                   │
+   │                   │
+sendall() ────────────►│
+   │                 recv()
+   │                   │
+   │                   │
+recv() ◄───────────────┤
+   │                 sendall()
+   │                   │
+   │                   │
+close()             close()
+```
+
+---
+
+## 10.18 O erro de esquecer o `close()`
+
+Em programas pequenos, esquecer um `close()` pode não parecer importante.
+
+Porém, em aplicações que criam muitas conexões, isso pode causar problemas.
+
+Por exemplo:
+
+```text
+conexão 1 → não fechada
+conexão 2 → não fechada
+conexão 3 → não fechada
+conexão 4 → não fechada
+...
+```
+
+Cada socket utiliza recursos do sistema operacional.
+
+Com muitas conexões abertas:
+
+```text
+recursos disponíveis
+       ↓
+      ↓↓↓
+podem se esgotar
+```
+
+Por isso devemos tratar corretamente o ciclo de vida dos sockets.
+
+---
+
+## 10.19 Erro: utilizar um socket depois de fechá-lo
+
+Depois de:
+
+```python
+client.close()
+```
+
+não devemos tentar:
+
+```python
+client.sendall(b"Olá")
+```
+
+ou:
+
+```python
+client.recv(1024)
+```
+
+porque aquele socket já foi fechado.
+
+Conceitualmente:
+
+```text
+socket aberto
+     │
+     ▼
+  close()
+     │
+     ▼
+socket fechado
+     │
+     X
+send()/recv()
+```
+
+Isso pode resultar em um erro como:
+
+```text
+OSError
+```
+
+dependendo da operação e do estado do socket.
+
+---
+
+## 10.20 `close()` e o problema da porta continuar aparecendo
+
+Como já vimos anteriormente, um servidor pode apresentar:
+
+```text
+OSError: [Errno 98] Address already in use
+```
+
+quando tenta executar:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Isso pode acontecer por vários motivos, inclusive porque outra aplicação ainda está utilizando a porta ou porque uma conexão anterior deixou o endereço em um estado relacionado ao encerramento TCP.
+
+Podemos verificar:
+
+```bash
+ss -ltnp | grep :4444
+```
+
+ou:
+
+```bash
+lsof -i :4444
+```
+
+O ponto importante é:
+
+> fechar um socket não significa que todas as características relacionadas à conexão TCP desaparecem instantaneamente da rede.
+
+O TCP possui estados de conexão e mecanismos próprios de encerramento.
+
+Esses estados serão estudados com mais profundidade posteriormente.
+
+---
+
+## 10.21 O modelo mental definitivo de encerramento
+
+Podemos resumir o conceito desta seção:
+
+```text
+shutdown()
+    │
+    ├── SHUT_RD
+    │      ↓
+    │   para leitura
+    │
+    ├── SHUT_WR
+    │      ↓
+    │   para escrita
+    │
+    └── SHUT_RDWR
+           ↓
+      para ambos
+```
+
+Enquanto:
+
+```text
+close()
+   ↓
+fecha o socket local
+   ↓
+libera o recurso
+```
+
+E, para um programa simples:
+
+```python
+client.close()
+```
+
+normalmente é suficiente.
+
+---
+
+## Resumo da Parte
+
+### `close()`
+
+Fecha o socket:
+
+```python
+socket.close()
+```
+
+É o método utilizado normalmente quando terminamos de utilizar uma conexão.
+
+### `shutdown()`
+
+Controla o encerramento das direções de comunicação:
+
+```python
+socket.shutdown(socket.SHUT_RD)
+socket.shutdown(socket.SHUT_WR)
+socket.shutdown(socket.SHUT_RDWR)
+```
+
+### `SHUT_RD`
+
+Encerra a direção de recebimento.
+
+### `SHUT_WR`
+
+Encerra a direção de envio.
+
+### `SHUT_RDWR`
+
+Encerra ambas.
+
+### Half-close
+
+Permite encerrar apenas uma direção da conexão:
+
+```python
+client.shutdown(socket.SHUT_WR)
+```
+
+O socket deixa de enviar, mas ainda pode receber.
+
+### `with`
+
+Pode ser utilizado para garantir o fechamento automático:
+
+```python
+with socket.socket(...) as client:
+    ...
+```
+
+### Ciclo básico
+
+```text
+SERVIDOR:
+
+socket()
+  ↓
+bind()
+  ↓
+listen()
+  ↓
+accept()
+  ↓
+send() / recv()
+  ↓
+close()
+```
+
+```text
+CLIENTE:
+
+socket()
+  ↓
+connect()
+  ↓
+send() / recv()
+  ↓
+close()
+```
+
+### Conceito principal
+
+> **`shutdown()` controla quais direções da comunicação serão encerradas, enquanto `close()` encerra o socket local e libera o recurso utilizado pela aplicação.**
+

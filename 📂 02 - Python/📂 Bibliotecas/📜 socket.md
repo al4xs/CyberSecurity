@@ -7512,3 +7512,1106 @@ Essa separação entre **socket de escuta** e **socket de conexão** é um dos f
     
 
 ---
+
+# 8. Estabelecendo uma conexão com `connect()`
+
+Até agora estudamos principalmente o lado do **servidor TCP**:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+Agora precisamos entender o lado do **cliente**.
+
+Um cliente TCP precisa solicitar uma conexão com um servidor. Para isso, utilizamos:
+
+```python
+connect()
+```
+
+Em Python:
+
+```python
+client.connect(endereco)
+```
+
+Por exemplo:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+Essa operação informa ao sistema operacional que o socket deve tentar estabelecer uma conexão com o endereço especificado.
+
+---
+
+## 8.1 O que `connect()` faz?
+
+Considere:
+
+```python
+import socket
+
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+```
+
+O fluxo é:
+
+```text
+socket()
+   ↓
+cria socket TCP
+   ↓
+connect()
+   ↓
+solicita conexão com 127.0.0.1:4444
+```
+
+Podemos pensar em `connect()` como:
+
+```text
+"Quero estabelecer uma conexão
+ com este endereço remoto."
+```
+
+Por isso, diferente de `bind()`, `connect()` trabalha principalmente com o **destino da conexão**.
+
+---
+
+## 8.2 `bind()` e `connect()` possuem funções diferentes
+
+Essa diferença é fundamental.
+
+`bind()`:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+associa o socket a um **endereço local**.
+
+`connect()`:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+solicita uma conexão com um **endereço remoto**.
+
+Podemos visualizar:
+
+```text
+bind()
+   ↓
+"Este é o meu endereço local."
+
+connect()
+   ↓
+"Quero me conectar a este endereço."
+```
+
+Portanto:
+
+```text
+bind()
+   ↓
+LOCAL
+
+connect()
+   ↓
+DESTINO
+```
+
+---
+
+## 8.3 Sintaxe de `connect()`
+
+A forma básica é:
+
+```python
+socket.connect(endereco)
+```
+
+Para IPv4:
+
+```python
+client.connect((ip, porta))
+```
+
+Exemplo:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+A estrutura do endereço é semelhante à utilizada em `bind()`:
+
+```python
+("127.0.0.1", 4444)
+```
+
+onde:
+
+```text
+127.0.0.1
+    ↓
+endereço IP
+
+4444
+    ↓
+porta
+```
+
+A diferença não está no formato da tupla.
+
+A diferença está no **papel do endereço**.
+
+---
+
+## 8.4 Exemplo mínimo de cliente TCP
+
+Podemos criar um cliente simples:
+
+```python
+import socket
+
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+
+print("Conectado ao servidor!")
+
+client.close()
+```
+
+Para que isso funcione, precisamos ter um servidor TCP escutando:
+
+```text
+127.0.0.1:4444
+```
+
+Por exemplo:
+
+```text
+SERVIDOR
+127.0.0.1:4444
+     ↑
+     │
+     │ connect()
+     │
+CLIENTE
+```
+
+---
+
+## 8.5 O servidor precisa estar preparado
+
+Imagine que o cliente execute:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+mas nenhum servidor esteja escutando nessa porta.
+
+A tentativa de conexão poderá falhar com um erro semelhante a:
+
+```text
+ConnectionRefusedError: [Errno 111] Connection refused
+```
+
+Isso significa, de forma simplificada, que não havia um serviço aceitando a conexão naquele endereço naquele momento.
+
+Podemos representar:
+
+```text
+CLIENTE
+   │
+   │ connect()
+   ↓
+127.0.0.1:4444
+   │
+   X
+nenhum servidor disponível
+```
+
+Portanto, para testar um cliente, precisamos normalmente iniciar primeiro o servidor.
+
+---
+
+## 8.6 Servidor e cliente trabalhando juntos
+
+Agora podemos combinar tudo o que aprendemos.
+
+### Servidor
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+print("Cliente conectado:", address)
+
+client.close()
+server.close()
+```
+
+### Cliente
+
+```python
+import socket
+
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+
+print("Conectado ao servidor!")
+
+client.close()
+```
+
+O fluxo será:
+
+```text
+                     SERVIDOR
+
+              socket()
+                 ↓
+              bind()
+                 ↓
+         127.0.0.1:4444
+                 ↓
+              listen()
+                 ↓
+              accept()
+                 ↑
+                 │
+                 │ conexão
+                 │
+              connect()
+                 ↑
+                 │
+               CLIENTE
+```
+
+---
+
+## 8.7 O que acontece durante `connect()`?
+
+Quando o cliente executa:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+o sistema operacional inicia o processo necessário para estabelecer a conexão TCP.
+
+Em uma conexão TCP tradicional, isso envolve o conhecido **three-way handshake**.
+
+De forma simplificada:
+
+```text
+CLIENTE                    SERVIDOR
+
+   SYN ───────────────────────►
+
+       ◄──────────────── SYN-ACK
+
+   ACK ───────────────────────►
+
+       conexão estabelecida
+```
+
+Essas mensagens fazem parte do funcionamento do protocolo TCP.
+
+A aplicação Python não precisa construir manualmente esses segmentos para utilizar uma conexão TCP normal.
+
+O sistema operacional e a implementação do TCP cuidam desse processo.
+
+---
+
+## 8.8 O three-way handshake
+
+Podemos entender o processo de maneira conceitual.
+
+### 1. Cliente envia SYN
+
+O cliente informa:
+
+```text
+"Quero iniciar uma conexão TCP."
+```
+
+Representado por:
+
+```text
+SYN
+```
+
+### 2. Servidor responde SYN-ACK
+
+O servidor responde indicando que recebeu a solicitação e também está disposto a estabelecer a conexão:
+
+```text
+SYN + ACK
+```
+
+### 3. Cliente envia ACK
+
+O cliente confirma:
+
+```text
+ACK
+```
+
+Depois disso, a conexão TCP é considerada estabelecida.
+
+Visualmente:
+
+```text
+CLIENTE                         SERVIDOR
+
+   SYN
+    ───────────────────────────►
+
+                   SYN + ACK
+    ◄───────────────────────────
+
+   ACK
+    ───────────────────────────►
+
+         CONEXÃO ESTABELECIDA
+```
+
+---
+
+## 8.9 `connect()` e o socket do cliente
+
+Depois de:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+o objeto:
+
+```python
+client
+```
+
+passa a representar uma conexão TCP estabelecida com aquele destino, caso a operação tenha sido concluída com sucesso.
+
+Agora podemos utilizar métodos de comunicação, como:
+
+```python
+client.send(...)
+```
+
+```python
+client.sendall(...)
+```
+
+e:
+
+```python
+client.recv(...)
+```
+
+Portanto:
+
+```text
+socket()
+   ↓
+socket criado
+
+connect()
+   ↓
+conexão estabelecida
+
+send()/sendall()
+   ↓
+envia dados
+
+recv()
+   ↓
+recebe dados
+```
+
+---
+
+## 8.10 `connect()` é bloqueante por padrão
+
+Assim como `accept()`, `connect()` normalmente possui comportamento bloqueante.
+
+Quando fazemos:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+o programa pode esperar até:
+
+- a conexão ser estabelecida;
+    
+- ocorrer uma falha;
+    
+- ocorrer um timeout configurado;
+    
+- ou outro evento relacionado ao estabelecimento da conexão.
+    
+
+Podemos visualizar:
+
+```text
+connect()
+   ↓
+tentativa de conexão
+   │
+   ├── sucesso → retorna
+   │
+   └── falha → exceção
+```
+
+Por isso, se o destino estiver indisponível, o programa pode não simplesmente continuar imediatamente.
+
+---
+
+## 8.11 Timeout de conexão
+
+Podemos configurar um timeout para evitar uma espera indefinida em determinadas situações.
+
+Por exemplo:
+
+```python
+client.settimeout(5)
+```
+
+Depois:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+Nesse caso, estamos configurando um limite de tempo para operações bloqueantes relacionadas ao socket.
+
+O conceito é:
+
+```text
+settimeout(5)
+      ↓
+operações bloqueantes
+      ↓
+limite de espera
+```
+
+Se o tempo for excedido, Python poderá gerar uma exceção de timeout.
+
+Esse assunto será aprofundado posteriormente quando estudarmos:
+
+- `settimeout()`;
+    
+- sockets bloqueantes;
+    
+- sockets não bloqueantes;
+    
+- tratamento de exceções.
+    
+
+---
+
+## 8.12 O sistema operacional pode escolher a porta local do cliente
+
+Uma coisa interessante acontece quando o cliente executa:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+sem executar `bind()` previamente.
+
+O sistema operacional normalmente escolhe automaticamente uma porta local.
+
+Por exemplo:
+
+```text
+CLIENTE
+127.0.0.1:53142
+       │
+       │ TCP
+       ▼
+SERVIDOR
+127.0.0.1:4444
+```
+
+Aqui:
+
+```text
+53142
+```
+
+é a porta local temporária do cliente.
+
+Enquanto:
+
+```text
+4444
+```
+
+é a porta utilizada pelo servidor.
+
+Portanto, uma conexão TCP pode ser identificada por quatro informações:
+
+```text
+IP origem
++
+porta origem
++
+IP destino
++
+porta destino
+```
+
+Por exemplo:
+
+```text
+127.0.0.1:53142
+        ↓
+127.0.0.1:4444
+```
+
+Esse conjunto forma o contexto de uma conexão TCP.
+
+---
+
+## 8.13 O cliente não precisa chamar `bind()` normalmente
+
+Um erro comum é pensar que todo cliente precisa fazer:
+
+```python
+client.bind(...)
+```
+
+antes de:
+
+```python
+client.connect(...)
+```
+
+Isso normalmente não é necessário.
+
+O cliente pode simplesmente fazer:
+
+```python
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+```
+
+O sistema operacional escolhe automaticamente um endereço local apropriado.
+
+Isso deixa o código mais simples.
+
+---
+
+## 8.14 Quando um cliente pode usar `bind()`?
+
+Existem situações em que um cliente pode precisar escolher explicitamente seu endereço local.
+
+Por exemplo, quando queremos:
+
+- utilizar uma interface de rede específica;
+    
+- utilizar uma porta local específica;
+    
+- controlar o endereço de origem;
+    
+- trabalhar com requisitos específicos de rede.
+    
+
+Nesse caso, podemos fazer:
+
+```python
+client.bind(("192.168.1.20", 5000))
+client.connect(("192.168.1.10", 4444))
+```
+
+Teríamos:
+
+```text
+CLIENTE
+192.168.1.20:5000
+       │
+       │ connect()
+       ▼
+SERVIDOR
+192.168.1.10:4444
+```
+
+Mas isso é diferente do caso comum.
+
+Na maioria das aplicações, o sistema operacional escolhe automaticamente o endereço e a porta local do cliente.
+
+---
+
+## 8.15 `connect()` não significa "enviar dados"
+
+Outro erro conceitual comum:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+não significa:
+
+```text
+"enviei uma mensagem para o servidor."
+```
+
+`connect()` estabelece a conexão.
+
+Depois podemos transmitir dados através de:
+
+```python
+client.send(...)
+```
+
+ou:
+
+```python
+client.sendall(...)
+```
+
+E receber através de:
+
+```python
+client.recv(...)
+```
+
+Portanto:
+
+```text
+connect()
+   ↓
+estabelece conexão
+
+send()/sendall()
+   ↓
+envia dados
+
+recv()
+   ↓
+recebe dados
+```
+
+---
+
+## 8.16 `connect()` e `accept()` trabalham juntos
+
+Essas duas operações são complementares.
+
+No cliente:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+No servidor:
+
+```python
+client, address = server.accept()
+```
+
+Podemos visualizar:
+
+```text
+CLIENTE                         SERVIDOR
+
+connect()
+    │
+    │
+    ├─────────────────────────►
+    │
+    │                         accept()
+    │                            │
+    │                            ▼
+    │                     socket da conexão
+    │
+    ▼
+conexão estabelecida
+```
+
+Ou, de forma mais simples:
+
+```text
+Cliente
+connect()
+   │
+   ▼
+Servidor
+accept()
+```
+
+As duas operações participam do estabelecimento da conexão vista pela aplicação.
+
+---
+
+## 8.17 O socket do cliente e o socket retornado por `accept()`
+
+Considere:
+
+```python
+# Cliente
+client.connect(("127.0.0.1", 4444))
+```
+
+e:
+
+```python
+# Servidor
+connection, address = server.accept()
+```
+
+Agora temos:
+
+```text
+CLIENTE                         SERVIDOR
+
+client  ◄════════════════════► connection
+```
+
+Os dois sockets representam os dois lados da mesma conexão TCP.
+
+Podemos visualizar:
+
+```text
+┌──────────────┐              ┌────────────────┐
+│   CLIENTE    │              │    SERVIDOR    │
+│              │              │                │
+│ client       │◄────────────►│ connection     │
+└──────────────┘              └────────────────┘
+```
+
+Depois podemos fazer:
+
+```text
+CLIENTE                         SERVIDOR
+
+send() ───────────────────────► recv()
+
+recv() ◄─────────────────────── send()
+```
+
+Essa é a base da comunicação bidirecional do TCP.
+
+---
+
+## 8.18 Cliente e servidor podem enviar e receber
+
+Depois que a conexão foi estabelecida, o modelo TCP é bidirecional.
+
+Isso significa que ambos os lados podem enviar e receber dados.
+
+Por exemplo:
+
+```text
+CLIENTE                         SERVIDOR
+
+send() ───────────────────────► recv()
+
+recv() ◄─────────────────────── send()
+```
+
+O cliente não é apenas um "enviador".
+
+O servidor também não é apenas um "receptor".
+
+Depois que a conexão TCP está estabelecida, ambos podem utilizar a conexão para comunicação nos dois sentidos.
+
+Isso será explorado detalhadamente na próxima parte, quando estudarmos:
+
+```python
+send()
+sendall()
+recv()
+```
+
+---
+
+## 8.19 Exemplo de conexão completa
+
+### Servidor
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+print("Aguardando conexão...")
+
+connection, address = server.accept()
+
+print("Conexão recebida de:", address)
+
+connection.close()
+server.close()
+```
+
+### Cliente
+
+```python
+import socket
+
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+
+print("Conectado!")
+
+client.close()
+```
+
+Fluxo:
+
+```text
+                    SERVIDOR
+
+                 socket()
+                    ↓
+                 bind()
+                    ↓
+             127.0.0.1:4444
+                    ↓
+                 listen()
+                    ↓
+                 accept()
+                    ▲
+                    │
+                    │ conexão
+                    │
+                 connect()
+                    ▲
+                    │
+                  CLIENTE
+```
+
+Depois da conexão:
+
+```text
+CLIENTE                         SERVIDOR
+
+client  ◄════════════════════► connection
+```
+
+Agora existe um canal TCP através do qual os dois lados podem trocar dados.
+
+---
+
+## 8.20 Diferença entre `connect()` e `accept()`
+
+Podemos resumir a diferença:
+
+|Operação|Lado típico|Função|
+|---|---|---|
+|`connect()`|Cliente|Solicita uma conexão com um destino|
+|`accept()`|Servidor|Aceita uma conexão recebida|
+|`listen()`|Servidor|Coloca o socket em modo de escuta|
+|`bind()`|Principalmente servidor|Associa o socket a um endereço local|
+
+Fluxo:
+
+```text
+CLIENTE
+
+socket()
+   ↓
+connect()
+   ↓
+comunicação
+```
+
+Servidor:
+
+```text
+SERVIDOR
+
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+comunicação
+```
+
+---
+
+## 8.21 Modelo mental definitivo de `connect()`
+
+Podemos pensar em:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+como:
+
+```text
+"Tenho um socket TCP.
+Quero estabelecer uma conexão
+com o endpoint 127.0.0.1:4444."
+```
+
+Depois de uma conexão bem-sucedida:
+
+```text
+socket()
+   ↓
+connect()
+   ↓
+TCP estabelecido
+   ↓
+send()/sendall()
+   ↓
+recv()
+```
+
+Enquanto no servidor:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+send()/sendall()
+   ↓
+recv()
+```
+
+A partir daqui, já temos a estrutura básica de uma comunicação TCP cliente-servidor.
+
+---
+
+## Resumo
+
+- `connect()` é utilizado para solicitar uma conexão com um endereço remoto.
+    
+- Exemplo:
+    
+    ```python
+    client.connect(("127.0.0.1", 4444))
+    ```
+    
+- `connect()` normalmente é utilizado no lado do cliente.
+    
+- `bind()` associa um socket a um endereço local.
+    
+- `connect()` utiliza um endereço de destino.
+    
+- O cliente normalmente não precisa executar `bind()` manualmente.
+    
+- O sistema operacional pode escolher automaticamente a porta local do cliente.
+    
+- Uma conexão TCP pode ser representada por:
+    
+    ```text
+    IP origem + porta origem
+    +
+    IP destino + porta destino
+    ```
+    
+- O estabelecimento de uma conexão TCP envolve o **three-way handshake**:
+    
+    ```text
+    SYN
+    SYN-ACK
+    ACK
+    ```
+    
+- `connect()` não envia os dados da aplicação.
+    
+- Depois de conectar, podemos utilizar:
+    
+    ```python
+    send()
+    sendall()
+    recv()
+    ```
+    
+- No servidor, `accept()` retorna o socket correspondente à conexão aceita.
+    
+- O socket do cliente e o socket retornado por `accept()` representam os dois lados da mesma conexão TCP.
+    
+- Depois de estabelecida, a conexão TCP permite comunicação nos dois sentidos.
+    
+- O fluxo básico completo agora é:
+    
+
+```text
+CLIENTE                         SERVIDOR
+
+socket()                        socket()
+   ↓                               ↓
+connect()                       bind()
+   │                               ↓
+   │                            listen()
+   │                               ↓
+   └─────────────────────────► accept()
+                                   │
+                                   ▼
+                              conexão TCP
+                                   │
+                     ┌─────────────┴─────────────┐
+                     ↓                           ↓
+                   send()                      recv()
+                     ↑                           ↑
+                     └─────────────┬─────────────┘
+                                   │
+                              comunicação
+```
+

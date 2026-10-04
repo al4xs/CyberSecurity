@@ -30020,3 +30020,1160 @@ O modelo geral agora fica:
 
 ---
 
+# 28. Broadcast e Multicast
+
+## 28.1 O que são Broadcast e Multicast?
+
+Até agora, a maioria dos exemplos utilizou comunicação **um para um**:
+
+```text
+Cliente ─────────→ Servidor
+```
+
+Esse modelo é chamado de **unicast**.
+
+Porém, existem situações em que um processo precisa enviar dados para vários destinos.
+
+Podemos ter:
+
+```text
+          ┌──→ Cliente A
+Servidor ─┼──→ Cliente B
+          └──→ Cliente C
+```
+
+Existem diferentes formas de fazer isso.
+
+As três categorias principais são:
+
+```text
+Unicast
+   ↓
+um remetente → um destino
+
+Broadcast
+   ↓
+um remetente → vários destinos dentro de um domínio de broadcast
+
+Multicast
+   ↓
+um remetente → grupo específico de destinatários
+```
+
+Broadcast e multicast não são simplesmente "um `send()` para vários sockets". Eles possuem mecanismos específicos na camada de rede e requisitos próprios.
+
+---
+
+## 28.2 Unicast
+
+Antes de entender broadcast e multicast, precisamos consolidar o modelo tradicional.
+
+Em uma comunicação unicast:
+
+```text
+Cliente A
+    │
+    │ dados
+    ↓
+Servidor
+```
+
+Existe um remetente e um destino específico.
+
+Exemplo:
+
+```python
+client.sendall(b"Olá")
+```
+
+O socket está conectado a um destino específico.
+
+Em termos conceituais:
+
+```text
+A ─────────→ B
+```
+
+---
+
+## 28.3 Broadcast
+
+Broadcast significa enviar um pacote para **todos os hosts alcançáveis dentro de determinado domínio de broadcast**.
+
+No IPv4, um exemplo clássico é:
+
+```text
+192.168.1.255
+```
+
+para uma rede:
+
+```text
+192.168.1.0/24
+```
+
+Nesse caso:
+
+```text
+              ┌──→ Host A
+              │
+Host emissor ─┼──→ Host B
+              │
+              ├──→ Host C
+              │
+              └──→ Host D
+```
+
+O objetivo não é escolher um único host.
+
+O pacote é destinado ao broadcast daquele domínio.
+
+---
+
+## 28.4 Broadcast não significa "Internet inteira"
+
+Um erro comum é pensar:
+
+> Broadcast envia para todos os computadores da Internet.
+
+Não.
+
+Broadcast IPv4 é limitado ao **domínio de broadcast local** e não é roteado normalmente através da Internet.
+
+Por exemplo:
+
+```text
+Rede local
+192.168.1.0/24
+```
+
+pode ter:
+
+```text
+192.168.1.255
+```
+
+como endereço de broadcast.
+
+O roteador normalmente não encaminha esse broadcast para outras redes.
+
+Portanto:
+
+```text
+Rede A
+192.168.1.0/24
+      │
+      │ broadcast
+      ↓
+Hosts da própria rede
+```
+
+não significa:
+
+```text
+Internet inteira
+```
+
+---
+
+## 28.5 Broadcast é principalmente associado ao IPv4
+
+O IPv4 possui mecanismos explícitos de broadcast.
+
+O IPv6 **não utiliza broadcast da mesma forma**.
+
+Em IPv6, mecanismos que poderiam exigir broadcast no IPv4 normalmente utilizam **multicast**.
+
+Por isso:
+
+```text
+IPv4
+   └── Broadcast disponível
+
+IPv6
+   └── Multicast utilizado em situações equivalentes
+```
+
+Essa diferença é importante quando trabalhamos diretamente com sockets de rede.
+
+---
+
+## 28.6 `SO_BROADCAST`
+
+Para enviar broadcast IPv4 usando um socket UDP, normalmente precisamos habilitar:
+
+```python
+socket.SO_BROADCAST
+```
+
+através de:
+
+```python
+setsockopt()
+```
+
+Exemplo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+sock.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_BROADCAST,
+    1
+)
+```
+
+Aqui:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+UDP
+
+SO_BROADCAST
+   ↓
+Permite utilizar o socket para broadcast
+```
+
+---
+
+## 28.7 Enviando um broadcast UDP
+
+Depois de habilitar `SO_BROADCAST`, podemos enviar para um endereço de broadcast.
+
+Exemplo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+sock.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_BROADCAST,
+    1
+)
+
+sock.sendto(
+    b"Mensagem de broadcast",
+    ("192.168.1.255", 4444)
+)
+
+sock.close()
+```
+
+A estrutura é:
+
+```text
+socket()
+   ↓
+setsockopt(SO_BROADCAST)
+   ↓
+sendto()
+   ↓
+192.168.1.255:4444
+```
+
+Como estamos utilizando UDP:
+
+```python
+socket.SOCK_DGRAM
+```
+
+não existe uma conexão TCP tradicional.
+
+---
+
+## 28.8 Servidor UDP recebendo broadcast
+
+Um socket UDP pode simplesmente fazer `bind()` na porta e receber o datagrama.
+
+Exemplo:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+server.bind(("0.0.0.0", 4444))
+
+print("Aguardando broadcast...")
+
+data, address = server.recvfrom(1024)
+
+print(f"Mensagem: {data.decode()}")
+print(f"Origem: {address}")
+
+server.close()
+```
+
+O:
+
+```python
+("0.0.0.0", 4444)
+```
+
+significa que o socket está associado à porta `4444` nas interfaces IPv4 disponíveis.
+
+Isso permite que ele receba datagramas destinados àquela porta, incluindo broadcasts recebidos pela máquina, desde que a rede e o sistema permitam.
+
+---
+
+## 28.9 Broadcast depende da configuração da rede
+
+Um exemplo como:
+
+```python
+("192.168.1.255", 4444)
+```
+
+não deve ser tratado como um endereço universal de broadcast.
+
+O endereço correto depende da **rede e da máscara**.
+
+Por exemplo:
+
+```text
+Rede:
+192.168.10.0/24
+
+Broadcast:
+192.168.10.255
+```
+
+Mas:
+
+```text
+Rede:
+192.168.10.0/25
+```
+
+possui outro endereço de broadcast:
+
+```text
+192.168.10.127
+```
+
+Portanto, o broadcast depende da topologia e do prefixo da rede.
+
+---
+
+## 28.10 Broadcast limitado
+
+Existe também o endereço:
+
+```text
+255.255.255.255
+```
+
+conhecido como **limited broadcast** no IPv4.
+
+Ele representa um broadcast limitado ao domínio local apropriado.
+
+Exemplo:
+
+```python
+sock.sendto(
+    b"Mensagem",
+    ("255.255.255.255", 4444)
+)
+```
+
+Porém, seu funcionamento ainda depende do sistema operacional, interface e configuração da rede.
+
+Não devemos assumir que qualquer rede permitirá esse envio.
+
+---
+
+## 28.11 Broadcast e segurança
+
+Broadcast pode ser útil, mas possui consequências.
+
+Se enviarmos:
+
+```text
+Mensagem
+     ↓
+Broadcast
+     ↓
+Todos os hosts do domínio
+```
+
+vários dispositivos podem receber o pacote mesmo que não tenham solicitado diretamente a comunicação.
+
+Isso pode gerar:
+
+- tráfego desnecessário;
+    
+- processamento em vários hosts;
+    
+- descoberta de dispositivos;
+    
+- exposição de informações;
+    
+- problemas de configuração;
+    
+- abuso em redes mal configuradas.
+    
+
+Por isso, protocolos que utilizam broadcast precisam definir cuidadosamente:
+
+- formato da mensagem;
+    
+- porta;
+    
+- autenticação;
+    
+- validação;
+    
+- frequência de envio;
+    
+- tamanho dos pacotes.
+    
+
+---
+
+# 28.12 Multicast
+
+Multicast possui uma ideia diferente.
+
+Em vez de enviar para:
+
+```text
+um destino
+```
+
+ou:
+
+```text
+todos os destinos
+```
+
+enviamos para um **grupo multicast**.
+
+Imagine:
+
+```text
+             ┌──→ Cliente A
+             │
+Servidor ───→│──→ Cliente B
+             │
+             └──→ Cliente C
+```
+
+Mas somente os clientes que **participam daquele grupo** recebem os dados.
+
+Podemos visualizar:
+
+```text
+             Grupo Multicast
+             239.1.1.1
+                  │
+        ┌─────────┼─────────┐
+        ↓         ↓         ↓
+     Host A     Host B    Host C
+```
+
+Se o Host D não pertence ao grupo:
+
+```text
+Host D
+   X
+```
+
+ele não participa daquela entrega multicast.
+
+---
+
+## 28.13 Endereços multicast IPv4
+
+No IPv4, os endereços multicast pertencem ao intervalo:
+
+```text
+224.0.0.0/4
+```
+
+ou seja:
+
+```text
+224.0.0.0
+até
+239.255.255.255
+```
+
+Um endereço de exemplo:
+
+```text
+239.1.1.1
+```
+
+Pode ser utilizado como endereço multicast privado/administrativo em determinados contextos.
+
+O conceito é:
+
+```text
+Servidor
+   │
+   │ envia para
+   ↓
+239.1.1.1
+   │
+   ├──→ Cliente A
+   ├──→ Cliente B
+   └──→ Cliente C
+```
+
+---
+
+## 28.14 Multicast não é igual a broadcast
+
+Essa diferença é fundamental.
+
+### Broadcast
+
+```text
+Servidor
+   │
+   ↓
+Broadcast
+   │
+   ├──→ Host A
+   ├──→ Host B
+   ├──→ Host C
+   └──→ Host D
+```
+
+A intenção é alcançar todos os hosts daquele domínio de broadcast.
+
+### Multicast
+
+```text
+Servidor
+   │
+   ↓
+Grupo 239.1.1.1
+   │
+   ├──→ Host A
+   ├──→ Host C
+   └──→ Host F
+```
+
+Somente os membros interessados no grupo participam.
+
+Portanto:
+
+```text
+Broadcast:
+"todos"
+
+Multicast:
+"todos que participam deste grupo"
+```
+
+---
+
+## 28.15 Entrando em um grupo multicast
+
+Para receber multicast IPv4, o host normalmente precisa informar ao sistema operacional que deseja participar de determinado grupo.
+
+Em Python, podemos utilizar:
+
+```python
+setsockopt()
+```
+
+com:
+
+```python
+IP_ADD_MEMBERSHIP
+```
+
+Exemplo:
+
+```python
+import socket
+import struct
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+sock.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+sock.bind(("0.0.0.0", 4444))
+
+group = socket.inet_aton("239.1.1.1")
+
+membership = struct.pack(
+    "4s4s",
+    group,
+    socket.inet_aton("0.0.0.0")
+)
+
+sock.setsockopt(
+    socket.IPPROTO_IP,
+    socket.IP_ADD_MEMBERSHIP,
+    membership
+)
+```
+
+Aqui existem várias etapas.
+
+---
+
+## 28.16 Entendendo `IP_ADD_MEMBERSHIP`
+
+A parte:
+
+```python
+socket.IP_ADD_MEMBERSHIP
+```
+
+informa ao sistema operacional:
+
+> Quero participar deste grupo multicast.
+
+O grupo:
+
+```python
+"239.1.1.1"
+```
+
+é convertido para sua representação binária:
+
+```python
+socket.inet_aton("239.1.1.1")
+```
+
+Depois utilizamos:
+
+```python
+struct.pack()
+```
+
+para construir a estrutura esperada pela API de sockets.
+
+Conceitualmente:
+
+```text
+"239.1.1.1"
+     ↓
+inet_aton()
+     ↓
+bytes do endereço IPv4
+     ↓
+struct.pack()
+     ↓
+estrutura de membership
+     ↓
+IP_ADD_MEMBERSHIP
+```
+
+---
+
+## 28.17 Recebendo mensagens multicast
+
+Depois de entrar no grupo, o socket pode utilizar:
+
+```python
+recvfrom()
+```
+
+normalmente:
+
+```python
+while True:
+    data, address = sock.recvfrom(1024)
+
+    print(
+        f"{address}: "
+        f"{data.decode()}"
+    )
+```
+
+O fluxo completo é:
+
+```text
+Servidor
+    │
+    │ UDP
+    ↓
+239.1.1.1:4444
+    │
+    ├──→ Cliente A
+    ├──→ Cliente B
+    └──→ Cliente C
+```
+
+Desde que esses clientes tenham ingressado no grupo e a infraestrutura da rede permita o multicast.
+
+---
+
+## 28.18 Enviando multicast
+
+O envio pode ser feito utilizando `sendto()`:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+sock.sendto(
+    b"Mensagem multicast",
+    ("239.1.1.1", 4444)
+)
+
+sock.close()
+```
+
+Não precisamos conectar o socket previamente para enviar o datagrama.
+
+O destino é informado diretamente:
+
+```python
+sendto(data, address)
+```
+
+---
+
+## 28.19 TTL do multicast
+
+Multicast IPv4 possui um conceito importante chamado **TTL (Time To Live)**.
+
+Podemos configurar:
+
+```python
+socket.IP_MULTICAST_TTL
+```
+
+Por exemplo:
+
+```python
+sock.setsockopt(
+    socket.IPPROTO_IP,
+    socket.IP_MULTICAST_TTL,
+    1
+)
+```
+
+Um TTL baixo pode limitar o alcance do multicast.
+
+Isso é importante porque não queremos necessariamente que um multicast utilizado em uma rede local atravesse vários roteadores.
+
+Podemos visualizar:
+
+```text
+TTL baixo
+   ↓
+Rede local
+
+TTL maior
+   ↓
+Potencialmente mais roteadores
+```
+
+O alcance real também depende da infraestrutura e das políticas de roteamento multicast.
+
+---
+
+## 28.20 Broadcast vs Multicast vs Unicast
+
+|Modelo|Destino|Exemplo|
+|---|---|---|
+|Unicast|Um host|`192.168.1.20`|
+|Broadcast|Todos no domínio de broadcast|`192.168.1.255`|
+|Multicast|Grupo específico|`239.1.1.1`|
+
+Visualmente:
+
+```text
+UNicast
+
+A ─────────→ B
+
+
+BROADCAST
+
+          ┌──→ B
+          ├──→ C
+A ────────┼──→ D
+          └──→ E
+
+
+MULTICAST
+
+          ┌──→ B
+          ├──→ D
+A ────────┤
+          └──→ F
+```
+
+---
+
+## 28.21 Por que UDP é normalmente utilizado?
+
+Broadcast e multicast estão normalmente associados a **UDP**.
+
+Isso acontece porque UDP trabalha naturalmente com datagramas e permite enviar diretamente para um endereço de destino através de:
+
+```python
+sendto()
+```
+
+TCP possui outro modelo:
+
+```text
+TCP
+   ↓
+conexão ponto a ponto
+   ↓
+um peer específico
+```
+
+Não existe um mecanismo TCP equivalente a:
+
+```text
+TCP → broadcast
+TCP → multicast
+```
+
+No modelo tradicional de sockets IP.
+
+Portanto:
+
+```text
+UDP
+ ├── Unicast
+ ├── Broadcast IPv4
+ └── Multicast
+
+TCP
+ └── Unicast orientado a conexão
+```
+
+---
+
+## 28.22 IPv6 e multicast
+
+Como vimos anteriormente, IPv6 não possui broadcast da mesma maneira que IPv4.
+
+IPv6 utiliza multicast para diversas funções da própria arquitetura.
+
+Os endereços multicast IPv6 começam com:
+
+```text
+ff00::/8
+```
+
+Por exemplo:
+
+```text
+ff02::1
+```
+
+é um endereço multicast IPv6 conhecido no contexto de todos os nós do enlace local.
+
+Isso demonstra uma diferença importante:
+
+```text
+IPv4
+ ├── Unicast
+ ├── Broadcast
+ └── Multicast
+
+IPv6
+ ├── Unicast
+ └── Multicast
+```
+
+Essa é uma das razões pelas quais entender multicast é importante para compreender IPv6.
+
+---
+
+## 28.23 `SO_BROADCAST` vs `IP_ADD_MEMBERSHIP`
+
+Não devemos confundir essas duas configurações.
+
+### Broadcast
+
+```python
+socket.SO_BROADCAST
+```
+
+permite que o socket seja utilizado para envio de broadcast IPv4.
+
+Exemplo:
+
+```python
+sock.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_BROADCAST,
+    1
+)
+```
+
+### Multicast
+
+Para ingressar em um grupo IPv4:
+
+```python
+socket.IP_ADD_MEMBERSHIP
+```
+
+Exemplo:
+
+```python
+sock.setsockopt(
+    socket.IPPROTO_IP,
+    socket.IP_ADD_MEMBERSHIP,
+    membership
+)
+```
+
+Portanto:
+
+```text
+SO_BROADCAST
+      ↓
+Broadcast IPv4
+
+
+IP_ADD_MEMBERSHIP
+      ↓
+Entrar em grupo multicast
+```
+
+São mecanismos diferentes.
+
+---
+
+## 28.24 Aplicações práticas
+
+Broadcast pode ser utilizado em situações como:
+
+- descoberta de dispositivos em uma rede local;
+    
+- descoberta de serviços;
+    
+- protocolos locais específicos;
+    
+- anúncios dentro de uma rede.
+    
+
+Multicast pode ser utilizado em:
+
+- distribuição de dados para grupos;
+    
+- streaming em determinados ambientes;
+    
+- descoberta de serviços;
+    
+- protocolos de infraestrutura;
+    
+- aplicações que possuem muitos receptores interessados no mesmo fluxo.
+    
+
+Porém, a escolha depende da rede e do protocolo.
+
+Não devemos escolher multicast simplesmente porque existem vários clientes.
+
+---
+
+## 28.25 Limitações e problemas práticos
+
+### Broadcast pode gerar muito tráfego
+
+Se uma máquina transmite frequentemente:
+
+```text
+broadcast → todos os hosts
+```
+
+muitos dispositivos podem precisar receber e processar os pacotes.
+
+---
+
+### Multicast depende da infraestrutura
+
+Uma aplicação multicast pode funcionar perfeitamente em uma rede pequena e falhar em outra.
+
+É necessário considerar:
+
+- suporte do sistema operacional;
+    
+- switches;
+    
+- roteadores;
+    
+- configuração de multicast;
+    
+- firewall;
+    
+- interfaces;
+    
+- roteamento multicast.
+    
+
+---
+
+### UDP não garante entrega
+
+Tanto broadcast quanto multicast normalmente utilizam UDP.
+
+Portanto, não temos automaticamente:
+
+```text
+entrega garantida
+ordenação
+retransmissão
+controle de congestionamento TCP
+```
+
+Se a aplicação precisar dessas características, terá que implementar mecanismos próprios ou utilizar outro modelo.
+
+---
+
+## 28.26 Modelo mental final
+
+Podemos pensar nos três modelos assim:
+
+```text
+                    ENVIO IP
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+       UNICAST      BROADCAST    MULTICAST
+          │            │            │
+          ↓            ↓            ↓
+       1 host       todos os      grupo de
+                     hosts         hosts
+          │            │            │
+          └────────────┼────────────┘
+                       ↓
+                      UDP
+```
+
+No IPv4:
+
+```text
+Unicast
+    ↓
+192.168.1.10
+
+Broadcast
+    ↓
+192.168.1.255
+
+Multicast
+    ↓
+239.1.1.1
+```
+
+No IPv6:
+
+```text
+Unicast
+    ↓
+2001:db8::10
+
+Multicast
+    ↓
+ff02::1
+```
+
+---
+
+## 28.27 Resumo da Parte
+
+- **Unicast** envia para um destino específico.
+    
+- **Broadcast** envia para todos os hosts dentro de um domínio de broadcast IPv4.
+    
+- **Multicast** envia para um grupo específico de participantes.
+    
+- Broadcast é um mecanismo principalmente associado ao IPv4.
+    
+- IPv6 não utiliza broadcast da mesma forma e utiliza multicast para diversas funções.
+    
+- Para broadcast IPv4, podemos utilizar:
+    
+
+```python
+socket.SO_BROADCAST
+```
+
+- Para participar de um grupo multicast IPv4, utilizamos:
+    
+
+```python
+socket.IP_ADD_MEMBERSHIP
+```
+
+- Broadcast IPv4 depende da rede e da máscara.
+    
+- Endereços multicast IPv4 estão no intervalo:
+    
+
+```text
+224.0.0.0/4
+```
+
+- Endereços multicast IPv6 utilizam:
+    
+
+```text
+ff00::/8
+```
+
+- Broadcast e multicast normalmente são utilizados com UDP.
+    
+- UDP não garante entrega, ordem ou retransmissão.
+    
+- Multicast depende da infraestrutura da rede e pode não funcionar através de redes que não suportam roteamento multicast.
+    
+- `sendto()` permite enviar datagramas diretamente para um endereço.
+    
+- Broadcast e multicast devem ser utilizados com cuidado para evitar tráfego desnecessário e problemas de segurança.
+    
+
+A visão geral fica:
+
+```text
+             COMUNICAÇÃO IP
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+     Unicast    Broadcast    Multicast
+        │           │           │
+      1 → 1        1 → N       1 → grupo
+        │           │           │
+        └───────────┼───────────┘
+                    │
+                   UDP
+```
+
+---

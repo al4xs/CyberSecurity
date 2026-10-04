@@ -37911,3 +37911,1402 @@ CLIENTE
 ```
 
 ---
+# 34. Projeto prático: transferência de arquivos com sockets TCP
+
+Depois de construir um servidor de comandos, podemos evoluir o projeto para algo mais próximo de uma aplicação real:
+
+> **transferir arquivos entre cliente e servidor usando TCP.**
+
+Esse exercício é importante porque reúne vários conceitos estudados anteriormente:
+
+- TCP;
+    
+- framing;
+    
+- buffers;
+    
+- `recv()`;
+    
+- `sendall()`;
+    
+- transferência em chunks;
+    
+- tamanho de arquivo;
+    
+- integridade;
+    
+- hash;
+    
+- validação;
+    
+- tratamento de erros;
+    
+- segurança de caminhos;
+    
+- limites de recursos.
+    
+
+A ideia será criar um protocolo simples:
+
+```text
+Cliente
+   │
+   │ UPLOAD arquivo.txt
+   ▼
+Servidor
+   │
+   │ recebe metadados
+   │
+   │ recebe arquivo
+   ▼
+Salva arquivo
+```
+
+Também poderemos fazer:
+
+```text
+Cliente
+   │
+   │ DOWNLOAD arquivo.txt
+   ▼
+Servidor
+   │
+   │ envia arquivo
+   ▼
+Cliente
+```
+
+---
+
+# 34.1 Por que não enviar o arquivo inteiro de uma vez?
+
+Uma implementação ingênua poderia fazer:
+
+```python
+with open("arquivo.iso", "rb") as file:
+    data = file.read()
+
+client.sendall(data)
+```
+
+Isso pode funcionar para arquivos pequenos.
+
+Mas imagine um arquivo de:
+
+```text
+4 GB
+```
+
+O programa tentaria carregar uma quantidade enorme de dados na memória.
+
+O correto é trabalhar em partes:
+
+```text
+arquivo
+│
+├── chunk 1
+├── chunk 2
+├── chunk 3
+├── chunk 4
+└── ...
+```
+
+Por exemplo:
+
+```python
+CHUNK_SIZE = 64 * 1024
+```
+
+Isso representa:
+
+```text
+64 KiB
+```
+
+por leitura.
+
+---
+
+# 34.2 O conceito de chunk
+
+Um **chunk** é simplesmente um bloco de dados.
+
+Imagine um arquivo:
+
+```text
+100 MB
+```
+
+Podemos dividir:
+
+```text
+┌───────────────┐
+│   arquivo     │
+└───────────────┘
+       │
+       ▼
+┌──────┬──────┬──────┬──────┬──────┐
+│ 64KB │ 64KB │ 64KB │ 64KB │ ...  │
+└──────┴──────┴──────┴──────┴──────┘
+```
+
+O cliente lê:
+
+```python
+chunk = file.read(CHUNK_SIZE)
+```
+
+e envia:
+
+```python
+client.sendall(chunk)
+```
+
+Depois repete até chegar ao final.
+
+---
+
+# 34.3 O problema: como o servidor sabe quando o arquivo terminou?
+
+Aqui aparece novamente o problema do framing.
+
+Imagine:
+
+```text
+Cliente → bytes do arquivo
+```
+
+O servidor não pode simplesmente assumir:
+
+```python
+data = client.recv(4096)
+
+if len(data) < 4096:
+    arquivo_terminou = True
+```
+
+Isso está errado.
+
+Um `recv(4096)` retornar menos de 4096 bytes **não significa que o arquivo acabou**.
+
+Pode ser simplesmente que naquele momento só havia menos dados disponíveis.
+
+Precisamos de uma regra de protocolo.
+
+---
+
+# 34.4 Enviando o tamanho do arquivo
+
+Uma solução simples é informar antecipadamente o tamanho.
+
+Podemos definir:
+
+```text
+[TAMANHO][DADOS]
+```
+
+Por exemplo:
+
+```text
+┌───────────────┬──────────────────────────┐
+│ tamanho       │ dados do arquivo         │
+│ 8 bytes       │ N bytes                  │
+└───────────────┴──────────────────────────┘
+```
+
+Se o arquivo possui:
+
+```text
+150000 bytes
+```
+
+o cliente envia primeiro:
+
+```text
+150000
+```
+
+e depois os:
+
+```text
+150000 bytes
+```
+
+---
+
+# 34.5 Por que usar 8 bytes?
+
+Podemos utilizar:
+
+```python
+struct.pack("!Q", file_size)
+```
+
+O formato:
+
+```text
+!Q
+```
+
+significa:
+
+```text
+!
+→ network byte order
+
+Q
+→ unsigned long long
+```
+
+Ou seja, um inteiro sem sinal de 8 bytes.
+
+Isso permite representar tamanhos muito grandes.
+
+---
+
+# 34.6 Enviando o cabeçalho
+
+Primeiro:
+
+```python
+import struct
+
+header = struct.pack(
+    "!Q",
+    file_size,
+)
+```
+
+Depois:
+
+```python
+client.sendall(header)
+```
+
+E finalmente:
+
+```python
+while chunk := file.read(CHUNK_SIZE):
+    client.sendall(chunk)
+```
+
+O fluxo fica:
+
+```text
+Cliente
+   │
+   ├── tamanho
+   │
+   ├── chunk
+   ├── chunk
+   ├── chunk
+   └── chunk
+          │
+          ▼
+        TCP
+```
+
+---
+
+# 34.7 O servidor precisa ler exatamente 8 bytes
+
+Aqui existe um detalhe extremamente importante.
+
+Não podemos simplesmente fazer:
+
+```python
+header = client.recv(8)
+```
+
+e assumir que recebemos exatamente 8 bytes.
+
+Como já vimos:
+
+> `recv(8)` significa receber **até** 8 bytes.
+
+Podemos receber:
+
+```text
+3 bytes
+```
+
+e depois:
+
+```text
+5 bytes
+```
+
+Portanto precisamos de uma função:
+
+```python
+def recv_exactly(sock, size):
+    data = bytearray()
+
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+
+        if not chunk:
+            raise ConnectionError(
+                "Conexão encerrada antes dos dados esperados"
+            )
+
+        data.extend(chunk)
+
+    return bytes(data)
+```
+
+Agora:
+
+```python
+header = recv_exactly(client, 8)
+```
+
+garante que teremos exatamente 8 bytes ou uma exceção.
+
+---
+
+# 34.8 Recuperando o tamanho
+
+Depois:
+
+```python
+file_size = struct.unpack(
+    "!Q",
+    header,
+)[0]
+```
+
+Por exemplo:
+
+```text
+header
+   ↓
+unpack()
+   ↓
+150000
+```
+
+Agora o servidor sabe quantos bytes precisa receber.
+
+---
+
+# 34.9 Recebendo o arquivo
+
+Podemos utilizar:
+
+```python
+remaining = file_size
+
+while remaining > 0:
+    chunk = client.recv(
+        min(CHUNK_SIZE, remaining)
+    )
+
+    if not chunk:
+        raise ConnectionError(
+            "Cliente desconectou durante upload"
+        )
+
+    file.write(chunk)
+
+    remaining -= len(chunk)
+```
+
+Observe a lógica:
+
+```text
+arquivo esperado:
+100000 bytes
+
+remaining = 100000
+
+recebe 65536
+remaining = 34464
+
+recebe 34464
+remaining = 0
+
+fim
+```
+
+---
+
+# 34.10 Por que usar `min()`?
+
+Imagine que faltam apenas:
+
+```text
+100 bytes
+```
+
+Mas nosso chunk possui:
+
+```text
+65536 bytes
+```
+
+Não precisamos solicitar tudo isso.
+
+Fazemos:
+
+```python
+min(CHUNK_SIZE, remaining)
+```
+
+Então:
+
+```text
+min(65536, 100)
+```
+
+resulta em:
+
+```text
+100
+```
+
+Assim o tamanho solicitado acompanha a quantidade restante.
+
+---
+
+# 34.11 Proteção contra arquivos gigantes
+
+Um cliente malicioso poderia dizer:
+
+```text
+file_size = 999999999999999999
+```
+
+O servidor não deve simplesmente aceitar qualquer tamanho.
+
+Devemos estabelecer um limite:
+
+```python
+MAX_FILE_SIZE = 100 * 1024 * 1024
+```
+
+Nesse exemplo:
+
+```text
+100 MiB
+```
+
+Depois:
+
+```python
+if file_size > MAX_FILE_SIZE:
+    raise ValueError(
+        "Arquivo excede o limite permitido"
+    )
+```
+
+O fluxo passa a ser:
+
+```text
+tamanho recebido
+       │
+       ▼
+é válido?
+       │
+   ┌───┴───┐
+   │       │
+  sim     não
+   │       │
+   ▼       ▼
+receber   rejeitar
+```
+
+---
+
+# 34.12 Não confundir tamanho declarado com tamanho real
+
+Existe outro problema.
+
+O cliente pode declarar:
+
+```text
+1000 bytes
+```
+
+mas enviar:
+
+```text
+500 bytes
+```
+
+e desconectar.
+
+O servidor perceberá:
+
+```text
+esperados = 1000
+recebidos = 500
+```
+
+e deverá considerar a transferência incompleta.
+
+Também pode acontecer o contrário:
+
+```text
+esperados = 1000
+```
+
+mas o cliente tentar enviar mais dados pertencentes à próxima mensagem.
+
+Isso mostra por que o protocolo precisa ser cuidadosamente definido.
+
+---
+
+# 34.13 Adicionando o nome do arquivo
+
+Agora surge outro problema:
+
+> Como o servidor sabe qual nome dar ao arquivo?
+
+Podemos adicionar metadados.
+
+Por exemplo:
+
+```text
+[COMANDO][NOME][TAMANHO][DADOS]
+```
+
+Conceitualmente:
+
+```text
+┌──────────┬──────────┬──────────┬────────────┐
+│ comando  │ nome     │ tamanho  │ dados      │
+└──────────┴──────────┴──────────┴────────────┘
+```
+
+Mas precisamos definir exatamente como cada campo termina.
+
+Por exemplo, poderíamos usar:
+
+```text
+UPLOAD\n
+nome.txt\n
+150000\n
+[dados]
+```
+
+ou um protocolo binário com campos de tamanho fixo.
+
+---
+
+# 34.14 Cuidado com nomes de arquivos
+
+Nunca devemos fazer simplesmente:
+
+```python
+path = os.path.join(
+    "uploads",
+    received_filename,
+)
+```
+
+sem validar o nome.
+
+Um cliente poderia enviar:
+
+```text
+../../arquivo_secreto
+```
+
+ou:
+
+```text
+/etc/passwd
+```
+
+O servidor poderia acabar escrevendo fora do diretório pretendido.
+
+Uma proteção básica:
+
+```python
+from pathlib import Path
+
+filename = Path(received_filename).name
+```
+
+Assim:
+
+```text
+../../teste.txt
+```
+
+vira:
+
+```text
+teste.txt
+```
+
+Mas, em uma aplicação real, ainda devemos aplicar regras adicionais.
+
+---
+
+# 34.15 Melhor: o servidor controla o nome físico
+
+Uma abordagem ainda mais segura é não confiar no nome enviado pelo cliente como nome final.
+
+Por exemplo:
+
+```text
+uploads/
+├── 8f3a91c2.bin
+├── a719bc22.bin
+└── 4c01de55.bin
+```
+
+O nome original pode ser armazenado separadamente como metadado.
+
+Assim:
+
+```text
+nome enviado:
+foto.jpg
+
+nome físico:
+8f3a91c2.bin
+```
+
+Isso reduz riscos relacionados a nomes e caminhos.
+
+---
+
+# 34.16 Integridade com SHA-256
+
+TCP garante integridade do fluxo de transporte dentro do modelo TCP, mas nossa aplicação pode querer verificar explicitamente se o arquivo recebido corresponde ao arquivo enviado.
+
+Podemos calcular:
+
+```python
+import hashlib
+
+sha256 = hashlib.sha256()
+```
+
+Durante a leitura:
+
+```python
+while chunk := file.read(CHUNK_SIZE):
+    sha256.update(chunk)
+    client.sendall(chunk)
+```
+
+No final:
+
+```python
+file_hash = sha256.hexdigest()
+```
+
+Teremos algo como:
+
+```text
+a1b2c3d4...
+```
+
+---
+
+# 34.17 Enviando o hash
+
+Podemos ampliar o protocolo:
+
+```text
+[SIZE][HASH][DATA]
+```
+
+Por exemplo:
+
+```text
+┌────────┬──────────────────┬───────────────┐
+│ SIZE   │ SHA-256          │ FILE DATA     │
+│ 8 bytes│ 32 bytes         │ N bytes       │
+└────────┴──────────────────┴───────────────┘
+```
+
+O hash SHA-256 possui:
+
+```text
+32 bytes
+```
+
+quando armazenado em sua forma binária.
+
+Depois do recebimento:
+
+```python
+received_hash = hashlib.sha256(
+    received_data
+).digest()
+```
+
+E comparamos:
+
+```python
+if received_hash != expected_hash:
+    raise ValueError(
+        "Integridade do arquivo inválida"
+    )
+```
+
+---
+
+# 34.18 Hash não substitui TLS
+
+É importante não confundir:
+
+```text
+SHA-256
+```
+
+com:
+
+```text
+TLS
+```
+
+O hash pode ajudar a detectar alteração dos dados.
+
+Mas não fornece confidencialidade.
+
+Se o protocolo enviar:
+
+```text
+arquivo secreto
+```
+
+sem TLS, o hash não impede que alguém observe o conteúdo.
+
+Portanto:
+
+```text
+TLS
+→ protege a comunicação
+
+Hash
+→ verifica integridade conforme o protocolo
+```
+
+São problemas diferentes.
+
+---
+
+# 34.19 Estrutura de um protocolo de upload
+
+Podemos chegar a algo assim:
+
+```text
+UPLOAD
+│
+├── versão
+├── nome
+├── tamanho
+├── hash
+└── dados
+```
+
+Representação:
+
+```text
+┌─────────┬──────────┬──────────┬──────────┬────────────┐
+│ VERSION │ FILENAME │ SIZE     │ SHA-256  │ DATA       │
+└─────────┴──────────┴──────────┴──────────┴────────────┘
+```
+
+Isso já se aproxima muito mais de um protocolo real.
+
+---
+
+# 34.20 Download
+
+O caminho inverso também pode ser implementado.
+
+Cliente:
+
+```text
+DOWNLOAD arquivo.txt
+```
+
+Servidor:
+
+```text
+arquivo existe?
+      │
+      ▼
+sim
+      │
+      ▼
+calcula tamanho
+      │
+      ▼
+envia metadados
+      │
+      ▼
+envia arquivo em chunks
+```
+
+Fluxo:
+
+```text
+Cliente
+   │
+   │ DOWNLOAD
+   ▼
+Servidor
+   │
+   ├── tamanho
+   ├── hash
+   └── dados
+          │
+          ▼
+       Cliente
+          │
+          ▼
+       arquivo
+```
+
+---
+
+# 34.21 Por que o download também precisa de tamanho?
+
+Pelo mesmo motivo do upload.
+
+O cliente precisa saber:
+
+```text
+quantos bytes devo receber?
+```
+
+Sem essa informação, não existe uma forma geral de distinguir:
+
+```text
+fim do arquivo
+```
+
+de:
+
+```text
+pausa temporária na chegada dos dados
+```
+
+TCP não fornece esse conceito de "fim do arquivo".
+
+O protocolo precisa definir isso.
+
+---
+
+# 34.22 O encerramento da conexão pode representar EOF?
+
+Em protocolos extremamente simples:
+
+```text
+enviar arquivo
+↓
+shutdown(SHUT_WR)
+↓
+cliente recebe EOF
+```
+
+Isso pode funcionar.
+
+Mas possui uma limitação:
+
+> Você está usando o encerramento da direção de escrita como delimitador.
+
+Isso dificulta protocolos que precisam enviar múltiplas mensagens na mesma conexão.
+
+Por isso:
+
+```text
+[TAMANHO][DADOS]
+```
+
+é geralmente mais flexível.
+
+---
+
+# 34.23 Múltiplos arquivos na mesma conexão
+
+Imagine:
+
+```text
+Cliente
+   │
+   ├── arquivo A
+   ├── arquivo B
+   ├── arquivo C
+   └── arquivo D
+```
+
+Se usarmos:
+
+```text
+conexão aberta = arquivo
+```
+
+não conseguimos facilmente diferenciar os arquivos.
+
+Com framing:
+
+```text
+[SIZE][DATA]
+[SIZE][DATA]
+[SIZE][DATA]
+[SIZE][DATA]
+```
+
+cada transferência possui sua própria delimitação.
+
+---
+
+# 34.24 Concorrência
+
+Nosso servidor pode atender:
+
+```text
+Cliente A → upload
+Cliente B → download
+Cliente C → upload
+```
+
+simultaneamente.
+
+Com threads:
+
+```text
+                    SERVIDOR
+                       │
+             ┌─────────┼─────────┐
+             ▼         ▼         ▼
+          Thread A  Thread B  Thread C
+             │         │         │
+           upload   download   upload
+```
+
+Mas existe um cuidado:
+
+> O sistema de arquivos também é um recurso compartilhado.
+
+Se duas threads escreverem no mesmo arquivo:
+
+```text
+Thread A ──┐
+           ├── arquivo.txt
+Thread B ──┘
+```
+
+podemos ter corrupção.
+
+Por isso precisamos garantir nomes únicos ou sincronização adequada.
+
+---
+
+# 34.25 Não guardar arquivos inteiros na memória
+
+O padrão recomendado é:
+
+```python
+with open(path, "wb") as file:
+    remaining = file_size
+
+    while remaining:
+        chunk = client.recv(
+            min(CHUNK_SIZE, remaining)
+        )
+
+        if not chunk:
+            raise ConnectionError(
+                "Transferência interrompida"
+            )
+
+        file.write(chunk)
+        remaining -= len(chunk)
+```
+
+A memória utilizada fica aproximadamente limitada ao tamanho do chunk e dos buffers envolvidos.
+
+Isso permite trabalhar com arquivos muito maiores que a memória disponível.
+
+---
+
+# 34.26 Exemplo de fluxo completo de upload
+
+Podemos visualizar:
+
+```text
+CLIENTE
+   │
+   │ 1. solicita upload
+   ▼
+SERVIDOR
+   │
+   │ 2. valida comando
+   ▼
+   │
+   │ 3. recebe tamanho
+   ▼
+   │
+   │ 4. valida tamanho
+   ▼
+   │
+   │ 5. recebe hash
+   ▼
+   │
+   │ 6. recebe chunks
+   ▼
+ARQUIVO TEMPORÁRIO
+   │
+   │ 7. calcula hash
+   ▼
+COMPARAÇÃO
+   │
+   ├── igual → arquivo aprovado
+   │
+   └── diferente → arquivo rejeitado
+```
+
+Essa abordagem evita considerar o arquivo válido simplesmente porque o cliente terminou de enviar dados.
+
+---
+
+# 34.27 Arquivo temporário
+
+Uma boa prática é não gravar diretamente no arquivo final.
+
+Em vez disso:
+
+```text
+uploads/
+└── arquivo.tmp
+```
+
+Recebemos tudo:
+
+```text
+arquivo.tmp
+```
+
+Verificamos:
+
+```text
+tamanho
+hash
+integridade
+```
+
+Somente depois:
+
+```text
+arquivo.tmp
+     │
+     ▼
+arquivo final
+```
+
+Isso evita deixar um arquivo aparentemente válido quando a transferência foi interrompida no meio.
+
+---
+
+# 34.28 Fluxo mais seguro
+
+```text
+Receber
+   │
+   ▼
+arquivo.tmp
+   │
+   ├── tamanho correto?
+   │
+   ├── hash correto?
+   │
+   ├── protocolo correto?
+   │
+   └── permissões corretas?
+          │
+          ▼
+      APROVADO
+          │
+          ▼
+   mover para destino
+```
+
+Se algo falhar:
+
+```text
+arquivo.tmp
+    │
+    ▼
+remover
+```
+
+---
+
+# 34.29 Segurança do protocolo
+
+Um protocolo de transferência de arquivos deve considerar:
+
+```text
+[ ] limite de tamanho
+[ ] nome de arquivo válido
+[ ] diretório permitido
+[ ] timeout
+[ ] autenticação
+[ ] autorização
+[ ] TLS
+[ ] integridade
+[ ] espaço disponível
+[ ] arquivos temporários
+[ ] nomes únicos
+[ ] tratamento de desconexão
+```
+
+Imagine um cliente que envia:
+
+```text
+file_size = 100 MB
+```
+
+mas o disco do servidor possui apenas:
+
+```text
+20 MB
+```
+
+O servidor precisa considerar também a capacidade de armazenamento.
+
+---
+
+# 34.30 TCP não garante que o arquivo será salvo
+
+Essa distinção é importante.
+
+TCP pode garantir:
+
+```text
+transporte confiável de bytes
+```
+
+Mas não garante:
+
+```text
+arquivo salvo corretamente no disco
+```
+
+Temos várias camadas:
+
+```text
+TCP
+ ↓
+bytes recebidos
+ ↓
+protocolo
+ ↓
+arquivo recebido
+ ↓
+hash
+ ↓
+gravação
+ ↓
+filesystem
+```
+
+Um erro pode acontecer em qualquer uma dessas etapas.
+
+---
+
+# 34.31 O protocolo completo
+
+Uma possível versão simplificada seria:
+
+```text
+UPLOAD
+│
+├── comando
+├── versão
+├── nome
+├── tamanho
+├── hash
+└── dados
+```
+
+E:
+
+```text
+DOWNLOAD
+│
+├── comando
+├── versão
+└── nome
+```
+
+Resposta:
+
+```text
+FILE
+│
+├── versão
+├── tamanho
+├── hash
+└── dados
+```
+
+Erro:
+
+```text
+ERROR
+│
+└── código
+```
+
+Agora temos algo muito próximo de um protocolo de aplicação real.
+
+---
+
+# 34.32 Por que colocar uma versão no protocolo?
+
+Imagine que hoje temos:
+
+```text
+VERSION 1
+```
+
+e amanhã queremos adicionar:
+
+```text
+compressão
+criptografia adicional
+novos metadados
+novos comandos
+```
+
+Podemos ter:
+
+```text
+VERSION 2
+```
+
+O servidor pode verificar:
+
+```text
+versão suportada?
+```
+
+Isso permite evolução do protocolo.
+
+Sem versionamento, mudanças futuras podem quebrar clientes antigos.
+
+---
+
+# 34.33 Visão geral do sistema
+
+Depois dessa evolução, nossa arquitetura fica:
+
+```text
+                       CLIENTE
+                          │
+                          ▼
+                    TCP / TLS
+                          │
+                          ▼
+                  ┌──────────────┐
+                  │    SOCKET    │
+                  └──────┬───────┘
+                         │
+                         ▼
+                      BUFFER
+                         │
+                         ▼
+                     PROTOCOLO
+                         │
+             ┌───────────┼───────────┐
+             ▼           ▼           ▼
+           UPLOAD     DOWNLOAD     ERROR
+             │           │
+             ▼           ▼
+          arquivos    arquivos
+             │           │
+             ▼           ▼
+          validação   validação
+             │           │
+             └──────┬────┘
+                    ▼
+                STORAGE
+```
+
+---
+
+## Resumo da Parte
+
+- Transferência de arquivos deve ser feita em **chunks**, evitando carregar arquivos gigantes inteiros na memória.
+    
+- `recv()` não informa sozinho quando um arquivo terminou.
+    
+- O protocolo precisa definir como delimitar a transferência.
+    
+- Uma solução comum é:
+    
+
+```text
+[TAMANHO][DADOS]
+```
+
+- `recv_exactly()` pode ser utilizado para receber cabeçalhos de tamanho conhecido.
+    
+- O tamanho declarado pelo cliente precisa ser validado.
+    
+- Arquivos devem possuir limites máximos.
+    
+- Nomes de arquivos enviados pelo cliente são dados não confiáveis.
+    
+- Path traversal precisa ser evitado.
+    
+- O servidor pode gerar nomes físicos próprios.
+    
+- SHA-256 pode ser utilizado para verificar a integridade do arquivo.
+    
+- Hash não substitui TLS.
+    
+- Arquivos podem ser recebidos em arquivos temporários antes de serem aprovados.
+    
+- O servidor deve verificar tamanho, integridade, permissões e espaço disponível.
+    
+- Upload e download precisam seguir regras de protocolo bem definidas.
+    
+- Versionar o protocolo facilita sua evolução.
+    
+- TCP transporta os bytes, mas a aplicação precisa definir o significado desses bytes.
+    
+
+**Modelo principal:**
+
+```text
+CLIENTE
+   │
+   │ comando + metadados
+   ▼
+SERVIDOR
+   │
+   │ valida
+   ▼
+[TAMANHO]
+   │
+   ▼
+[CHUNKS]
+   │
+   ▼
+ARQUIVO TEMPORÁRIO
+   │
+   ├── tamanho
+   ├── integridade
+   └── permissões
+          │
+          ▼
+       APROVADO
+          │
+          ▼
+    ARQUIVO FINAL
+```
+
+---
+

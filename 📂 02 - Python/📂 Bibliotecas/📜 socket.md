@@ -23563,3 +23563,1259 @@ processa clientes concorrentemente
 sincroniza recursos compartilhados quando necessário
 ```
 
+# 22. Multiplexação de sockets com `selectors`
+
+Quando um servidor precisa atender **muitos clientes simultaneamente**, uma alternativa ao uso de uma thread para cada cliente é utilizar **multiplexação de I/O**.
+
+A ideia é simples:
+
+> Em vez de ficar bloqueado esperando cada socket individualmente, o programa monitora vários sockets ao mesmo tempo e trabalha somente com aqueles que estão prontos para realizar alguma operação de I/O.
+
+Em Python, uma das formas mais práticas de fazer isso é através da biblioteca `selectors`.
+
+---
+
+## 22.1 O que é multiplexação de I/O?
+
+Multiplexação de I/O significa que **um único fluxo de execução pode monitorar vários sockets simultaneamente**.
+
+Imagine um servidor conectado a 1.000 clientes:
+
+```text
+                 ┌── Cliente 1
+                 │
+                 ├── Cliente 2
+                 │
+Servidor ────────┼── Cliente 3
+                 │
+                 ├── Cliente 4
+                 │
+                 ├── ...
+                 │
+                 └── Cliente 1000
+```
+
+Uma abordagem seria criar uma thread para cada cliente:
+
+```text
+Servidor
+   │
+   ├── Thread → Cliente 1
+   ├── Thread → Cliente 2
+   ├── Thread → Cliente 3
+   ├── Thread → Cliente 4
+   └── ...
+```
+
+Outra abordagem é utilizar um único loop que pergunta ao sistema operacional:
+
+```text
+"Qual desses sockets está pronto para eu trabalhar agora?"
+```
+
+O sistema operacional responde:
+
+```text
+Cliente 2 → pronto para leitura
+Cliente 7 → pronto para leitura
+Cliente 15 → pronto para leitura
+```
+
+O programa então processa somente esses sockets.
+
+---
+
+## 22.2 Por que isso é útil?
+
+Sockets normalmente trabalham com operações de I/O que podem bloquear.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+Se não houver dados disponíveis, um socket em modo bloqueante pode fazer o programa ficar parado esperando.
+
+Com muitos clientes, isso se torna um problema.
+
+Com multiplexação:
+
+```text
+              ┌── Cliente 1 ── sem dados
+              │
+              ├── Cliente 2 ── dados disponíveis ✓
+              │
+Selector ─────┼── Cliente 3 ── sem dados
+              │
+              ├── Cliente 4 ── dados disponíveis ✓
+              │
+              └── Cliente 5 ── sem dados
+```
+
+O programa não precisa ficar esperando individualmente cada cliente.
+
+Ele espera pelo conjunto de sockets.
+
+---
+
+## 22.3 A biblioteca `selectors`
+
+O módulo `selectors` fornece uma abstração de alto nível para multiplexação de I/O.
+
+```python
+import selectors
+```
+
+O objeto principal é:
+
+```python
+selectors.DefaultSelector()
+```
+
+Exemplo:
+
+```python
+import selectors
+
+selector = selectors.DefaultSelector()
+```
+
+O `DefaultSelector` escolhe automaticamente uma implementação apropriada para o sistema operacional.
+
+Dependendo da plataforma, a implementação pode utilizar mecanismos como:
+
+```text
+Linux      → epoll
+BSD/macOS  → kqueue
+outros     → select/poll ou mecanismo disponível
+```
+
+Assim, normalmente você não precisa programar diretamente contra `epoll`, `kqueue` ou `poll`.
+
+Você trabalha com a interface fornecida por `selectors`.
+
+---
+
+## 22.4 Registrando um socket
+
+Para que o selector monitore um socket, precisamos registrá-lo:
+
+```python
+selector.register(sock, selectors.EVENT_READ)
+```
+
+A ideia é:
+
+```text
+socket
+   │
+   ▼
+register()
+   │
+   ▼
+selector começa a monitorar o socket
+```
+
+O selector pode monitorar diferentes tipos de eventos.
+
+Os dois mais importantes são:
+
+```python
+selectors.EVENT_READ
+selectors.EVENT_WRITE
+```
+
+---
+
+## 22.5 `EVENT_READ`
+
+`EVENT_READ` indica que estamos interessados em saber quando o socket estiver **pronto para uma operação de leitura**.
+
+Exemplo:
+
+```python
+selector.register(client, selectors.EVENT_READ)
+```
+
+Depois disso, podemos perguntar ao selector quais sockets estão prontos.
+
+```python
+events = selector.select()
+```
+
+Se o cliente tiver dados disponíveis, ele poderá aparecer entre os eventos retornados.
+
+---
+
+## 22.6 `EVENT_WRITE`
+
+Também podemos monitorar quando um socket estiver pronto para escrita:
+
+```python
+selector.register(
+    client,
+    selectors.EVENT_WRITE
+)
+```
+
+Isso pode ser útil quando temos dados aguardando para serem enviados e não queremos bloquear tentando escrever.
+
+Por exemplo:
+
+```text
+Aplicação possui dados para enviar
+              │
+              ▼
+        socket possui espaço
+        disponível no buffer
+              │
+              ▼
+        socket fica pronto
+        para escrita
+              │
+              ▼
+            send()
+```
+
+Entretanto, servidores simples normalmente começam monitorando principalmente `EVENT_READ`.
+
+---
+
+## 22.7 `register()`
+
+A assinatura conceitual é:
+
+```python
+selector.register(fileobj, events, data=None)
+```
+
+### Parâmetros
+
+|Parâmetro|Tipo|Obrigatório|Comportamento|
+|---|---|--:|---|
+|`fileobj`|socket/objeto compatível|Sim|Objeto que será monitorado|
+|`events`|`int`|Sim|Eventos desejados|
+|`data`|qualquer objeto|Não|Dados associados ao registro|
+
+Exemplo:
+
+```python
+selector.register(
+    server,
+    selectors.EVENT_READ
+)
+```
+
+Podemos também associar informações ao socket:
+
+```python
+selector.register(
+    client,
+    selectors.EVENT_READ,
+    data={"tipo": "cliente"}
+)
+```
+
+Esse `data` pode ser recuperado posteriormente.
+
+---
+
+## 22.8 `select()`
+
+Depois de registrar os sockets, usamos:
+
+```python
+events = selector.select()
+```
+
+Esse método espera até que algum socket esteja pronto.
+
+Conceitualmente:
+
+```text
+              sockets registrados
+                     │
+                     ▼
+              ┌─────────────┐
+              │   selector  │
+              └──────┬──────┘
+                     │
+              espera por eventos
+                     │
+          ┌──────────┴──────────┐
+          ▼                     ▼
+     Cliente 1             Cliente 4
+     pronto                pronto
+```
+
+O retorno contém informações sobre os sockets que estão prontos.
+
+---
+
+## 22.9 Entendendo o retorno de `select()`
+
+Um exemplo:
+
+```python
+events = selector.select()
+
+for key, mask in events:
+    print(key)
+    print(mask)
+```
+
+Cada item possui:
+
+```text
+key
+mask
+```
+
+O `key` contém informações sobre o objeto registrado.
+
+O `mask` informa quais eventos estão prontos.
+
+Por exemplo:
+
+```python
+if mask & selectors.EVENT_READ:
+    print("Socket pronto para leitura")
+```
+
+O operador:
+
+```python
+&
+```
+
+é utilizado porque `mask` pode representar uma combinação de eventos através de bits.
+
+---
+
+## 22.10 O `SelectorKey`
+
+O `key` retornado pelo selector é um `SelectorKey`.
+
+Ele possui informações como:
+
+```python
+key.fileobj
+key.fd
+key.events
+key.data
+```
+
+### `key.fileobj`
+
+É o objeto que foi registrado.
+
+Por exemplo:
+
+```python
+client = key.fileobj
+```
+
+### `key.fd`
+
+É o file descriptor associado ao objeto.
+
+Por exemplo, conceitualmente:
+
+```text
+Socket Python
+     │
+     ▼
+file descriptor
+     │
+     ▼
+kernel
+```
+
+Podemos obter:
+
+```python
+print(key.fd)
+```
+
+### `key.events`
+
+Mostra os eventos registrados.
+
+```python
+print(key.events)
+```
+
+### `key.data`
+
+Contém o objeto que passamos em:
+
+```python
+selector.register(..., data=...)
+```
+
+Por exemplo:
+
+```python
+selector.register(
+    client,
+    selectors.EVENT_READ,
+    data={"nome": "cliente1"}
+)
+```
+
+Depois:
+
+```python
+print(key.data)
+```
+
+pode retornar:
+
+```python
+{"nome": "cliente1"}
+```
+
+---
+
+## 22.11 `unregister()`
+
+Quando um cliente desconecta, não devemos continuar monitorando o socket.
+
+Para removê-lo:
+
+```python
+selector.unregister(client)
+```
+
+Depois podemos fechar:
+
+```python
+client.close()
+```
+
+Fluxo:
+
+```text
+Cliente desconecta
+       │
+       ▼
+unregister()
+       │
+       ▼
+close()
+       │
+       ▼
+socket removido
+```
+
+É importante fazer isso porque manter sockets desnecessários registrados pode causar erros e desperdício de recursos.
+
+---
+
+## 22.12 `modify()`
+
+Também podemos alterar os eventos monitorados.
+
+```python
+selector.modify(
+    client,
+    selectors.EVENT_WRITE
+)
+```
+
+Por exemplo, inicialmente podemos monitorar apenas leitura:
+
+```python
+EVENT_READ
+```
+
+Depois, quando temos dados pendentes para enviar:
+
+```text
+EVENT_READ
+     ↓
+tem dados para enviar
+     ↓
+EVENT_READ | EVENT_WRITE
+```
+
+Podemos representar os dois eventos:
+
+```python
+selectors.EVENT_READ | selectors.EVENT_WRITE
+```
+
+O `|` significa uma combinação bit a bit.
+
+Exemplo:
+
+```python
+selector.modify(
+    client,
+    selectors.EVENT_READ | selectors.EVENT_WRITE
+)
+```
+
+---
+
+## 22.13 Servidor Echo usando `selectors`
+
+Agora podemos juntar os conceitos.
+
+Um servidor TCP simples:
+
+```python
+import socket
+import selectors
+
+selector = selectors.DefaultSelector()
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+server.setblocking(False)
+
+selector.register(
+    server,
+    selectors.EVENT_READ
+)
+
+while True:
+    events = selector.select()
+
+    for key, mask in events:
+
+        sock = key.fileobj
+
+        if sock is server:
+            client, address = server.accept()
+
+            print(f"Cliente conectado: {address}")
+
+            client.setblocking(False)
+
+            selector.register(
+                client,
+                selectors.EVENT_READ
+            )
+
+        else:
+            data = sock.recv(1024)
+
+            if data:
+                print(f"Recebido: {data!r}")
+
+                sock.sendall(data)
+
+            else:
+                print("Cliente desconectado")
+
+                selector.unregister(sock)
+                sock.close()
+```
+
+Esse servidor consegue monitorar vários clientes usando um único loop principal.
+
+---
+
+## 22.14 Entendendo o loop
+
+A parte mais importante é:
+
+```python
+while True:
+    events = selector.select()
+
+    for key, mask in events:
+        ...
+```
+
+Podemos visualizar:
+
+```text
+                    ┌───────────────┐
+                    │ selector      │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    select() bloqueia
+                    esperando eventos
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+              ▼                           ▼
+       server pronto                client pronto
+              │                           │
+              ▼                           ▼
+          accept()                     recv()
+              │                           │
+              ▼                           ▼
+      novo cliente                 processa dados
+              │                           │
+              └─────────────┬─────────────┘
+                            │
+                            ▼
+                         select()
+                            │
+                            └──────► ...
+```
+
+O servidor não precisa fazer:
+
+```text
+recv() Cliente 1
+espera
+recv() Cliente 2
+espera
+recv() Cliente 3
+espera
+```
+
+Ele pergunta ao sistema operacional quais sockets estão prontos e trabalha somente nesses sockets.
+
+---
+
+## 22.15 Por que o socket precisa ser não bloqueante?
+
+Observe:
+
+```python
+server.setblocking(False)
+```
+
+e:
+
+```python
+client.setblocking(False)
+```
+
+Isso é importante porque o selector informa que o socket está **pronto**, mas ainda devemos evitar que uma operação de I/O bloqueie inesperadamente o loop.
+
+Por exemplo:
+
+```python
+data = sock.recv(1024)
+```
+
+O objetivo é que, depois de o selector indicar que há algo para ler, essa operação seja realizada sem bloquear todo o servidor.
+
+Caso uma operação bloqueante fique presa:
+
+```text
+selector
+   │
+   ▼
+socket pronto
+   │
+   ▼
+recv()
+   │
+   ▼
+bloqueou inesperadamente
+   │
+   ▼
+loop inteiro parado
+```
+
+Isso destruiria grande parte da vantagem da multiplexação.
+
+---
+
+## 22.16 Readiness não significa "mensagem completa"
+
+Esse é um ponto extremamente importante.
+
+O selector pode informar:
+
+```text
+"Este socket possui dados disponíveis para leitura."
+```
+
+Ele **não** está dizendo:
+
+```text
+"Este socket possui uma mensagem completa da sua aplicação."
+```
+
+Por exemplo, suponha que o protocolo da aplicação utilize:
+
+```text
+[4 bytes de tamanho][dados]
+```
+
+O selector pode indicar que existem apenas 2 bytes disponíveis.
+
+Então:
+
+```python
+recv(1024)
+```
+
+pode retornar apenas:
+
+```text
+2 bytes
+```
+
+Mesmo que a mensagem completa tenha:
+
+```text
+1000 bytes
+```
+
+Por isso, continuam sendo necessários:
+
+- buffers;
+    
+- delimitação de mensagens;
+    
+- prefixo de tamanho;
+    
+- processamento incremental.
+    
+
+O selector resolve **quando fazer I/O**.
+
+Ele não resolve **como interpretar os dados recebidos**.
+
+---
+
+## 22.17 Selector + buffer de aplicação
+
+Imagine:
+
+```text
+TCP
+ │
+ ▼
+selector
+ │
+ ▼
+recv()
+ │
+ ▼
+buffer
+ │
+ ├── mensagem incompleta
+ │
+ └── mensagem completa
+```
+
+O programa pode manter um buffer por cliente:
+
+```python
+buffers = {}
+```
+
+Por exemplo:
+
+```python
+buffers[client] = b""
+```
+
+Quando chegam dados:
+
+```python
+data = client.recv(1024)
+
+buffers[client] += data
+```
+
+Depois o protocolo pode tentar extrair mensagens completas.
+
+Isso é especialmente importante em servidores reais.
+
+---
+
+## 22.18 `EVENT_READ` e `EVENT_WRITE` na prática
+
+Podemos imaginar:
+
+```text
+EVENT_READ
+    │
+    └── "Quero saber quando posso ler."
+
+EVENT_WRITE
+    │
+    └── "Quero saber quando posso escrever."
+```
+
+Um servidor pode inicialmente registrar:
+
+```python
+selector.register(
+    client,
+    selectors.EVENT_READ
+)
+```
+
+Se tiver dados pendentes:
+
+```python
+selector.modify(
+    client,
+    selectors.EVENT_READ | selectors.EVENT_WRITE
+)
+```
+
+Quando o socket estiver pronto para escrita:
+
+```python
+if mask & selectors.EVENT_WRITE:
+    ...
+```
+
+Depois que todos os dados pendentes forem enviados, podemos remover `EVENT_WRITE` novamente.
+
+Isso evita ficar monitorando escrita desnecessariamente.
+
+---
+
+## 22.19 `EVENT_WRITE` e backpressure
+
+Imagine que o servidor precisa enviar uma quantidade enorme de dados para um cliente lento.
+
+```text
+Servidor
+   │
+   │ muitos dados
+   ▼
+buffer de envio
+   │
+   ▼
+cliente lento
+```
+
+Se o servidor tentar enviar tudo de uma vez, o `send()` pode não conseguir enviar tudo imediatamente.
+
+Em um servidor baseado em multiplexação, podemos manter os dados restantes em um buffer:
+
+```text
+dados pendentes
+      │
+      ▼
+buffer da aplicação
+      │
+      ▼
+EVENT_WRITE
+      │
+      ▼
+socket pronto
+      │
+      ▼
+send()
+      │
+      ▼
+remove bytes enviados
+```
+
+Isso é chamado de **backpressure**: o ritmo de produção de dados precisa respeitar a capacidade de consumo do destino.
+
+Esse conceito se torna especialmente importante em servidores de alto desempenho.
+
+---
+
+## 22.20 `select(timeout)`
+
+Também podemos fornecer um timeout:
+
+```python
+events = selector.select(timeout=1)
+```
+
+Nesse caso, o selector espera no máximo aproximadamente:
+
+```text
+1 segundo
+```
+
+Se nenhum evento aparecer, o retorno pode ser vazio:
+
+```python
+[]
+```
+
+Isso permite que o servidor execute outras tarefas periodicamente.
+
+Por exemplo:
+
+```python
+while True:
+
+    events = selector.select(timeout=1)
+
+    for key, mask in events:
+        ...
+    
+    verificar_tarefas()
+```
+
+Podemos então ter:
+
+```text
+┌───────────────────────┐
+│ selector.select(1)    │
+└───────────┬───────────┘
+            │
+       eventos?
+       /      \
+     sim       não
+      │         │
+      ▼         ▼
+ processa    tarefas
+ clientes    periódicas
+      │         │
+      └────┬────┘
+           ▼
+        próximo loop
+```
+
+---
+
+## 22.21 `selectors` versus `threading`
+
+As duas abordagens podem resolver o problema de múltiplos clientes, mas funcionam de maneiras diferentes.
+
+### Threads
+
+```text
+Servidor
+   │
+   ├── Thread 1 → Cliente 1
+   ├── Thread 2 → Cliente 2
+   ├── Thread 3 → Cliente 3
+   └── Thread 4 → Cliente 4
+```
+
+Cada thread pode ficar bloqueada esperando I/O.
+
+### `selectors`
+
+```text
+Servidor
+   │
+   └── Loop principal
+          │
+          ├── Cliente 1
+          ├── Cliente 2
+          ├── Cliente 3
+          └── Cliente 4
+```
+
+Um único fluxo monitora todos os sockets.
+
+### Comparação
+
+|Característica|Threads|`selectors`|
+|---|---|---|
+|Modelo|Concorrência por threads|Multiplexação de I/O|
+|Threads|Várias|Normalmente uma por loop|
+|I/O bloqueante|Pode ser usado|Normalmente evita-se|
+|Estado compartilhado|Mais complexo|Geralmente mais simples|
+|Escala com muitos sockets|Pode consumir mais recursos|Muito adequado para I/O|
+|Complexidade inicial|Mais simples|Mais complexo|
+|Controle do loop|Menor|Maior|
+
+Isso não significa que `selectors` seja sempre melhor.
+
+A escolha depende da aplicação.
+
+---
+
+## 22.22 `selectors` não substitui o protocolo da aplicação
+
+É importante separar as responsabilidades:
+
+```text
+┌───────────────────────────────┐
+│ Protocolo da aplicação        │
+│                               │
+│ comandos, framing, autenticação│
+└───────────────┬───────────────┘
+                │
+┌───────────────▼───────────────┐
+│ selectors                     │
+│                               │
+│ quando fazer I/O              │
+└───────────────┬───────────────┘
+                │
+┌───────────────▼───────────────┐
+│ Socket / TCP                  │
+│                               │
+│ transporte de bytes           │
+└───────────────┬───────────────┘
+                │
+                ▼
+              Rede
+```
+
+Cada camada possui uma responsabilidade diferente.
+
+O TCP transporta bytes.
+
+O selector ajuda a descobrir quando os sockets estão prontos.
+
+O protocolo da aplicação decide o significado desses bytes.
+
+---
+
+## 22.23 Erros comuns
+
+### Tentar usar `recv()` sem verificar o fechamento
+
+Errado:
+
+```python
+data = sock.recv(1024)
+print(data)
+```
+
+Sem tratar:
+
+```python
+if not data:
+```
+
+O servidor pode continuar monitorando um socket que já foi encerrado pelo cliente.
+
+---
+
+### Esquecer `unregister()`
+
+Ao fechar um socket monitorado:
+
+```python
+sock.close()
+```
+
+também devemos removê-lo do selector:
+
+```python
+selector.unregister(sock)
+```
+
+---
+
+### Assumir que `recv()` recebe uma mensagem completa
+
+Mesmo com `selectors`, continua valendo:
+
+```text
+TCP = stream de bytes
+```
+
+Portanto:
+
+```python
+recv(1024)
+```
+
+não significa:
+
+```text
+"receba exatamente uma mensagem"
+```
+
+---
+
+### Usar socket bloqueante em um loop de multiplexação
+
+Se uma operação bloquear indefinidamente:
+
+```python
+recv()
+```
+
+o loop inteiro pode ficar parado.
+
+Por isso, servidores baseados em `selectors` normalmente utilizam sockets não bloqueantes.
+
+---
+
+## 22.24 Arquitetura mental
+
+Uma forma boa de memorizar é:
+
+```text
+                 ┌──────────────────┐
+                 │ Aplicação        │
+                 │ protocolo/framing│
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │   selectors      │
+                 │                  │
+                 │ "quem está pronto│
+                 │  para I/O?"      │
+                 └────────┬─────────┘
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+          Socket 1     Socket 2    Socket 3
+              │           │           │
+              └───────────┼───────────┘
+                          ▼
+                         TCP
+                          │
+                          ▼
+                         IP
+                          │
+                          ▼
+                        Rede
+```
+
+O ponto principal é:
+
+> **`selectors` não transporta os dados e não define o protocolo. Ele permite que o programa monitore vários objetos de I/O e trabalhe quando eles estiverem prontos.**
+
+---
+
+## 22.25 Fluxo completo de um servidor com `selectors`
+
+```text
+socket()
+   │
+   ▼
+bind()
+   │
+   ▼
+listen()
+   │
+   ▼
+setblocking(False)
+   │
+   ▼
+selector.register(server, EVENT_READ)
+   │
+   ▼
+┌─────────────────────────────┐
+│         LOOP                │
+│                             │
+│ selector.select()           │
+│         │                   │
+│         ▼                   │
+│ socket pronto?              │
+│      /       \              │
+│    server   client          │
+│      │         │            │
+│      ▼         ▼            │
+│   accept()   recv()         │
+│      │         │            │
+│      ▼         ▼            │
+│ register    processar       │
+│ client      dados           │
+│                             │
+│ cliente fechou?             │
+│      │                      │
+│      ▼                      │
+│ unregister()                │
+│ close()                     │
+└─────────────────────────────┘
+```
+
+---
+
+## 22.26 Onde `selectors` se encaixa na evolução dos servidores
+
+Até agora estudamos uma evolução natural:
+
+```text
+Servidor sequencial
+       │
+       ▼
+Thread por cliente
+       │
+       ▼
+ThreadPoolExecutor
+       │
+       ▼
+selectors
+       │
+       ▼
+asyncio
+```
+
+Cada etapa introduz uma forma diferente de lidar com concorrência e I/O.
+
+`selectors` é particularmente importante para entender o que existe **por baixo de abstrações como `asyncio`**.
+
+O conceito fundamental é:
+
+```text
+muitos sockets
+      ↓
+um mecanismo de espera
+      ↓
+somente sockets prontos são processados
+```
+
+---
+
+## 22.27 Resumo da Parte
+
+- **Multiplexação de I/O** permite monitorar vários sockets sem precisar de uma thread para cada cliente.
+    
+- `selectors.DefaultSelector()` fornece uma abstração portátil para mecanismos de multiplexação do sistema operacional.
+    
+- `register()` adiciona um socket ao selector.
+    
+- `unregister()` remove um socket.
+    
+- `modify()` altera os eventos monitorados.
+    
+- `select()` espera até que existam sockets prontos.
+    
+- `EVENT_READ` monitora disponibilidade para leitura.
+    
+- `EVENT_WRITE` monitora disponibilidade para escrita.
+    
+- `SelectorKey` fornece informações sobre o socket registrado.
+    
+- Sockets usados com `selectors` normalmente são configurados como **não bloqueantes**.
+    
+- Estar "pronto para leitura" **não significa que uma mensagem completa esteja disponível**.
+    
+- TCP continua sendo um **stream de bytes**, portanto framing e buffers continuam sendo responsabilidade da aplicação.
+    
+- `selectors` permite construir servidores eficientes para muitos clientes usando um loop de eventos.
+    
+- `selectors` é uma base conceitual importante para entender modelos assíncronos como `asyncio`.
+    
+
+**Modelo mental final:**
+
+```text
+                    Muitos clientes
+                          │
+                          ▼
+                  ┌───────────────┐
+                  │   selector    │
+                  └───────┬───────┘
+                          │
+                    select()
+                          │
+             ┌────────────┼────────────┐
+             ▼            ▼            ▼
+          Socket A     Socket B     Socket C
+          pronto        pronto       não pronto
+             │            │
+             ▼            ▼
+           recv()       recv()
+             │            │
+             └──────┬─────┘
+                    ▼
+              protocolo da
+                aplicação
+```
+
+

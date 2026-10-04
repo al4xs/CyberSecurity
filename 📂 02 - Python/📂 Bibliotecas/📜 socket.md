@@ -5503,6 +5503,914 @@ Cada operação possui sua própria responsabilidade.
 - Um cliente pode deixar o sistema operacional escolher automaticamente sua porta local.
     
 - `bind()` trabalha com o **endereço local**, enquanto `connect()` será utilizado para estabelecer uma conexão com um **endereço remoto**.
+
+---
+
+# 6. Colocando o socket em modo de escuta com `listen()`
+
+Depois de criar o socket e associá-lo a um endereço através de `bind()`, ainda falta uma etapa para transformar o socket em um socket capaz de **receber solicitações de conexão TCP**.
+
+Essa etapa é realizada através de:
+
+```python
+listen()
+```
+
+Exemplo:
+
+```python
+sock.listen()
+```
+
+O fluxo básico de um servidor TCP passa a ser:
+
+```text
+socket()
+   ↓
+cria o socket
+   ↓
+bind()
+   ↓
+associa IP + porta
+   ↓
+listen()
+   ↓
+coloca o socket em modo de escuta
+```
+
+É importante entender que `listen()` é uma operação específica de sockets orientados a conexão, como os sockets TCP baseados em:
+
+```python
+socket.SOCK_STREAM
+```
+
+---
+
+## 6.1 O que `listen()` faz?
+
+A função `listen()` informa ao sistema operacional que o socket deve ser colocado em **modo de escuta para conexões de entrada**.
+
+Exemplo:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+```
+
+Nesse ponto, o fluxo é:
+
+```text
+socket()
+   ↓
+socket TCP criado
+
+bind()
+   ↓
+127.0.0.1:4444
+
+listen()
+   ↓
+socket preparado para receber conexões
+```
+
+Podemos pensar em `listen()` como:
+
+```text
+"Este socket será usado para receber
+solicitações de conexão."
+```
+
+---
+
+## 6.2 `listen()` não aceita a conexão
+
+Um detalhe muito importante:
+
+```python
+server.listen()
+```
+
+não significa:
+
+```text
+"aceite uma conexão agora"
+```
+
+Ele significa:
+
+```text
+"prepare este socket para receber conexões."
+```
+
+A operação que efetivamente aceita uma conexão é:
+
+```python
+server.accept()
+```
+
+Portanto:
+
+```text
+listen()
+   ↓
+prepara para receber conexões
+
+accept()
+   ↓
+aceita uma conexão específica
+```
+
+Esse é um dos conceitos mais importantes do funcionamento de um servidor TCP.
+
+---
+
+## 6.3 O fluxo completo até `listen()`
+
+Podemos visualizar:
+
+```text
+             SERVIDOR TCP
+
+socket()
+   │
+   │ cria
+   ↓
+Socket TCP
+   │
+   │ bind()
+   ↓
+127.0.0.1:4444
+   │
+   │ listen()
+   ↓
+Socket em escuta
+```
+
+Somente depois disso teremos:
+
+```python
+server.accept()
+```
+
+para aceitar uma conexão recebida.
+
+---
+
+## 6.4 Sintaxe de `listen()`
+
+A sintaxe é:
+
+```python
+socket.listen(backlog=-1)
+```
+
+Na prática, podemos utilizar simplesmente:
+
+```python
+server.listen()
+```
+
+ou:
+
+```python
+server.listen(5)
+```
+
+O parâmetro indica o tamanho desejado da fila de conexões pendentes.
+
+Exemplo:
+
+```python
+server.listen(5)
+```
+
+Podemos interpretar conceitualmente como:
+
+```text
+"mantenha uma fila para conexões
+ que chegaram e ainda não foram aceitas."
+```
+
+---
+
+## 6.5 O que é a fila de conexões?
+
+Imagine que nosso servidor execute:
+
+```python
+server.listen(5)
+```
+
+e vários clientes tentem estabelecer uma conexão ao mesmo tempo.
+
+Podemos imaginar:
+
+```text
+             SERVIDOR
+                 │
+                 │
+             listen()
+                 │
+                 ↓
+        ┌─────────────────┐
+        │ fila de espera  │
+        ├─────────────────┤
+        │ Cliente 1       │
+        │ Cliente 2       │
+        │ Cliente 3       │
+        │ Cliente 4       │
+        │ Cliente 5       │
+        └─────────────────┘
+```
+
+Enquanto o programa servidor ainda não chamou:
+
+```python
+server.accept()
+```
+
+as conexões que puderem ser mantidas ficam aguardando na estrutura de fila administrada pelo sistema operacional.
+
+O objetivo dessa fila é permitir que o sistema operacional mantenha conexões pendentes enquanto a aplicação ainda não as processou.
+
+---
+
+## 6.6 `backlog` não significa número máximo absoluto de clientes
+
+Um erro comum é interpretar:
+
+```python
+server.listen(5)
+```
+
+como:
+
+```text
+"Meu servidor só pode ter 5 clientes."
+```
+
+Não é isso.
+
+O valor está relacionado à fila de conexões pendentes que aguardam aceitação.
+
+Ele não representa diretamente:
+
+```text
+número máximo de clientes conectados
+```
+
+Por exemplo, um servidor pode aceitar uma conexão:
+
+```python
+client, address = server.accept()
+```
+
+e depois a conexão deixa de ser uma solicitação pendente e passa a ser representada pelo socket retornado por `accept()`.
+
+Portanto:
+
+```text
+backlog
+   ↓
+fila de conexões pendentes
+
+não significa:
+
+número total de conexões existentes
+```
+
+---
+
+## 6.7 O socket de escuta
+
+Depois de:
+
+```python
+server.listen()
+```
+
+o objeto:
+
+```python
+server
+```
+
+é conhecido conceitualmente como **listening socket** ou **socket de escuta**.
+
+Ele possui uma função diferente do socket que será utilizado para conversar com o cliente.
+
+Podemos representar:
+
+```text
+Listening socket
+       │
+       │ aceita conexão
+       ↓
+Client socket
+       │
+       │ comunicação
+       ↓
+Cliente
+```
+
+Isso é extremamente importante.
+
+O socket que executa:
+
+```python
+server.listen()
+```
+
+não é o mesmo socket retornado por:
+
+```python
+server.accept()
+```
+
+---
+
+## 6.8 `listen()` prepara o socket para `accept()`
+
+Podemos pensar na relação:
+
+```python
+server.listen()
+```
+
+e:
+
+```python
+server.accept()
+```
+
+como:
+
+```text
+listen()
+   ↓
+"Estou pronto para receber conexões."
+
+accept()
+   ↓
+"Agora me entregue uma conexão recebida."
+```
+
+Um servidor TCP normalmente possui:
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+client, address = server.accept()
+```
+
+O fluxo é:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+---
+
+## 6.9 O que acontece quando um cliente chama `connect()`?
+
+Suponha que o servidor esteja executando:
+
+```python
+server.listen()
+```
+
+e esteja associado a:
+
+```text
+127.0.0.1:4444
+```
+
+Agora um cliente executa:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+Temos:
+
+```text
+CLIENTE
+   │
+   │ connect()
+   │
+   ↓
+127.0.0.1:4444
+   │
+   ↓
+SERVIDOR
+   │
+   │ listen()
+   ↓
+fila de conexões
+```
+
+A solicitação de conexão é processada pelo sistema operacional.
+
+Depois, o servidor pode chamar:
+
+```python
+server.accept()
+```
+
+para obter a conexão.
+
+---
+
+## 6.10 `accept()` será o próximo passo
+
+Neste momento, é importante apenas entender a posição de `accept()` no fluxo.
+
+Temos:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+Já estudamos:
+
+```text
+socket()
+```
+
+que cria o socket.
+
+Depois:
+
+```text
+bind()
+```
+
+que associa o endereço local.
+
+Agora:
+
+```text
+listen()
+```
+
+coloca o socket em modo de escuta.
+
+A próxima etapa será:
+
+```text
+accept()
+```
+
+que permite ao servidor aceitar uma conexão recebida.
+
+---
+
+## 6.11 Exemplo de servidor até `listen()`
+
+Podemos montar um servidor ainda incompleto:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Servidor aguardando conexões...")
+```
+
+Esse programa:
+
+1. importa `socket`;
+    
+2. cria um socket TCP IPv4;
+    
+3. associa o socket a `127.0.0.1:4444`;
+    
+4. coloca o socket em modo de escuta;
+    
+5. imprime uma mensagem.
+    
+
+Podemos visualizar:
+
+```text
+Python
+  ↓
+socket()
+  ↓
+TCP / IPv4
+  ↓
+bind()
+  ↓
+127.0.0.1:4444
+  ↓
+listen()
+  ↓
+aguardando conexões
+```
+
+Entretanto, esse programa ainda não possui:
+
+```python
+accept()
+```
+
+Portanto, ele ainda não está retirando as conexões da fila para trabalhar com elas.
+
+---
+
+## 6.12 O que acontece se `listen()` for chamado antes de `bind()`?
+
+Em um servidor TCP tradicional, normalmente fazemos:
+
+```python
+server.bind(("127.0.0.1", 4444))
+server.listen()
+```
+
+A ordem faz parte do fluxo esperado.
+
+Por isso, não devemos pensar em:
+
+```python
+server.listen()
+server.bind(("127.0.0.1", 4444))
+```
+
+como a sequência normal.
+
+O servidor primeiro precisa definir seu endereço local:
+
+```text
+bind()
+   ↓
+qual endereço local será utilizado?
+```
+
+Depois:
+
+```text
+listen()
+   ↓
+começar a escutar naquele endereço
+```
+
+Em outras palavras:
+
+```text
+bind()
+   ↓
+identidade local
+
+listen()
+   ↓
+modo de escuta
+```
+
+---
+
+## 6.13 `listen()` é específico do modelo orientado a conexão
+
+O método:
+
+```python
+listen()
+```
+
+faz sentido para sockets que trabalham com um modelo de conexão, como:
+
+```python
+socket.SOCK_STREAM
+```
+
+Por isso, em um servidor TCP tradicional temos:
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+seguido por:
+
+```python
+server.bind(...)
+server.listen(...)
+```
+
+Já UDP utiliza:
+
+```python
+socket.SOCK_DGRAM
+```
+
+e possui um modelo diferente.
+
+Um servidor UDP normalmente não utiliza:
+
+```python
+listen()
+accept()
+```
+
+Em vez disso, trabalha diretamente com datagramas utilizando métodos como:
+
+```python
+recvfrom()
+sendto()
+```
+
+Portanto:
+
+```text
+TCP
+ ↓
+socket()
+ ↓
+bind()
+ ↓
+listen()
+ ↓
+accept()
+```
+
+Enquanto UDP possui um fluxo diferente:
+
+```text
+UDP
+ ↓
+socket()
+ ↓
+bind()
+ ↓
+recvfrom()
+```
+
+Esse contraste ficará mais claro quando estudarmos TCP e UDP na prática.
+
+---
+
+## 6.14 `listen()` não envia dados
+
+Também é importante não confundir `listen()` com métodos de transmissão.
+
+`listen()` não:
+
+- envia dados;
+    
+- recebe dados da aplicação;
+    
+- estabelece uma conexão diretamente;
+    
+- lê mensagens;
+    
+- envia pacotes de aplicação.
+    
+
+Sua responsabilidade é preparar o socket para receber solicitações de conexão.
+
+Podemos separar:
+
+```text
+listen()
+   ↓
+gerenciamento de conexões
+```
+
+enquanto métodos como:
+
+```python
+send()
+sendall()
+recv()
+```
+
+serão utilizados posteriormente para:
+
+```text
+transmissão de dados
+```
+
+---
+
+## 6.15 O papel do kernel
+
+Assim como acontece com `socket()` e `bind()`, o comportamento de `listen()` envolve o sistema operacional.
+
+Quando fazemos:
+
+```python
+server.listen()
+```
+
+o Python solicita ao sistema operacional que aquele socket seja colocado no estado apropriado para receber conexões.
+
+Podemos representar:
+
+```text
+Python
+  │
+  │ listen()
+  ↓
+Sistema operacional
+  │
+  ↓
+socket em estado de escuta
+  │
+  ↓
+gerenciamento de conexões TCP
+```
+
+O kernel passa a cuidar de aspectos da comunicação TCP enquanto a aplicação poderá posteriormente chamar:
+
+```python
+accept()
+```
+
+para obter uma conexão disponível.
+
+---
+
+## 6.16 Estado conceitual do socket
+
+Até agora podemos acompanhar a evolução:
+
+```text
+socket()
+   ↓
+socket criado
+```
+
+Depois:
+
+```text
+bind()
+   ↓
+socket associado a IP + porta
+```
+
+Depois:
+
+```text
+listen()
+   ↓
+socket em modo de escuta
+```
+
+Podemos representar:
+
+```text
+                 SOCKET TCP
+
+       socket()
+           │
+           ▼
+     [CRIADO]
+           │
+           │ bind()
+           ▼
+ [ENDEREÇO ASSOCIADO]
+           │
+           │ listen()
+           ▼
+     [ESCUTANDO]
+           │
+           │ accept()
+           ▼
+ [CONEXÃO ACEITA]
+```
+
+Essa sequência será fundamental para entender servidores TCP.
+
+---
+
+## 6.17 Exemplo visual completo até `listen()`
+
+Código:
+
+```python
+import socket
+
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+server.bind(("127.0.0.1", 4444))
+
+server.listen()
+
+print("Aguardando conexão...")
+```
+
+Fluxo:
+
+```text
+                SERVIDOR
+
+          socket.socket()
+                 │
+                 ▼
+          Socket TCP IPv4
+                 │
+                 │ bind()
+                 ▼
+          127.0.0.1:4444
+                 │
+                 │ listen()
+                 ▼
+          ┌──────────────┐
+          │  ESCUTANDO   │
+          └──────┬───────┘
+                 │
+                 │ conexões
+                 ▼
+          fila de espera
+```
+
+O próximo passo será retirar uma conexão dessa estrutura através de:
+
+```python
+server.accept()
+```
+
+---
+
+## Resumo
+
+- `listen()` coloca um socket TCP em **modo de escuta**.
+    
+- É utilizado normalmente depois de:
+    
+    ```python
+    bind()
+    ```
+    
+- O fluxo tradicional de um servidor TCP é:
+    
+    ```text
+    socket()
+        ↓
+    bind()
+        ↓
+    listen()
+        ↓
+    accept()
+    ```
+    
+- `listen()` não aceita uma conexão.
+    
+- `accept()` é responsável por aceitar uma conexão recebida.
+    
+- O parâmetro `backlog` está relacionado à fila de conexões pendentes.
+    
+- `listen(5)` não significa que o servidor só pode possuir cinco clientes.
+    
+- O socket que chama `listen()` é o **socket de escuta**.
+    
+- O socket de escuta não deve ser confundido com o socket retornado por `accept()`.
+    
+- `listen()` não transmite dados da aplicação.
+    
+- `listen()` é utilizado no modelo orientado a conexão, como TCP.
+    
+- UDP não utiliza o fluxo tradicional `listen()` → `accept()`.
+    
+- O sistema operacional gerencia a fila e o estado das conexões enquanto a aplicação utiliza `accept()` para obter uma conexão disponível.
     
 
 ---

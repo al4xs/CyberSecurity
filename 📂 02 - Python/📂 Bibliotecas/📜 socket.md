@@ -2104,3 +2104,1309 @@ Essa será a próxima etapa.
 
 
 ---
+# 3. Tipos de sockets
+
+Agora que entendemos as **famílias de endereços**, precisamos entender uma segunda característica fundamental de um socket: o seu **tipo**.
+
+A família responde, de forma simplificada:
+
+> **“Em que tipo de sistema de endereçamento esse socket vai operar?”**
+
+Por exemplo:
+
+```python
+socket.AF_INET
+```
+
+indica IPv4.
+
+Já o tipo responde:
+
+> **“Qual é a semântica de comunicação que esse socket oferece?”**
+
+Por exemplo:
+
+```python
+socket.SOCK_STREAM
+```
+
+indica uma comunicação orientada a fluxo de bytes.
+
+Essa distinção é extremamente importante porque:
+
+```python
+socket.AF_INET
+```
+
+e:
+
+```python
+socket.SOCK_STREAM
+```
+
+não representam a mesma coisa.
+
+Podemos pensar inicialmente assim:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+fluxo de bytes
+```
+
+Uma combinação comum é:
+
+```python
+socket.AF_INET + socket.SOCK_STREAM
+```
+
+que normalmente resulta em um socket IPv4 usando TCP.
+
+Outra combinação comum é:
+
+```python
+socket.AF_INET + socket.SOCK_DGRAM
+```
+
+que normalmente resulta em um socket IPv4 usando UDP.
+
+Mas existe uma diferença importante:
+
+> **Tipo de socket não deve ser tratado simplesmente como sinônimo do protocolo de transporte.**
+
+O tipo define principalmente a **semântica da comunicação**. O protocolo efetivamente utilizado depende também da família, do parâmetro de protocolo e do suporte do sistema operacional.
+
+---
+
+## 3.1 `SOCK_STREAM`
+
+O tipo:
+
+```python
+socket.SOCK_STREAM
+```
+
+representa uma comunicação baseada em **fluxo de bytes**.
+
+É o tipo tradicionalmente utilizado com **TCP**.
+
+Exemplo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Podemos interpretar:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+fluxo de bytes
+
+combinação
+   ↓
+normalmente TCP sobre IPv4
+```
+
+---
+
+## 3.2 O que significa "fluxo de bytes"?
+
+Esse é um dos conceitos mais importantes de sockets.
+
+Quando trabalhamos com:
+
+```python
+SOCK_STREAM
+```
+
+não estamos enviando necessariamente:
+
+```text
+mensagem 1
+mensagem 2
+mensagem 3
+```
+
+O socket trabalha com uma sequência contínua de bytes:
+
+```text
+[byte][byte][byte][byte][byte][byte]...
+```
+
+Por exemplo, imagine que uma aplicação queira enviar:
+
+```text
+"Olá mundo"
+```
+
+Isso pode ser convertido para bytes:
+
+```python
+b"Ol\xc3\xa1 mundo"
+```
+
+O receptor recebe bytes através de:
+
+```python
+recv()
+```
+
+Por exemplo:
+
+```python
+dados = sock.recv(1024)
+```
+
+O valor:
+
+```python
+1024
+```
+
+não significa:
+
+> "receba exatamente uma mensagem de 1024 bytes."
+
+Significa:
+
+> "receba no máximo 1024 bytes nesta operação."
+
+Essa diferença será extremamente importante quando estudarmos TCP em profundidade.
+
+---
+
+## 3.3 TCP não preserva fronteiras de mensagens
+
+Suponha que o cliente faça:
+
+```python
+sock.sendall(b"OLA")
+sock.sendall(b"MUNDO")
+```
+
+Seria um erro conceitual imaginar que o servidor obrigatoriamente receberá:
+
+```text
+OLA
+MUNDO
+```
+
+em duas chamadas separadas de:
+
+```python
+recv()
+```
+
+O servidor poderia receber:
+
+```text
+OLAMUNDO
+```
+
+em uma única leitura.
+
+Ou poderia receber:
+
+```text
+OLA
+```
+
+e depois:
+
+```text
+MUNDO
+```
+
+Ou até:
+
+```text
+OL
+```
+
+e depois:
+
+```text
+AMUNDO
+```
+
+A aplicação não pode assumir que cada chamada de `send()` ou `sendall()` corresponde a uma chamada equivalente de `recv()`.
+
+Podemos representar:
+
+```text
+APLICAÇÃO CLIENTE
+
+send("OLA")
+send("MUNDO")
+       │
+       ▼
+┌─────────────────────┐
+│ fluxo TCP           │
+│                     │
+│ O L A M U N D O     │
+└─────────────────────┘
+       │
+       ▼
+APLICAÇÃO SERVIDOR
+
+recv(...)
+```
+
+Isso acontece porque TCP fornece um **fluxo ordenado de bytes**, e não um sistema de mensagens.
+
+Por isso, protocolos de aplicação que utilizam TCP normalmente precisam definir algum mecanismo para descobrir:
+
+> **onde uma mensagem termina e a próxima começa?**
+
+Algumas possibilidades são:
+
+### Delimitador
+
+```text
+OLA\n
+MUNDO\n
+```
+
+### Tamanho antes da mensagem
+
+```text
+[0005][HELLO]
+[0005][WORLD]
+```
+
+### Estrutura fixa
+
+Por exemplo:
+
+```text
+8 bytes → cabeçalho
+N bytes → conteúdo
+```
+
+### Fechamento da conexão
+
+Em determinados protocolos, o fim do fluxo pode indicar o fim dos dados.
+
+Esse assunto será aprofundado quando estudarmos **TCP como byte stream** e construção de protocolos próprios.
+
+---
+
+## 3.4 `SOCK_DGRAM`
+
+O segundo tipo importante é:
+
+```python
+socket.SOCK_DGRAM
+```
+
+`SOCK_DGRAM` representa comunicação baseada em **datagramas**.
+
+O protocolo mais comum associado a ele é:
+
+```text
+UDP
+```
+
+Exemplo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Aqui temos:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+datagramas
+
+combinação comum
+   ↓
+UDP sobre IPv4
+```
+
+A grande diferença para `SOCK_STREAM` é que datagramas possuem **fronteiras de mensagem**.
+
+Por exemplo:
+
+```python
+sock.sendto(b"OLA", destino)
+sock.sendto(b"MUNDO", destino)
+```
+
+O receptor utiliza:
+
+```python
+dados, origem = sock.recvfrom(1024)
+```
+
+e recebe datagramas individualmente.
+
+Conceitualmente:
+
+```text
+CLIENTE
+
+datagrama 1
+┌──────────────┐
+│     OLA      │
+└──────────────┘
+
+datagrama 2
+┌──────────────┐
+│    MUNDO     │
+└──────────────┘
+        │
+        ▼
+       UDP
+        │
+        ▼
+SERVIDOR
+
+recvfrom()
+   ↓
+"OLA"
+
+recvfrom()
+   ↓
+"MUNDO"
+```
+
+Existe, portanto, uma diferença fundamental:
+
+```text
+SOCK_STREAM
+    ↓
+fluxo contínuo de bytes
+
+SOCK_DGRAM
+    ↓
+unidades individuais de dados
+```
+
+---
+
+## 3.5 Datagramas não significam confiabilidade
+
+É importante não confundir:
+
+> **preservação da fronteira da mensagem**
+
+com:
+
+> **entrega garantida**
+
+UDP normalmente não oferece as garantias de entrega, ordenação e retransmissão que TCP oferece.
+
+Imagine que uma aplicação envie:
+
+```text
+Datagrama A
+Datagrama B
+Datagrama C
+```
+
+O receptor pode receber:
+
+```text
+A
+C
+```
+
+e não receber:
+
+```text
+B
+```
+
+Também pode ocorrer:
+
+```text
+C
+A
+```
+
+dependendo do comportamento da rede.
+
+A aplicação que utiliza UDP precisa lidar com essas características quando elas forem importantes.
+
+Podemos resumir:
+
+```text
+TCP
+ ├── confiabilidade
+ ├── ordenação
+ ├── retransmissão
+ └── fluxo de bytes
+
+UDP
+ ├── datagramas
+ ├── menor complexidade no transporte
+ ├── não fornece as mesmas garantias de TCP
+ └── preserva fronteiras dos datagramas
+```
+
+Isso não significa que UDP seja simplesmente "TCP pior".
+
+São modelos diferentes.
+
+UDP é útil justamente quando a aplicação deseja características diferentes das oferecidas pelo TCP.
+
+---
+
+## 3.6 `SOCK_STREAM` vs `SOCK_DGRAM`
+
+Uma comparação simples:
+
+|Característica|`SOCK_STREAM`|`SOCK_DGRAM`|
+|---|---|---|
+|Semântica|Fluxo|Datagramas|
+|Protocolo comum|TCP|UDP|
+|Fronteira de mensagem|Não|Sim|
+|Ordenação garantida pelo transporte|Normalmente sim com TCP|Não|
+|Retransmissão pelo transporte|TCP fornece|UDP não|
+|Conexão TCP tradicional|Sim|Não possui conexão TCP|
+|Uso típico|HTTP/1.1, SSH, chat TCP|DNS, streaming específico, jogos e aplicações que usam UDP|
+|API comum|`send()` / `recv()`|`sendto()` / `recvfrom()`|
+
+Existe uma observação importante sobre a palavra **conexão**.
+
+Frequentemente dizemos:
+
+```text
+TCP = orientado à conexão
+UDP = sem conexão
+```
+
+Isso é correto como descrição do modelo de transporte.
+
+Porém, isso **não significa que um socket UDP jamais possa usar `connect()`**.
+
+Um socket UDP pode fazer:
+
+```python
+sock.connect(("127.0.0.1", 9999))
+```
+
+Nesse caso, o sistema operacional associa aquele socket a um destino padrão.
+
+Isso não transforma UDP em TCP.
+
+Não ocorre uma conexão TCP, nem passa a existir a mesma confiabilidade do TCP.
+
+Portanto:
+
+```text
+UDP + connect()
+       ≠
+TCP
+```
+
+O significado de `connect()` em UDP será estudado posteriormente.
+
+---
+
+## 3.7 `SOCK_RAW`
+
+Outro tipo é:
+
+```python
+socket.SOCK_RAW
+```
+
+Raw sockets fornecem acesso muito mais baixo nível à comunicação de rede.
+
+Em vez de trabalhar somente com a abstração tradicional de:
+
+```text
+aplicação
+   ↓
+TCP/UDP
+```
+
+um raw socket pode permitir que a aplicação interaja de forma mais direta com protocolos e cabeçalhos de rede, dependendo do sistema operacional e das permissões.
+
+Conceitualmente:
+
+```text
+Aplicação
+    │
+    ▼
+RAW SOCKET
+    │
+    ▼
+camadas inferiores da rede
+```
+
+Isso é muito diferente de:
+
+```python
+socket.AF_INET, socket.SOCK_STREAM
+```
+
+que normalmente utilizamos para comunicação TCP convencional.
+
+### Exemplo conceitual
+
+Um programa utilizando raw sockets pode estar interessado em observar ou construir estruturas de protocolos de rede em um nível mais baixo.
+
+Isso aparece em áreas como:
+
+- análise de protocolos;
+    
+- ferramentas de diagnóstico;
+    
+- pesquisa de redes;
+    
+- captura e análise de pacotes;
+    
+- ferramentas de segurança;
+    
+- implementação experimental de protocolos;
+    
+- estudos de cabeçalhos IP/ICMP.
+    
+
+Porém, raw sockets possuem limitações importantes.
+
+No Linux, determinadas operações exigem privilégios elevados, e o comportamento exato depende da família, protocolo e configuração do sistema.
+
+Por isso, não devemos assumir:
+
+```text
+SOCK_RAW = posso fazer qualquer coisa na rede
+```
+
+Não é assim.
+
+O sistema operacional continua controlando o acesso.
+
+---
+
+## 3.8 Raw socket e segurança
+
+Raw sockets aparecem bastante em segurança porque permitem trabalhar próximo das camadas de rede.
+
+Por exemplo, ferramentas de diagnóstico e pesquisa de protocolos podem precisar construir ou observar pacotes de forma mais direta.
+
+Isso também explica por que operações com raw sockets podem exigir privilégios.
+
+Uma abstração simplificada seria:
+
+```text
+SOCK_STREAM
+
+Aplicação
+   ↓
+TCP
+   ↓
+IP
+   ↓
+Ethernet
+```
+
+Enquanto um raw socket pode permitir trabalhar em uma camada mais próxima de:
+
+```text
+Aplicação
+   ↓
+RAW SOCKET
+   ↓
+protocolo de rede
+   ↓
+interface de rede
+```
+
+O nível exato depende da família e do protocolo escolhido.
+
+Quando estudarmos **raw sockets**, vamos analisar isso separadamente para não misturar o conceito com TCP e UDP.
+
+---
+
+## 3.9 `SOCK_SEQPACKET`
+
+Outro tipo importante é:
+
+```python
+socket.SOCK_SEQPACKET
+```
+
+O nome pode parecer estranho inicialmente.
+
+Podemos dividi-lo:
+
+```text
+SEQ
+ ↓
+sequenciado
+
+PACKET
+ ↓
+pacotes/mensagens
+```
+
+A ideia é fornecer uma comunicação:
+
+- orientada a conexão;
+    
+- confiável;
+    
+- ordenada;
+    
+- baseada em mensagens/records.
+    
+
+Isso é diferente de `SOCK_STREAM`.
+
+Podemos visualizar:
+
+```text
+SOCK_STREAM
+
+AAAAA BBBBB CCCCC
+─────────────────
+fluxo contínuo
+```
+
+Enquanto:
+
+```text
+SOCK_SEQPACKET
+
+┌─────┐ ┌─────┐ ┌─────┐
+│ AAA │ │ BBB │ │ CCC │
+└─────┘ └─────┘ └─────┘
+ mensagens preservadas
+```
+
+Portanto, `SOCK_SEQPACKET` combina características que podem ser muito interessantes:
+
+```text
+confiabilidade
+      +
+ordenação
+      +
+fronteiras de mensagem
+```
+
+Porém, existe uma consideração importante:
+
+> **`SOCK_SEQPACKET` não deve ser tratado como simplesmente "TCP com mensagens".**
+
+A disponibilidade e o protocolo associado dependem da família de endereços e do sistema operacional.
+
+Em algumas famílias, como determinados usos de sockets locais, esse modelo é mais comum.
+
+Portanto, não devemos assumir que:
+
+```python
+socket.AF_INET + socket.SOCK_SEQPACKET
+```
+
+terá necessariamente uma implementação disponível e equivalente em todos os sistemas.
+
+---
+
+## 3.10 Comparação geral dos tipos
+
+Podemos montar um modelo mental:
+
+```text
+                    SOCKET TYPES
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+   SOCK_STREAM      SOCK_DGRAM       SOCK_RAW
+        │                │                │
+        ▼                ▼                ▼
+   fluxo de bytes     datagramas      acesso baixo nível
+        │                │
+        ▼                ▼
+      TCP*             UDP*
+```
+
+E:
+
+```text
+SOCK_SEQPACKET
+       │
+       ▼
+mensagens ordenadas e confiáveis
+```
+
+Onde `*` significa:
+
+> protocolo comumente associado, não uma equivalência absoluta do tipo de socket.
+
+---
+
+## 3.11 Tabela completa
+
+|Tipo|Modelo|Fronteira de mensagem|Confiabilidade|Ordenação|Protocolo comum|
+|---|---|--:|--:|--:|---|
+|`SOCK_STREAM`|fluxo de bytes|Não|Sim, quando TCP|Sim, quando TCP|TCP|
+|`SOCK_DGRAM`|datagramas|Sim|Não, quando UDP|Não, quando UDP|UDP|
+|`SOCK_RAW`|acesso de baixo nível|Depende|Depende|Depende|IP/ICMP e outros usos|
+|`SOCK_SEQPACKET`|mensagens sequenciadas|Sim|Sim, quando suportado|Sim|Depende da família/protocolo|
+
+A tabela não deve ser interpretada como:
+
+```text
+SOCK_STREAM = TCP
+SOCK_DGRAM = UDP
+```
+
+A maneira mais correta de pensar é:
+
+```text
+SOCK_STREAM
+    ↓
+semântica de fluxo
+
+SOCK_DGRAM
+    ↓
+semântica de datagrama
+
+SOCK_RAW
+    ↓
+acesso de baixo nível
+
+SOCK_SEQPACKET
+    ↓
+semântica de mensagens sequenciadas
+```
+
+Depois entram:
+
+```text
+família
++
+protocolo
++
+sistema operacional
+```
+
+para determinar o comportamento concreto.
+
+---
+
+## 3.12 Família + tipo + protocolo
+
+Agora podemos começar a montar uma visão mais completa da criação de sockets.
+
+Um socket possui, conceitualmente:
+
+```text
+FAMÍLIA
+   +
+TIPO
+   +
+PROTOCOLO
+```
+
+Por exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Temos:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+fluxo
+
+resultado comum
+   ↓
+TCP/IPv4
+```
+
+Outro exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Temos:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+datagrama
+
+resultado comum
+   ↓
+UDP/IPv4
+```
+
+Isso já permite entender uma parte importante da assinatura:
+
+```python
+socket.socket(family, type, proto=0, fileno=None)
+```
+
+Ainda não vamos aprofundar todos esses parâmetros aqui.
+
+O objetivo desta parte é construir o modelo mental:
+
+```text
+family
+  =
+onde / qual sistema de endereçamento
+
+type
+  =
+como os dados são tratados
+
+proto
+  =
+qual protocolo específico
+```
+
+Esse modelo será utilizado quando estudarmos `socket.socket()` em detalhes.
+
+---
+
+## 3.13 Um erro conceitual muito comum
+
+Um erro frequente de quem começa com sockets é pensar:
+
+```text
+SOCK_STREAM = conexão
+SOCK_DGRAM = sem conexão
+```
+
+Isso é uma simplificação excessiva.
+
+O tipo define a **semântica do socket**.
+
+Por exemplo, `SOCK_DGRAM` trabalha com datagramas.
+
+Mas um socket UDP pode utilizar:
+
+```python
+connect()
+```
+
+para definir um peer padrão.
+
+Portanto:
+
+```text
+"socket conectado"
+```
+
+e:
+
+```text
+"protocolo orientado à conexão"
+```
+
+não são necessariamente a mesma coisa.
+
+Da mesma forma:
+
+```text
+SOCK_STREAM
+```
+
+não deve ser entendido simplesmente como:
+
+> "um socket TCP"
+
+O mais correto é:
+
+> `SOCK_STREAM` fornece uma semântica de fluxo de bytes e é tradicionalmente utilizado com TCP.
+
+Essa precisão será importante quando chegarmos a outros protocolos e famílias.
+
+---
+
+## 3.14 Fluxo vs mensagem
+
+Esse é provavelmente o conceito mais importante desta parte.
+
+### Stream
+
+```text
+AAAAAAAAAABBBBBBBBBBCCCCCCCCCC
+──────────────────────────────
+             fluxo
+```
+
+Não existem divisões naturais de:
+
+```text
+AAAA
+BBBB
+CCCC
+```
+
+A aplicação precisa criar essas divisões.
+
+### Datagram
+
+```text
+┌─────────┐
+│ AAAAAAA │
+└─────────┘
+
+┌─────────┐
+│ BBBBBBB │
+└─────────┘
+
+┌─────────┐
+│ CCCCCCC │
+└─────────┘
+```
+
+Cada unidade possui sua própria fronteira.
+
+### Seqpacket
+
+```text
+┌─────────┐
+│ AAAAAAA │
+└─────────┘
+      ↓
+sequenciado
+
+┌─────────┐
+│ BBBBBBB │
+└─────────┘
+      ↓
+sequenciado
+
+┌─────────┐
+│ CCCCCCC │
+└─────────┘
+```
+
+Essa diferença aparentemente pequena muda completamente a maneira como uma aplicação precisa estruturar sua comunicação.
+
+---
+
+## 3.15 Exemplo mínimo: TCP
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+sock.connect(("127.0.0.1", 4444))
+
+sock.sendall(b"OLA")
+
+sock.close()
+```
+
+Aqui temos:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+fluxo de bytes
+
+127.0.0.1
+   ↓
+localhost
+
+4444
+   ↓
+porta
+
+sendall()
+   ↓
+envio de bytes
+```
+
+---
+
+## 3.16 Exemplo mínimo: UDP
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+
+sock.sendto(
+    b"OLA",
+    ("127.0.0.1", 4444)
+)
+
+sock.close()
+```
+
+Agora:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+datagrama
+
+sendto()
+   ↓
+dados + destino
+```
+
+Observe a diferença da API:
+
+### TCP
+
+```python
+sock.sendall(b"OLA")
+```
+
+Depois que o socket está conectado, o destino já está associado à comunicação.
+
+### UDP
+
+```python
+sock.sendto(
+    b"OLA",
+    ("127.0.0.1", 4444)
+)
+```
+
+O destino pode ser especificado diretamente no envio.
+
+Essa diferença será explorada posteriormente quando estudarmos:
+
+```text
+connect()
+send()
+sendall()
+sendto()
+recv()
+recvfrom()
+```
+
+---
+
+## 3.17 O modelo mental definitivo desta parte
+
+Ao encontrar:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+não pense simplesmente:
+
+> "isso cria um TCP."
+
+Pense em camadas:
+
+```text
+socket.socket()
+       │
+       ├── AF_INET
+       │      ↓
+       │    IPv4
+       │
+       ├── SOCK_STREAM
+       │      ↓
+       │    fluxo de bytes
+       │
+       └── protocolo
+              ↓
+        normalmente TCP
+```
+
+E ao encontrar:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+pense:
+
+```text
+socket.socket()
+       │
+       ├── AF_INET
+       │      ↓
+       │    IPv4
+       │
+       ├── SOCK_DGRAM
+       │      ↓
+       │    datagramas
+       │
+       └── protocolo
+              ↓
+        normalmente UDP
+```
+
+Esse modelo evita uma enorme quantidade de confusão posteriormente.
+
+---
+
+## Resumo da Parte
+
+### `SOCK_STREAM`
+
+Representa uma comunicação baseada em **fluxo de bytes**.
+
+É normalmente utilizado com TCP.
+
+```python
+socket.AF_INET
+socket.SOCK_STREAM
+```
+
+→ normalmente TCP sobre IPv4.
+
+---
+
+### `SOCK_DGRAM`
+
+Representa comunicação baseada em **datagramas**.
+
+É normalmente utilizado com UDP.
+
+```python
+socket.AF_INET
+socket.SOCK_DGRAM
+```
+
+→ normalmente UDP sobre IPv4.
+
+---
+
+### `SOCK_RAW`
+
+Permite acesso mais baixo nível à comunicação de rede, dependendo da família, protocolo e permissões do sistema operacional.
+
+É importante em:
+
+- análise de protocolos;
+    
+- diagnóstico;
+    
+- pesquisa de redes;
+    
+- segurança;
+    
+- ferramentas de baixo nível.
+    
+
+---
+
+### `SOCK_SEQPACKET`
+
+Representa uma semântica orientada a mensagens, sequenciada e confiável, quando suportada pela combinação de família/protocolo/sistema operacional.
+
+Não deve ser tratado simplesmente como:
+
+```text
+TCP + mensagens
+```
+
+---
+
+### A diferença central
+
+```text
+SOCK_STREAM
+    ↓
+fluxo de bytes
+
+SOCK_DGRAM
+    ↓
+datagramas
+
+SOCK_RAW
+    ↓
+acesso de baixo nível
+
+SOCK_SEQPACKET
+    ↓
+mensagens sequenciadas
+```
+
+E a criação de um socket deve ser entendida como uma combinação:
+
+```text
+FAMÍLIA
+   +
+TIPO
+   +
+PROTOCOLO
+```
+
+Por exemplo:
+
+```text
+AF_INET + SOCK_STREAM
+        ↓
+      IPv4/TCP
+```
+
+ou:
+
+```text
+AF_INET + SOCK_DGRAM
+        ↓
+      IPv4/UDP
+```
+
+---

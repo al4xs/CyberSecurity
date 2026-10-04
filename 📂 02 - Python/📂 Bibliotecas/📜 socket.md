@@ -8615,3 +8615,1382 @@ connect()                       bind()
                               comunicação
 ```
 
+---
+
+# 9. Enviando e recebendo dados
+
+Depois de criar o socket, associá-lo a um endereço, colocá-lo em escuta e estabelecer a conexão, finalmente podemos realizar a parte principal da comunicação:
+
+> **enviar e receber dados.**
+
+Em TCP, os dados são tratados como um **fluxo de bytes**.
+
+Isso significa que o socket não trabalha diretamente com `str` do Python.
+
+Por exemplo:
+
+```python
+"Olá"
+```
+
+é uma string.
+
+Já:
+
+```python
+b"Olá"
+```
+
+é uma sequência de bytes.
+
+Como a comunicação de rede trabalha com bytes, precisamos normalmente **codificar** uma string antes de enviá-la e **decodificar** os bytes recebidos para voltar a uma string.
+
+O fluxo básico é:
+
+```text
+STRING
+   ↓
+encode()
+   ↓
+BYTES
+   ↓
+socket.send() / socket.sendall()
+   ↓
+REDE
+   ↓
+socket.recv()
+   ↓
+BYTES
+   ↓
+decode()
+   ↓
+STRING
+```
+
+---
+
+## 9.1 `send()`
+
+O método `send()` é utilizado para enviar dados através de um socket conectado.
+
+Sintaxe:
+
+```python
+socket.send(data)
+```
+
+Também é possível utilizar flags:
+
+```python
+socket.send(data, flags)
+```
+
+### Parâmetros
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Comportamento|
+|---|---|---|---|---|
+|`data`|bytes-like|Sim|—|Dados que serão enviados|
+|`flags`|`int`|Não|`0`|Flags específicas para a operação|
+
+Exemplo:
+
+```python
+client.send(b"Olá servidor!")
+```
+
+Nesse caso:
+
+```text
+b"Olá servidor!"
+       ↓
+      bytes
+       ↓
+      send()
+       ↓
+socket
+       ↓
+    servidor
+```
+
+---
+
+## 9.2 `send()` retorna a quantidade de bytes enviada
+
+Um detalhe muito importante é que `send()` **retorna a quantidade de bytes que conseguiu enviar**.
+
+Exemplo:
+
+```python
+data = b"Olá servidor!"
+
+enviados = client.send(data)
+
+print(enviados)
+```
+
+Se todos os bytes forem enviados:
+
+```text
+data
+ ↓
+12 bytes
+ ↓
+send()
+ ↓
+12
+```
+
+O valor retornado pode ser menor que o tamanho total dos dados.
+
+Por exemplo:
+
+```python
+data = b"A" * 10000
+
+enviados = client.send(data)
+
+print(enviados)
+```
+
+Poderíamos obter algo como:
+
+```text
+8192
+```
+
+Isso significa que naquele momento apenas 8192 bytes foram enviados.
+
+Portanto:
+
+```python
+send()
+```
+
+**não garante que todos os dados fornecidos foram enviados em uma única chamada.**
+
+---
+
+## 9.3 Por que `send()` pode enviar apenas parte dos dados?
+
+TCP trabalha com um fluxo de bytes e possui buffers internos.
+
+Quando fazemos:
+
+```python
+socket.send(data)
+```
+
+estamos pedindo ao sistema operacional para enviar aqueles dados.
+
+O sistema operacional pode aceitar apenas uma parte naquele momento.
+
+Podemos imaginar:
+
+```text
+Aplicação
+    │
+    │ 10000 bytes
+    ▼
+socket.send()
+    │
+    │ aceita 5000
+    ▼
+Buffer do sistema operacional
+    │
+    ▼
+Rede
+```
+
+Por isso o valor retornado por `send()` é importante:
+
+```python
+enviados = socket.send(data)
+```
+
+Ele informa quantos bytes foram aceitos/enviados pela chamada.
+
+---
+
+## 9.4 `sendall()`
+
+Quando queremos enviar todos os dados de maneira simples, normalmente utilizamos:
+
+```python
+socket.sendall(data)
+```
+
+Exemplo:
+
+```python
+client.sendall(b"Olá servidor!")
+```
+
+A principal diferença é:
+
+```text
+send()
+    ↓
+pode enviar apenas uma parte
+
+sendall()
+    ↓
+continua tentando até enviar tudo
+```
+
+Se ocorrer um erro durante o processo, `sendall()` lança uma exceção.
+
+Em caso de sucesso, seu retorno é:
+
+```python
+None
+```
+
+Portanto:
+
+```python
+resultado = client.sendall(b"Olá")
+print(resultado)
+```
+
+resulta em:
+
+```text
+None
+```
+
+Isso é diferente de `send()`:
+
+```python
+resultado = client.send(b"Olá")
+print(resultado)
+```
+
+que retorna a quantidade de bytes enviados.
+
+---
+
+## 9.5 `send()` vs `sendall()`
+
+|Método|Retorno|Pode enviar parcialmente?|Uso comum|
+|---|---|---|---|
+|`send()`|quantidade de bytes|Sim|Controle manual do envio|
+|`sendall()`|`None` em sucesso|Internamente continua enviando|Envio simples de todos os dados|
+
+Para códigos simples de cliente/servidor TCP:
+
+```python
+socket.sendall(data)
+```
+
+geralmente é a opção mais conveniente.
+
+---
+
+## 9.6 Enviando uma `str`
+
+Não podemos fazer diretamente:
+
+```python
+client.send("Olá")
+```
+
+Isso gera um erro porque:
+
+```text
+"Olá"
+ ↓
+str
+```
+
+mas o socket espera algo compatível com bytes.
+
+Precisamos converter:
+
+```python
+mensagem = "Olá"
+
+client.send(mensagem.encode())
+```
+
+Ou:
+
+```python
+client.sendall(mensagem.encode())
+```
+
+O método:
+
+```python
+encode()
+```
+
+transforma uma string em bytes utilizando uma codificação.
+
+Por padrão, podemos utilizar UTF-8:
+
+```python
+mensagem.encode("utf-8")
+```
+
+Exemplo:
+
+```python
+mensagem = "Olá servidor!"
+
+dados = mensagem.encode("utf-8")
+
+client.sendall(dados)
+```
+
+O fluxo é:
+
+```text
+"Olá servidor!"
+      ↓
+     str
+      ↓
+encode("utf-8")
+      ↓
+    bytes
+      ↓
+  sendall()
+```
+
+---
+
+## 9.7 Recebendo dados com `recv()`
+
+Para receber dados de um socket utilizamos:
+
+```python
+socket.recv(bufsize)
+```
+
+Exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+O valor:
+
+```python
+1024
+```
+
+é a quantidade máxima de bytes que aquela chamada está preparada para retornar.
+
+Não significa:
+
+> "Receba exatamente 1024 bytes."
+
+Significa:
+
+> "Receba no máximo 1024 bytes nesta chamada."
+
+---
+
+## 9.8 Parâmetros de `recv()`
+
+Sintaxe:
+
+```python
+socket.recv(bufsize, flags)
+```
+
+### Parâmetros
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Comportamento|
+|---|---|---|---|---|
+|`bufsize`|`int`|Sim|—|Quantidade máxima de bytes retornada|
+|`flags`|`int`|Não|`0`|Flags específicas para recebimento|
+
+Exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+Aqui:
+
+```text
+socket
+   ↓
+recv(1024)
+   ↓
+até 1024 bytes
+   ↓
+retorna bytes
+```
+
+---
+
+## 9.9 `recv(1024)` não significa receber 1024 bytes
+
+Esse é um erro conceitual muito comum.
+
+Imagine que o servidor envie:
+
+```python
+server.sendall(b"Oi")
+```
+
+O cliente faz:
+
+```python
+data = client.recv(1024)
+```
+
+O retorno pode ser:
+
+```python
+b"Oi"
+```
+
+e não:
+
+```text
+1024 bytes
+```
+
+O argumento `1024` representa o **limite máximo da quantidade de bytes retornados naquela chamada**.
+
+Por exemplo:
+
+```python
+client.recv(1024)
+```
+
+pode retornar:
+
+```text
+b"A"
+```
+
+ou:
+
+```text
+b"Hello"
+```
+
+ou:
+
+```text
+b"A" * 500
+```
+
+ou:
+
+```text
+b"A" * 1024
+```
+
+Dependendo dos dados disponíveis e do comportamento da comunicação.
+
+---
+
+## 9.10 `recv()` retorna `bytes`
+
+Assim como `send()` trabalha com bytes, `recv()` também retorna bytes.
+
+Exemplo:
+
+```python
+data = client.recv(1024)
+
+print(data)
+```
+
+Podemos obter:
+
+```text
+b'Olá servidor!'
+```
+
+O `b` indica que estamos trabalhando com um objeto `bytes`.
+
+Para transformar esses bytes novamente em uma string:
+
+```python
+mensagem = data.decode("utf-8")
+```
+
+Exemplo:
+
+```python
+data = client.recv(1024)
+
+mensagem = data.decode("utf-8")
+
+print(mensagem)
+```
+
+Resultado:
+
+```text
+Olá servidor!
+```
+
+O fluxo inverso é:
+
+```text
+REDE
+ ↓
+recv()
+ ↓
+bytes
+ ↓
+decode("utf-8")
+ ↓
+str
+```
+
+---
+
+## 9.11 `encode()` e `decode()`
+
+É importante memorizar a direção de cada operação:
+
+```text
+str
+ ↓
+encode()
+ ↓
+bytes
+```
+
+e:
+
+```text
+bytes
+ ↓
+decode()
+ ↓
+str
+```
+
+Exemplo:
+
+```python
+mensagem = "Olá"
+
+dados = mensagem.encode("utf-8")
+
+print(dados)
+```
+
+Resultado semelhante a:
+
+```text
+b'Ol\xc3\xa1'
+```
+
+Depois:
+
+```python
+texto = dados.decode("utf-8")
+
+print(texto)
+```
+
+Resultado:
+
+```text
+Olá
+```
+
+Portanto:
+
+```python
+str → encode() → bytes
+bytes → decode() → str
+```
+
+---
+
+## 9.12 Um exemplo completo de envio e recebimento
+
+### Servidor
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+client, address = server.accept()
+
+data = client.recv(1024)
+
+print("Cliente:", data.decode("utf-8"))
+
+client.sendall(b"Mensagem recebida!")
+
+client.close()
+server.close()
+```
+
+### Cliente
+
+```python
+import socket
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+client.connect(("127.0.0.1", 4444))
+
+client.sendall(b"Ol\u00e1 servidor!")
+
+data = client.recv(1024)
+
+print("Servidor:", data.decode("utf-8"))
+
+client.close()
+```
+
+A comunicação acontece aproximadamente assim:
+
+```text
+                 SERVIDOR
+                    │
+                    │
+              socket()
+                    │
+                  bind()
+                    │
+                 listen()
+                    │
+                 accept()
+                    │
+                    │
+                    │
+CLIENTE             │
+   │                │
+socket()            │
+   │                │
+connect() ──────────┤
+   │                │
+   │                │
+sendall() ─────────►│
+   │                │
+   │              recv()
+   │                │
+   │              processa
+   │                │
+recv() ◄────────────┤
+   │              sendall()
+   │                │
+   │                │
+ close()          close()
+```
+
+---
+
+## 9.13 O socket utilizado para comunicação é o socket retornado por `accept()`
+
+No servidor temos:
+
+```python
+server = socket.socket(...)
+```
+
+Depois:
+
+```python
+server.bind(...)
+server.listen()
+```
+
+E:
+
+```python
+client, address = server.accept()
+```
+
+Agora temos dois sockets diferentes:
+
+```text
+server
+   ↓
+socket de escuta
+
+client
+   ↓
+socket da conexão específica
+```
+
+É o socket retornado por `accept()` que normalmente utilizamos para trocar dados com aquele cliente:
+
+```python
+data = client.recv(1024)
+
+client.sendall(b"Resposta")
+```
+
+Não fazemos:
+
+```python
+server.recv(1024)
+```
+
+para conversar com o cliente aceito.
+
+O `server` continua sendo responsável por aceitar novas conexões.
+
+---
+
+## 9.14 TCP não preserva mensagens
+
+Esse é um dos conceitos mais importantes desta parte.
+
+Imagine que o cliente faça:
+
+```python
+client.sendall(b"Olá")
+client.sendall(b"Mundo")
+```
+
+Não devemos assumir que o servidor receberá:
+
+```python
+b"Olá"
+```
+
+e depois:
+
+```python
+b"Mundo"
+```
+
+Ele pode receber:
+
+```python
+b"OláMundo"
+```
+
+ou:
+
+```python
+b"OlaMun"
+```
+
+e depois:
+
+```python
+b"do"
+```
+
+ou outras combinações.
+
+Isso acontece porque TCP fornece um:
+
+> **fluxo de bytes**
+
+e não um sistema de mensagens.
+
+Portanto:
+
+```text
+sendall("Olá")
+sendall("Mundo")
+        ↓
+       TCP
+        ↓
+fluxo contínuo de bytes
+        ↓
+recv()
+```
+
+O TCP não sabe que `"Olá"` e `"Mundo"` eram duas mensagens diferentes da aplicação.
+
+---
+
+## 9.15 Um `send()` pode aparecer em vários `recv()`
+
+Imagine:
+
+```python
+client.sendall(b"ABCDEFGHIJ")
+```
+
+O servidor pode fazer:
+
+```python
+data = client.recv(5)
+```
+
+e receber:
+
+```text
+b"ABCDE"
+```
+
+Depois:
+
+```python
+data = client.recv(5)
+```
+
+e receber:
+
+```text
+b"FGHIJ"
+```
+
+Portanto:
+
+```text
+SEND
+ABCDEFGHIJ
+     ↓
+     TCP
+     ↓
+RECV
+ABCDE
+
+RECV
+FGHIJ
+```
+
+Isso é perfeitamente válido.
+
+---
+
+## 9.16 Vários `send()` podem aparecer em um único `recv()`
+
+O contrário também pode acontecer.
+
+Cliente:
+
+```python
+client.sendall(b"ABC")
+client.sendall(b"DEF")
+```
+
+Servidor:
+
+```python
+data = client.recv(1024)
+```
+
+Pode receber:
+
+```python
+b"ABCDEF"
+```
+
+Portanto:
+
+```text
+send("ABC")
+send("DEF")
+       ↓
+      TCP
+       ↓
+recv()
+       ↓
+"ABCDEF"
+```
+
+Por isso, aplicações que precisam trabalhar com **mensagens separadas** precisam definir algum protocolo próprio.
+
+Por exemplo:
+
+```text
+MENSAGEM\n
+```
+
+ou:
+
+```text
+[tamanho][dados]
+```
+
+ou algum formato estruturado como:
+
+```text
+JSON
+```
+
+Esse assunto será importante posteriormente para construir protocolos de comunicação próprios.
+
+---
+
+## 9.17 `recv()` é normalmente bloqueante
+
+Por padrão, sockets Python são criados em modo bloqueante.
+
+Isso significa que:
+
+```python
+data = client.recv(1024)
+```
+
+pode fazer o programa ficar aguardando.
+
+Por exemplo:
+
+```text
+Programa
+   │
+   │ recv()
+   ▼
+┌───────────────┐
+│ aguardando    │
+│ dados         │
+└───────────────┘
+   │
+   │ cliente envia
+   ▼
+dados recebidos
+```
+
+Se nenhum dado chegar, o programa pode permanecer bloqueado naquela chamada.
+
+Exemplo:
+
+```python
+print("Antes")
+
+data = client.recv(1024)
+
+print("Depois")
+```
+
+Se o outro lado não enviar nada:
+
+```text
+Antes
+   ↓
+recv()
+   ↓
+[aguardando...]
+```
+
+O:
+
+```python
+print("Depois")
+```
+
+não será executado enquanto a chamada não prosseguir.
+
+---
+
+## 9.18 `recv()` pode retornar menos dados do que esperamos
+
+Outro erro comum seria fazer:
+
+```python
+data = client.recv(1024)
+```
+
+e pensar:
+
+> "Agora recebi toda a mensagem."
+
+Isso não é garantido no TCP.
+
+Se o protocolo da aplicação espera receber, por exemplo, 10.000 bytes, não podemos simplesmente assumir:
+
+```python
+data = client.recv(10000)
+```
+
+e esperar necessariamente obter os 10.000 bytes.
+
+Precisamos definir uma lógica para determinar:
+
+> **quando a mensagem terminou.**
+
+Uma estratégia simples seria conhecer antecipadamente o tamanho:
+
+```text
+Mensagem possui 5000 bytes
+       ↓
+receber até acumular 5000 bytes
+```
+
+Outra estratégia é utilizar um delimitador:
+
+```text
+Olá servidor!\n
+```
+
+A aplicação continua recebendo até encontrar:
+
+```text
+\n
+```
+
+Outra possibilidade é utilizar um protocolo estruturado que informe o tamanho da mensagem.
+
+---
+
+## 9.19 O que significa `b''` em `recv()`?
+
+Um comportamento muito importante:
+
+Se:
+
+```python
+data = client.recv(1024)
+```
+
+retornar:
+
+```python
+b""
+```
+
+isso normalmente significa que o outro lado **encerrou a conexão de forma ordenada**.
+
+Exemplo:
+
+```python
+while True:
+    data = client.recv(1024)
+
+    if data == b"":
+        break
+
+    print(data)
+```
+
+Podemos interpretar:
+
+```text
+recv()
+  ↓
+dados?
+  ├── sim → processa
+  │
+  └── b"" → conexão encerrada
+```
+
+Isso é diferente de:
+
+```python
+None
+```
+
+`recv()` retorna um objeto `bytes`.
+
+Quando retorna:
+
+```python
+b""
+```
+
+temos uma sequência de bytes vazia indicando o fechamento ordenado da conexão TCP pelo peer.
+
+---
+
+## 9.20 Exemplo de servidor recebendo continuamente
+
+Podemos utilizar um loop:
+
+```python
+while True:
+    data = client.recv(1024)
+
+    if data == b"":
+        break
+
+    print(data.decode("utf-8"))
+```
+
+O comportamento é:
+
+```text
+             recv()
+               │
+               ▼
+          recebeu dados?
+          /           \
+        sim            não
+         │              │
+         ▼              ▼
+     processa          b""
+         │              │
+         │              ▼
+         │          encerra loop
+         │
+         └──────► recv()
+```
+
+Esse padrão é muito comum em servidores TCP.
+
+---
+
+## 9.21 Erros comuns durante envio e recebimento
+
+### `BrokenPipeError`
+
+Pode acontecer quando tentamos enviar dados para uma conexão que já foi fechada pelo outro lado.
+
+Exemplo conceitual:
+
+```text
+Cliente
+  │
+  │ fecha conexão
+  ▼
+Servidor
+  │
+  │ sendall()
+  ▼
+BrokenPipeError
+```
+
+---
+
+### `ConnectionResetError`
+
+Pode ocorrer quando o outro lado encerra a conexão de forma abrupta.
+
+Exemplo:
+
+```text
+Cliente
+  │
+  │ conexão abruptamente encerrada
+  ▼
+Servidor
+  │
+  │ recv()
+  ▼
+ConnectionResetError
+```
+
+---
+
+### `TimeoutError`
+
+Pode ocorrer quando configuramos um timeout e a operação demora além do limite definido.
+
+Por exemplo:
+
+```python
+client.settimeout(5)
+```
+
+Nesse caso, uma operação bloqueante pode falhar por timeout se não houver progresso dentro do período configurado.
+
+---
+
+## 9.22 `send()` e `recv()` pertencem à conexão, não ao endereço
+
+Depois que uma conexão TCP foi estabelecida:
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+podemos utilizar:
+
+```python
+client.sendall(...)
+```
+
+e:
+
+```python
+client.recv(...)
+```
+
+O endereço:
+
+```python
+("127.0.0.1", 4444)
+```
+
+foi utilizado para estabelecer a conexão.
+
+Depois disso, a comunicação acontece através do socket.
+
+Podemos pensar:
+
+```text
+connect()
+    ↓
+estabelece conexão
+    ↓
+socket conectado
+    ↓
+┌───────────────┐
+│ send / recv   │
+│ sendall       │
+└───────────────┘
+```
+
+Não precisamos informar novamente:
+
+```python
+("127.0.0.1", 4444)
+```
+
+a cada envio.
+
+---
+
+## 9.23 Modelo mental completo desta parte
+
+Até aqui, o fluxo TCP em Python pode ser visualizado assim:
+
+```text
+                SERVIDOR
+                   │
+              socket()
+                   │
+                 bind()
+                   │
+                listen()
+                   │
+                accept()
+                   │
+                   │
+                   │
+CLIENTE            │
+   │               │
+socket()           │
+   │               │
+connect() ─────────┤
+   │               │
+   │               │
+sendall() ────────►│
+   │             recv()
+   │               │
+   │               │
+   │               │
+recv() ◄───────────┤
+   │             sendall()
+   │               │
+   │               │
+ close()         close()
+```
+
+E a transformação dos dados:
+
+```text
+Cliente
+   │
+   │ str
+   ▼
+encode()
+   │
+   │ bytes
+   ▼
+sendall()
+   │
+   ▼
+======== TCP ========
+   │
+   ▼
+recv()
+   │
+   │ bytes
+   ▼
+decode()
+   │
+   ▼
+Servidor
+   │
+   │ str
+```
+
+---
+
+## Resumo da Parte
+
+### `send()`
+
+Envia dados e retorna a quantidade de bytes enviados.
+
+```python
+enviados = socket.send(data)
+```
+
+Pode enviar apenas uma parte dos dados.
+
+### `sendall()`
+
+Continua enviando até que todos os dados sejam enviados ou ocorra um erro.
+
+```python
+socket.sendall(data)
+```
+
+Em caso de sucesso:
+
+```python
+None
+```
+
+### `recv()`
+
+Recebe até a quantidade máxima de bytes especificada.
+
+```python
+data = socket.recv(1024)
+```
+
+Não significa que exatamente 1024 bytes serão recebidos.
+
+### `encode()`
+
+Converte:
+
+```text
+str → bytes
+```
+
+Exemplo:
+
+```python
+mensagem.encode("utf-8")
+```
+
+### `decode()`
+
+Converte:
+
+```text
+bytes → str
+```
+
+Exemplo:
+
+```python
+data.decode("utf-8")
+```
+
+### TCP não preserva mensagens
+
+```text
+send()
+send()
+   ↓
+fluxo contínuo de bytes
+   ↓
+recv()
+```
+
+Por isso, a aplicação precisa definir como identificar o início e o fim das mensagens.
+
+### `b""`
+
+Se `recv()` retornar:
+
+```python
+b""
+```
+
+normalmente significa que o outro lado encerrou a conexão de forma ordenada.
+
+### Conceito principal
+
+> **TCP entrega um fluxo de bytes. `send()`/`sendall()` colocam bytes nesse fluxo e `recv()` retira bytes desse fluxo. O TCP não sabe onde uma mensagem da aplicação começa ou termina.**
+

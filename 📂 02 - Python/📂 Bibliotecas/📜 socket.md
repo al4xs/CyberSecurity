@@ -3410,3 +3410,1171 @@ AF_INET + SOCK_DGRAM
 ```
 
 ---
+# 4. Criando um socket com `socket.socket()`
+
+Depois de entender **família de endereços**, **tipo de socket** e a relação entre `SOCK_STREAM`, TCP, `SOCK_DGRAM`, UDP etc., podemos finalmente criar um socket em Python.
+
+A criação é feita através da função:
+
+```python
+socket.socket()
+```
+
+Essa função cria um **objeto socket** que representa, dentro do programa Python, uma interface de comunicação disponibilizada pelo sistema operacional.
+
+O modelo básico é:
+
+```python
+import socket
+
+sock = socket.socket()
+```
+
+Nesse momento, ainda **não existe uma conexão com outro computador**.
+
+O que foi criado foi apenas o objeto socket e os recursos correspondentes no sistema operacional.
+
+Podemos pensar no processo desta forma:
+
+```text
+Python
+   ↓
+socket.socket()
+   ↓
+Objeto socket
+   ↓
+Recurso de comunicação no kernel
+```
+
+Somente depois outras operações poderão definir como esse socket será utilizado.
+
+Por exemplo, em um servidor TCP:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+recv() / send()
+```
+
+Enquanto em um cliente TCP:
+
+```text
+socket()
+   ↓
+connect()
+   ↓
+recv() / send()
+```
+
+Portanto, `socket.socket()` é normalmente o **primeiro passo** da criação de uma comunicação baseada em sockets.
+
+---
+
+## 4.1 Sintaxe de `socket.socket()`
+
+A assinatura da função é:
+
+```python
+socket.socket(family=-1, type=SOCK_STREAM, proto=0, fileno=None)
+```
+
+Podemos dividir os parâmetros em quatro partes:
+
+```text
+socket.socket(
+    family,
+    type,
+    proto,
+    fileno
+)
+```
+
+Cada parâmetro possui uma finalidade diferente.
+
+|Parâmetro|Tipo|Obrigatório|Padrão|Função|
+|---|---|---|---|---|
+|`family`|constante inteira|Não|`AF_UNSPEC` / autodeterminado|Define a família de endereços|
+|`type`|constante inteira|Não|`SOCK_STREAM`|Define o tipo de comunicação|
+|`proto`|inteiro|Não|`0`|Define o protocolo específico|
+|`fileno`|inteiro|Não|`None`|Permite criar um socket a partir de um descritor existente|
+
+Na prática, durante o aprendizado, os parâmetros mais importantes são:
+
+```python
+family
+type
+```
+
+Por exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Isso significa:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+comunicação orientada a fluxo
+
+Resultado
+   ↓
+socket TCP sobre IPv4
+```
+
+---
+
+## 4.2 Importando o módulo `socket`
+
+Antes de utilizar `socket.socket()`, precisamos importar o módulo:
+
+```python
+import socket
+```
+
+Depois podemos acessar a função através do módulo:
+
+```python
+socket.socket()
+```
+
+Exemplo:
+
+```python
+import socket
+
+sock = socket.socket()
+```
+
+Aqui:
+
+```python
+socket
+```
+
+é o módulo Python.
+
+Enquanto:
+
+```python
+socket.socket
+```
+
+é a classe utilizada para criar objetos socket.
+
+E:
+
+```python
+socket.socket()
+```
+
+é a criação de uma instância dessa classe.
+
+Podemos visualizar:
+
+```text
+import socket
+      ↓
+ módulo socket
+      ↓
+ socket.socket
+      ↓
+ classe socket
+      ↓
+ socket.socket()
+      ↓
+ objeto socket
+```
+
+---
+
+## 4.3 Criando um socket TCP IPv4 explicitamente
+
+Embora Python possua valores padrão, é importante aprender a escrever explicitamente a família e o tipo.
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Nesse caso:
+
+```python
+socket.AF_INET
+```
+
+define:
+
+```text
+IPv4
+```
+
+E:
+
+```python
+socket.SOCK_STREAM
+```
+
+define:
+
+```text
+fluxo de bytes
+```
+
+A combinação representa o uso tradicional de:
+
+```text
+IPv4 + TCP
+```
+
+Podemos representar:
+
+```text
+socket.socket(
+    AF_INET,
+    SOCK_STREAM
+)
+
+        ↓
+
+      IPv4
+        +
+      TCP
+```
+
+Esse é o tipo de socket que será utilizado na maior parte dos exemplos de cliente e servidor TCP.
+
+---
+
+## 4.4 Criando um socket UDP IPv4
+
+Para UDP, alteramos o tipo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Agora temos:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_DGRAM
+   ↓
+Datagramas
+
+Resultado
+   ↓
+UDP sobre IPv4
+```
+
+A diferença fundamental está no segundo parâmetro:
+
+```python
+socket.SOCK_STREAM
+```
+
+versus:
+
+```python
+socket.SOCK_DGRAM
+```
+
+Comparando:
+
+```python
+# TCP
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+```python
+# UDP
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Portanto, a função `socket.socket()` não significa automaticamente TCP.
+
+Quem define o comportamento do socket é principalmente a combinação entre:
+
+```text
+family + type + proto
+```
+
+---
+
+## 4.5 O que realmente acontece quando `socket.socket()` é executado?
+
+Quando fazemos:
+
+```python
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+não estamos simplesmente criando uma variável Python.
+
+Existe uma interação entre:
+
+```text
+Programa Python
+      ↓
+Biblioteca socket
+      ↓
+Sistema operacional
+      ↓
+Kernel
+```
+
+O Python solicita ao sistema operacional a criação de um socket.
+
+De forma simplificada:
+
+```text
+Python
+  │
+  │ socket.socket()
+  ↓
+Biblioteca socket
+  │
+  │ chamada ao sistema
+  ↓
+Kernel
+  │
+  │ cria recurso de socket
+  ↓
+Descritor de arquivo
+  │
+  ↓
+Objeto socket Python
+```
+
+O sistema operacional passa a controlar o recurso de comunicação.
+
+O Python recebe uma referência para esse recurso e fornece métodos para trabalhar com ele.
+
+Por isso conseguimos fazer:
+
+```python
+sock.bind(...)
+sock.listen(...)
+sock.accept(...)
+sock.connect(...)
+sock.send(...)
+sock.recv(...)
+```
+
+Esses métodos não são simplesmente funções que "fazem a rede sozinhas".
+
+Eles são uma interface de alto nível para operações disponibilizadas pelo sistema operacional.
+
+---
+
+## 4.6 O objeto retornado por `socket.socket()`
+
+Quando executamos:
+
+```python
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+a variável:
+
+```python
+sock
+```
+
+passa a armazenar um objeto da classe `socket.socket`.
+
+Podemos verificar:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+print(type(sock))
+```
+
+O resultado será semelhante a:
+
+```text
+<class 'socket.socket'>
+```
+
+Portanto:
+
+```python
+sock
+```
+
+não é o IP.
+
+Não é a porta.
+
+Não é uma conexão.
+
+Não é o servidor.
+
+É o **objeto que representa o socket dentro do programa**.
+
+Esse objeto fornece métodos para configurar e utilizar o socket.
+
+Por exemplo:
+
+```python
+sock.bind(...)
+sock.listen(...)
+sock.accept(...)
+sock.connect(...)
+sock.send(...)
+sock.recv(...)
+sock.close()
+```
+
+---
+
+## 4.7 Socket criado não significa socket conectado
+
+Esse é um ponto extremamente importante.
+
+Observe:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Nesse momento:
+
+```text
+socket criado
+      ≠
+socket conectado
+```
+
+Ainda não fizemos:
+
+```python
+sock.connect(...)
+```
+
+nem:
+
+```python
+sock.accept()
+```
+
+Também ainda não definimos necessariamente um endereço local através de:
+
+```python
+sock.bind(...)
+```
+
+Portanto, devemos separar os conceitos:
+
+```text
+socket.socket()
+      ↓
+cria o socket
+
+bind()
+      ↓
+associa endereço local
+
+listen()
+      ↓
+coloca socket TCP em modo de escuta
+
+connect()
+      ↓
+solicita conexão com destino
+
+accept()
+      ↓
+aceita uma conexão recebida
+```
+
+Cada operação possui uma responsabilidade diferente.
+
+---
+
+## 4.8 Criar, associar e conectar são coisas diferentes
+
+Podemos representar o ciclo inicial de um socket TCP assim:
+
+```text
+1. socket()
+      ↓
+   cria o socket
+
+2. bind()
+      ↓
+   associa IP + porta local
+
+3. listen()
+      ↓
+   prepara para receber conexões
+
+4. accept()
+      ↓
+   aceita uma conexão
+```
+
+Para um cliente:
+
+```text
+1. socket()
+      ↓
+   cria o socket
+
+2. connect()
+      ↓
+   solicita conexão ao servidor
+```
+
+Essa separação é fundamental para entender sockets.
+
+Por exemplo, este código:
+
+```python
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+não cria um servidor.
+
+Ele apenas cria o socket.
+
+Um servidor TCP começa a assumir comportamento de servidor quando realizamos operações como:
+
+```python
+sock.bind(...)
+sock.listen(...)
+```
+
+e posteriormente:
+
+```python
+sock.accept()
+```
+
+---
+
+## 4.9 O parâmetro `family`
+
+O parâmetro `family` define a **família de endereços** utilizada pelo socket.
+
+Exemplo:
+
+```python
+socket.AF_INET
+```
+
+representa IPv4.
+
+Outro exemplo:
+
+```python
+socket.AF_INET6
+```
+
+representa IPv6.
+
+Então:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+significa:
+
+```text
+Família:
+IPv4
+
+Tipo:
+SOCK_STREAM
+```
+
+Enquanto:
+
+```python
+socket.socket(
+    socket.AF_INET6,
+    socket.SOCK_STREAM
+)
+```
+
+significa:
+
+```text
+Família:
+IPv6
+
+Tipo:
+SOCK_STREAM
+```
+
+A família influencia diretamente o formato dos endereços que serão utilizados posteriormente.
+
+IPv4 normalmente trabalha com endereços como:
+
+```text
+192.168.1.10
+```
+
+IPv6 utiliza endereços como:
+
+```text
+2001:db8::1
+```
+
+Portanto:
+
+```text
+AF_INET
+   ↓
+estrutura de endereço IPv4
+
+AF_INET6
+   ↓
+estrutura de endereço IPv6
+```
+
+---
+
+## 4.10 O parâmetro `type`
+
+O parâmetro `type` determina o tipo de socket.
+
+Os mais importantes que já estudamos são:
+
+```python
+socket.SOCK_STREAM
+```
+
+e:
+
+```python
+socket.SOCK_DGRAM
+```
+
+Exemplo TCP:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Exemplo UDP:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Portanto:
+
+```text
+family
+   ↓
+"qual família de endereços?"
+
+type
+   ↓
+"qual modelo de comunicação?"
+```
+
+Essa distinção é importante porque `AF_INET` sozinho não significa TCP.
+
+Por exemplo:
+
+```python
+socket.AF_INET + socket.SOCK_STREAM
+```
+
+resulta em uma combinação típica de:
+
+```text
+IPv4 + TCP
+```
+
+Enquanto:
+
+```python
+socket.AF_INET + socket.SOCK_DGRAM
+```
+
+resulta em:
+
+```text
+IPv4 + UDP
+```
+
+---
+
+## 4.11 O parâmetro `proto`
+
+O terceiro parâmetro é:
+
+```python
+proto
+```
+
+Ele permite especificar um protocolo específico.
+
+Na maioria dos programas comuns, podemos utilizar:
+
+```python
+proto=0
+```
+
+ou simplesmente deixar o padrão.
+
+Por exemplo:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM,
+    0
+)
+```
+
+Normalmente isso resulta na seleção automática do protocolo apropriado para a combinação utilizada.
+
+No caso:
+
+```text
+AF_INET
++
+SOCK_STREAM
++
+proto=0
+```
+
+o sistema normalmente utiliza:
+
+```text
+TCP
+```
+
+Enquanto:
+
+```text
+AF_INET
++
+SOCK_DGRAM
++
+proto=0
+```
+
+normalmente utiliza:
+
+```text
+UDP
+```
+
+Por isso, em aplicações comuns, é muito frequente vermos:
+
+```python
+socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+sem especificar `proto`.
+
+---
+
+## 4.12 Por que `proto=0` normalmente é suficiente?
+
+Porque o sistema consegue determinar o protocolo adequado com base na combinação de família e tipo.
+
+Podemos imaginar:
+
+```text
+AF_INET
+   +
+SOCK_STREAM
+   +
+proto=0
+       ↓
+   TCP
+```
+
+E:
+
+```text
+AF_INET
+   +
+SOCK_DGRAM
+   +
+proto=0
+       ↓
+   UDP
+```
+
+Isso não significa que `proto` seja inútil.
+
+Existem situações mais específicas em que selecionar explicitamente um protocolo pode ser necessário.
+
+Porém, para os sockets TCP e UDP tradicionais, normalmente não precisamos alterar esse parâmetro.
+
+---
+
+## 4.13 O parâmetro `fileno`
+
+Existe ainda o parâmetro:
+
+```python
+fileno
+```
+
+Ele permite criar um objeto `socket` Python associado a um **descritor de arquivo já existente**.
+
+Por exemplo, conceitualmente:
+
+```python
+socket.socket(fileno=fd)
+```
+
+onde:
+
+```python
+fd
+```
+
+é um descritor de arquivo válido.
+
+Esse recurso é mais avançado e aparece principalmente quando estamos trabalhando diretamente com recursos do sistema operacional, integração com código de baixo nível ou manipulação de descritores existentes.
+
+Para criar sockets normalmente, não precisamos utilizá-lo.
+
+A forma tradicional continua sendo:
+
+```python
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Portanto, neste momento, podemos deixar:
+
+```python
+fileno=None
+```
+
+e trabalhar normalmente com `socket()`.
+
+---
+
+## 4.14 Criando e fechando um socket
+
+Quando criamos um socket, também precisamos pensar no seu ciclo de vida.
+
+Um exemplo mínimo:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+sock.close()
+```
+
+A primeira operação:
+
+```python
+socket.socket(...)
+```
+
+cria o socket.
+
+A segunda:
+
+```python
+sock.close()
+```
+
+libera o recurso associado a ele.
+
+Podemos representar:
+
+```text
+socket()
+   ↓
+recurso criado
+   ↓
+uso do socket
+   ↓
+close()
+   ↓
+recurso liberado
+```
+
+Isso é importante porque sockets são recursos do sistema operacional.
+
+Não devemos pensar apenas na variável Python:
+
+```python
+sock
+```
+
+mas também no recurso que existe por trás dela.
+
+---
+
+## 4.15 Uma forma mais segura de trabalhar com sockets
+
+Python também permite utilizar o socket com um gerenciador de contexto:
+
+```python
+import socket
+
+with socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+) as sock:
+
+    print("Socket criado")
+```
+
+Quando o bloco `with` termina, o socket é fechado automaticamente.
+
+Conceitualmente:
+
+```text
+with
+ ↓
+cria socket
+ ↓
+utiliza socket
+ ↓
+fim do bloco
+ ↓
+close() automático
+```
+
+Isso ajuda a evitar situações em que o programa esquece de fechar o socket.
+
+Para exemplos pequenos, também podemos utilizar:
+
+```python
+sock.close()
+```
+
+explicitamente.
+
+---
+
+## 4.16 Exemplo completo da criação de um socket TCP
+
+Um exemplo simples:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+print("Socket criado!")
+
+sock.close()
+
+print("Socket fechado!")
+```
+
+Fluxo:
+
+```text
+import socket
+      ↓
+socket.socket()
+      ↓
+socket TCP/IPv4 criado
+      ↓
+uso do socket
+      ↓
+close()
+      ↓
+socket fechado
+```
+
+Observe que esse programa ainda **não envia dados pela rede**.
+
+Também não cria um servidor.
+
+Também não cria uma conexão com outro computador.
+
+Ele apenas demonstra o ciclo básico:
+
+```text
+CRIAR
+  ↓
+UTILIZAR
+  ↓
+FECHAR
+```
+
+As próximas operações é que vão transformar esse socket em um participante real de uma comunicação de rede.
+
+---
+
+## 4.17 Modelo mental desta seção
+
+Depois desta seção, podemos pensar em:
+
+```python
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+como:
+
+```text
+"Crie para mim um objeto socket
+ capaz de trabalhar com endereços IPv4
+ usando um modelo de comunicação orientado
+ a fluxo."
+
+                    ↓
+
+              socket Python
+                    ↓
+             recurso no kernel
+```
+
+E ainda:
+
+```text
+socket criado
+      ≠
+socket conectado
+      ≠
+servidor
+      ≠
+cliente
+```
+
+O comportamento será definido pelas operações realizadas depois.
+
+Para um servidor TCP:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+```
+
+Para um cliente TCP:
+
+```text
+socket()
+   ↓
+connect()
+```
+
+Essa distinção será fundamental para entender `bind()`, `listen()`, `accept()` e `connect()`.
+
+---
+
+## Resumo
+
+- `socket.socket()` cria um objeto socket em Python.
+    
+- Criar um socket **não significa estabelecer uma conexão**.
+    
+- `family` define a família de endereços.
+    
+- `type` define o tipo de comunicação.
+    
+- `proto` permite especificar o protocolo.
+    
+- `fileno` permite trabalhar com um descritor de arquivo existente.
+    
+- `AF_INET` representa IPv4.
+    
+- `AF_INET6` representa IPv6.
+    
+- `SOCK_STREAM` é utilizado normalmente com TCP.
+    
+- `SOCK_DGRAM` é utilizado normalmente com UDP.
+    
+- `proto=0` normalmente permite que o sistema escolha o protocolo adequado.
+    
+- `close()` libera o socket.
+    
+- `with socket.socket(...)` permite fechar o socket automaticamente.
+    
+- Um socket criado ainda não é necessariamente cliente ou servidor.
+    
+- Operações posteriores como `bind()`, `listen()`, `accept()` e `connect()` determinam seu papel no processo de comunicação.
+    
+
+---

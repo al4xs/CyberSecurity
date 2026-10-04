@@ -14408,4 +14408,1010 @@ Framing → separação das mensagens
 Aplicação → interpretação das mensagens
 ```
 
-	
+	---
+
+# 14. Construindo um protocolo simples sobre TCP
+
+## 14.1 O que é um protocolo próprio?
+
+Até agora vimos que o TCP fornece apenas um **fluxo confiável de bytes**.
+
+Isso significa que, se quisermos construir uma aplicação como:
+
+- chat;
+    
+- transferência de arquivos;
+    
+- autenticação;
+    
+- API;
+    
+- controle remoto;
+    
+- comunicação entre programas;
+    
+
+precisamos definir **regras para interpretar esses bytes**.
+
+Essas regras formam um protocolo.
+
+Um protocolo próprio pode ser extremamente simples.
+
+Por exemplo:
+
+```text
+CLIENTE → LOGIN allan senha123
+SERVIDOR → OK
+```
+
+Ou:
+
+```text
+CLIENTE → MSG Olá servidor
+SERVIDOR → OK
+```
+
+O importante é que **cliente e servidor concordem com o formato**.
+
+---
+
+## 14.2 Um protocolo precisa definir regras
+
+Um protocolo de comunicação precisa responder perguntas como:
+
+1. Como uma mensagem começa?
+    
+2. Como uma mensagem termina?
+    
+3. Como sabemos qual é o tipo da mensagem?
+    
+4. Como representamos os dados?
+    
+5. O servidor pode responder?
+    
+6. O que acontece quando ocorre um erro?
+    
+7. Como a conexão é encerrada?
+    
+
+Por exemplo, podemos criar o seguinte protocolo:
+
+```text
+LOGIN <usuario> <senha>\n
+MSG <texto>\n
+QUIT\n
+```
+
+Assim:
+
+```text
+LOGIN allan senha123\n
+```
+
+representa uma operação de login.
+
+Enquanto:
+
+```text
+MSG Olá servidor\n
+```
+
+representa uma mensagem.
+
+E:
+
+```text
+QUIT\n
+```
+
+representa uma solicitação para encerrar a sessão.
+
+---
+
+## 14.3 Comandos e dados
+
+Uma estrutura comum em protocolos simples é separar:
+
+```text
+COMANDO + DADOS
+```
+
+Por exemplo:
+
+```text
+LOGIN allan senha123
+```
+
+pode ser interpretado como:
+
+```text
+comando = LOGIN
+dados = allan senha123
+```
+
+Outro exemplo:
+
+```text
+MSG Olá mundo
+```
+
+pode ser:
+
+```text
+comando = MSG
+dados = Olá mundo
+```
+
+Isso permite que o servidor saiba **qual operação deve executar**.
+
+---
+
+## 14.4 Exemplo de servidor
+
+Podemos criar um servidor simples:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+print(f"Cliente conectado: {address}")
+
+buffer = b""
+
+while True:
+    data = client.recv(1024)
+
+    if not data:
+        break
+
+    buffer += data
+
+    while b"\n" in buffer:
+        message, buffer = buffer.split(b"\n", 1)
+
+        message = message.decode()
+
+        print("Recebido:", message)
+
+client.close()
+server.close()
+```
+
+Observe que o servidor não trata cada `recv()` como uma mensagem.
+
+Ele utiliza:
+
+```python
+buffer += data
+```
+
+e depois procura:
+
+```python
+b"\n"
+```
+
+para encontrar mensagens completas.
+
+---
+
+## 14.5 Interpretando comandos
+
+Agora podemos transformar a mensagem em um comando.
+
+Por exemplo:
+
+```python
+parts = message.split(" ", 1)
+```
+
+Se recebermos:
+
+```text
+MSG Olá servidor
+```
+
+teremos:
+
+```python
+parts[0]
+```
+
+igual a:
+
+```text
+MSG
+```
+
+e:
+
+```python
+parts[1]
+```
+
+igual a:
+
+```text
+Olá servidor
+```
+
+Podemos então fazer:
+
+```python
+command, data = message.split(" ", 1)
+```
+
+E:
+
+```python
+if command == "MSG":
+    print("Mensagem:", data)
+```
+
+---
+
+## 14.6 O segundo argumento do `split()`
+
+Aqui existe um detalhe importante:
+
+```python
+message.split(" ", 1)
+```
+
+O `1` limita a quantidade de divisões.
+
+Considere:
+
+```text
+MSG Olá meu amigo
+```
+
+Sem limite:
+
+```python
+message.split(" ")
+```
+
+resultaria em:
+
+```python
+["MSG", "Olá", "meu", "amigo"]
+```
+
+Com:
+
+```python
+message.split(" ", 1)
+```
+
+teremos:
+
+```python
+["MSG", "Olá meu amigo"]
+```
+
+Isso é útil porque queremos separar apenas:
+
+```text
+comando
+```
+
+de:
+
+```text
+restante da mensagem
+```
+
+---
+
+## 14.7 Respostas do servidor
+
+Um protocolo normalmente possui comunicação nos dois sentidos.
+
+Por exemplo:
+
+```text
+CLIENTE → MSG Olá\n
+SERVIDOR → OK\n
+```
+
+O servidor pode responder:
+
+```python
+client.sendall(b"OK\n")
+```
+
+O cliente pode então receber:
+
+```python
+response = client.recv(1024)
+```
+
+e interpretar:
+
+```python
+print(response.decode())
+```
+
+Novamente, em um protocolo real, não devemos assumir que uma chamada de `recv()` necessariamente contém toda a resposta.
+
+A mesma regra de framing continua válida.
+
+---
+
+## 14.8 Protocolo requisição → resposta
+
+Uma estrutura muito comum é:
+
+```text
+Cliente
+   │
+   │ requisição
+   ▼
+Servidor
+   │
+   │ resposta
+   ▼
+Cliente
+```
+
+Por exemplo:
+
+```text
+CLIENTE → PING\n
+SERVIDOR → PONG\n
+```
+
+Outro exemplo:
+
+```text
+CLIENTE → ADD 10 20\n
+SERVIDOR → RESULT 30\n
+```
+
+Outro:
+
+```text
+CLIENTE → GET usuario\n
+SERVIDOR → USER allan\n
+```
+
+Esse modelo aparece em diversos sistemas reais.
+
+---
+
+## 14.9 Exemplo: protocolo `PING/PONG`
+
+Podemos criar um protocolo extremamente simples.
+
+Regra:
+
+```text
+PING\n
+```
+
+deve receber:
+
+```text
+PONG\n
+```
+
+Servidor:
+
+```python
+import socket
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind(("127.0.0.1", 4444))
+server.listen()
+
+print("Servidor aguardando conexão...")
+
+client, address = server.accept()
+
+buffer = b""
+
+while True:
+    data = client.recv(1024)
+
+    if not data:
+        break
+
+    buffer += data
+
+    while b"\n" in buffer:
+        message, buffer = buffer.split(b"\n", 1)
+
+        message = message.decode()
+
+        if message == "PING":
+            client.sendall(b"PONG\n")
+
+        elif message == "QUIT":
+            client.sendall(b"BYE\n")
+            client.close()
+            server.close()
+            raise SystemExit
+```
+
+Agora temos um pequeno protocolo funcional.
+
+---
+
+## 14.10 Cliente do protocolo
+
+O cliente pode ser:
+
+```python
+import socket
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+client.connect(("127.0.0.1", 4444))
+
+client.sendall(b"PING\n")
+
+response = client.recv(1024)
+
+print("Servidor:", response.decode())
+
+client.close()
+```
+
+O fluxo será:
+
+```text
+Cliente
+   │
+   │ PING\n
+   ▼
+Servidor
+   │
+   │ PONG\n
+   ▼
+Cliente
+```
+
+Resultado:
+
+```text
+Servidor: PONG
+```
+
+---
+
+## 14.11 O problema do `recv()` na resposta
+
+O exemplo anterior funciona para demonstrar o conceito, mas existe uma limitação:
+
+```python
+response = client.recv(1024)
+```
+
+não garante que:
+
+```text
+PONG\n
+```
+
+será recebido inteiro nessa chamada.
+
+Pode acontecer de receber:
+
+```python
+b"PO"
+```
+
+e depois:
+
+```python
+b"NG\n"
+```
+
+Por isso, uma implementação mais correta também utilizaria um buffer no cliente.
+
+---
+
+## 14.12 Função para receber uma mensagem delimitada
+
+Podemos criar uma função reutilizável:
+
+```python
+def recv_message(sock, buffer):
+    while b"\n" not in buffer:
+        data = sock.recv(1024)
+
+        if not data:
+            raise ConnectionError("Conexão encerrada")
+
+        buffer += data
+
+    message, buffer = buffer.split(b"\n", 1)
+
+    return message, buffer
+```
+
+Agora podemos fazer:
+
+```python
+buffer = b""
+
+message, buffer = recv_message(client, buffer)
+
+print(message.decode())
+```
+
+A função continua recebendo dados até encontrar:
+
+```text
+\n
+```
+
+---
+
+## 14.13 Por que retornar o buffer?
+
+Considere que o socket receba:
+
+```text
+PONG\nOK\n
+```
+
+em uma única chamada:
+
+```python
+recv()
+```
+
+O protocolo possui duas mensagens:
+
+```text
+PONG
+```
+
+e:
+
+```text
+OK
+```
+
+Quando fazemos:
+
+```python
+message, buffer = buffer.split(b"\n", 1)
+```
+
+a primeira mensagem é:
+
+```text
+PONG
+```
+
+e o restante permanece:
+
+```text
+OK\n
+```
+
+Por isso precisamos preservar o buffer.
+
+Caso descartássemos o restante, perderíamos dados.
+
+---
+
+## 14.14 Um protocolo pode possuir estados
+
+Protocolos mais elaborados podem exigir que determinadas operações ocorram em determinada ordem.
+
+Por exemplo:
+
+```text
+1. Conectar
+2. Autenticar
+3. Enviar comandos
+4. Encerrar
+```
+
+O servidor pode possuir estados:
+
+```text
+CONNECTED
+     │
+     ▼
+AUTHENTICATED
+     │
+     ▼
+READY
+     │
+     ▼
+CLOSED
+```
+
+Assim, um cliente que tentar:
+
+```text
+MSG Olá\n
+```
+
+antes de autenticar pode receber:
+
+```text
+ERROR NOT_AUTHENTICATED\n
+```
+
+Isso é chamado de **máquina de estados do protocolo**.
+
+---
+
+## 14.15 Exemplo de protocolo com autenticação
+
+Podemos definir:
+
+```text
+LOGIN allan senha123\n
+```
+
+Resposta:
+
+```text
+OK\n
+```
+
+Depois disso:
+
+```text
+MSG Olá servidor\n
+```
+
+Resposta:
+
+```text
+OK\n
+```
+
+Se o cliente tentar enviar:
+
+```text
+MSG Olá servidor\n
+```
+
+antes do login:
+
+```text
+ERROR LOGIN_REQUIRED\n
+```
+
+O servidor precisa manter o estado da conexão:
+
+```python
+authenticated = False
+```
+
+Depois de um login válido:
+
+```python
+authenticated = True
+```
+
+Então:
+
+```python
+if not authenticated:
+    client.sendall(b"ERROR LOGIN_REQUIRED\n")
+```
+
+Esse conceito será muito importante quando começarmos a criar aplicações de rede maiores.
+
+---
+
+## 14.16 Protocolo não é necessariamente um padrão da Internet
+
+Quando falamos em protocolo, não significa necessariamente:
+
+```text
+HTTP
+DNS
+FTP
+SSH
+```
+
+Nós também podemos criar um protocolo privado para uma aplicação.
+
+Por exemplo:
+
+```text
+MEU_PROTOCOLO/1.0
+```
+
+com regras próprias.
+
+Entretanto, protocolos reais precisam ser projetados com muito mais cuidado.
+
+Eles precisam considerar:
+
+- compatibilidade;
+    
+- segurança;
+    
+- versionamento;
+    
+- erros;
+    
+- tamanho dos dados;
+    
+- encoding;
+    
+- autenticação;
+    
+- integridade;
+    
+- timeouts;
+    
+- limites;
+    
+- concorrência.
+    
+
+---
+
+## 14.17 Versionamento do protocolo
+
+Uma aplicação pode mudar ao longo do tempo.
+
+Imagine que a versão inicial aceite:
+
+```text
+PING\n
+```
+
+Depois queremos adicionar:
+
+```text
+PING <id>\n
+```
+
+Clientes antigos podem não entender o novo formato.
+
+Por isso, protocolos podem possuir versões.
+
+Por exemplo:
+
+```text
+PROTO/1.0
+```
+
+ou:
+
+```text
+PROTO/2.0
+```
+
+Isso permite que cliente e servidor saibam quais regras estão utilizando.
+
+---
+
+## 14.18 Segurança não vem automaticamente do TCP
+
+Outro conceito fundamental:
+
+> TCP confiável não significa comunicação segura.
+
+O TCP fornece características como:
+
+```text
+entrega ordenada
+retransmissão
+controle de fluxo
+```
+
+Mas não fornece automaticamente:
+
+```text
+criptografia
+autenticação da identidade
+confidencialidade
+proteção contra leitura dos dados
+```
+
+Por exemplo, se enviarmos:
+
+```python
+client.sendall(b"senha123\n")
+```
+
+o TCP não transforma isso automaticamente em dados criptografados.
+
+Para comunicação segura, normalmente utilizamos mecanismos adicionais, como **TLS**.
+
+---
+
+## 14.19 TCP + protocolo da aplicação + segurança
+
+Uma arquitetura mais completa pode ser:
+
+```text
+┌──────────────────────────────┐
+│ Aplicação                    │
+│                              │
+│ Login / Chat / Arquivos      │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Protocolo da aplicação       │
+│                              │
+│ framing + comandos + dados   │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ TLS                          │
+│                              │
+│ criptografia + autenticação  │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ TCP                          │
+│                              │
+│ transporte confiável         │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ IP                           │
+└──────────────────────────────┘
+```
+
+Esse modelo ajuda a entender por que tecnologias como HTTPS não são simplesmente "um TCP diferente".
+
+Existe uma composição de camadas.
+
+---
+
+## 14.20 Modelo mental desta parte
+
+Ao construir uma aplicação TCP, pense:
+
+```text
+Socket
+   ↓
+TCP
+   ↓
+Fluxo de bytes
+   ↓
+Framing
+   ↓
+Mensagem
+   ↓
+Comando
+   ↓
+Dados
+   ↓
+Ação
+   ↓
+Resposta
+```
+
+Por exemplo:
+
+```text
+client.sendall(b"PING\n")
+```
+
+não significa simplesmente:
+
+```text
+"enviei uma mensagem"
+```
+
+O que realmente acontece conceitualmente é:
+
+```text
+"PING\n"
+   ↓
+bytes
+   ↓
+TCP
+   ↓
+rede
+   ↓
+TCP do servidor
+   ↓
+recv()
+   ↓
+buffer
+   ↓
+framing
+   ↓
+"PING"
+   ↓
+protocolo
+   ↓
+PONG
+```
+
+Essa separação é uma das bases para entender programação de redes.
+
+---
+
+## Resumo da Parte
+
+- Um protocolo define **regras de comunicação** entre programas.
+    
+- TCP fornece o transporte, mas não define o significado dos dados.
+    
+- Podemos criar protocolos próprios sobre TCP.
+    
+- Um protocolo pode definir:
+    
+    - comandos;
+        
+    - argumentos;
+        
+    - respostas;
+        
+    - erros;
+        
+    - estados;
+        
+    - versionamento;
+        
+    - framing.
+        
+- Um modelo simples é:
+    
+
+```text
+COMANDO DADOS\n
+```
+
+- Um protocolo pode seguir o modelo:
+    
+
+```text
+requisição → resposta
+```
+
+- Cliente e servidor precisam concordar com o mesmo formato.
+    
+- Uma aplicação pode manter estados como:
+    
+
+```text
+CONNECTED
+AUTHENTICATED
+READY
+CLOSED
+```
+
+- TCP não fornece criptografia por padrão.
+    
+- Segurança é uma responsabilidade de camadas adicionais, como TLS.
+    
+- O fluxo completo pode ser entendido como:
+    
+
+```text
+Aplicação
+   ↓
+Protocolo
+   ↓
+Framing
+   ↓
+TCP
+   ↓
+IP
+   ↓
+Rede
+```
+

@@ -24819,3 +24819,1106 @@ somente sockets prontos são processados
 ```
 
 
+# 23. Servidores assíncronos com `asyncio`
+
+Até agora vimos diferentes formas de atender vários clientes:
+
+```text
+Servidor sequencial
+        ↓
+Thread por cliente
+        ↓
+ThreadPoolExecutor
+        ↓
+selectors
+        ↓
+asyncio
+```
+
+O `asyncio` leva o conceito de **I/O assíncrono** para uma abstração mais alta.
+
+Em vez de trabalharmos diretamente com `selectors`, `epoll`, `kqueue` etc., podemos escrever o código utilizando:
+
+```python
+async
+await
+```
+
+e deixar o event loop coordenar as operações de I/O.
+
+---
+
+## 23.1 O que é `asyncio`?
+
+`asyncio` é um módulo da biblioteca padrão do Python para programação concorrente baseada em **corrotinas** e **event loop**.
+
+Importamos:
+
+```python
+import asyncio
+```
+
+A ideia principal é:
+
+```text
+                ┌───────────────────┐
+                │    Event Loop     │
+                └─────────┬─────────┘
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+          Cliente A    Cliente B    Cliente C
+          esperando    executando   esperando
+             I/O           │           I/O
+                           │
+                           ▼
+                     continua trabalho
+```
+
+Enquanto uma tarefa está esperando uma operação de I/O, o event loop pode executar outra tarefa.
+
+---
+
+## 23.2 O que é um event loop?
+
+O **event loop** é o mecanismo responsável por coordenar tarefas assíncronas.
+
+Podemos imaginar:
+
+```text
+┌─────────────────────────────┐
+│         Event Loop          │
+│                             │
+│ verifica tarefas            │
+│ verifica I/O                │
+│ executa corrotinas prontas  │
+│ aguarda eventos             │
+└──────────────┬──────────────┘
+               │
+       ┌───────┼────────┐
+       ▼       ▼        ▼
+    tarefa 1 tarefa 2 tarefa 3
+```
+
+Ele fica executando continuamente e decide qual trabalho pode avançar.
+
+Por exemplo:
+
+```python
+async def cliente():
+    ...
+```
+
+Quando essa função precisa esperar uma operação assíncrona:
+
+```python
+await alguma_operacao()
+```
+
+a corrotina pode ceder o controle ao event loop.
+
+---
+
+## 23.3 `async def`
+
+Uma função definida com:
+
+```python
+async def
+```
+
+é uma **função assíncrona**.
+
+Exemplo:
+
+```python
+async def hello():
+    print("Olá")
+```
+
+Porém, chamar:
+
+```python
+hello()
+```
+
+não executa a função da mesma maneira que uma função normal.
+
+O resultado é uma **corrotina**.
+
+```python
+coroutine = hello()
+```
+
+Ela precisa ser executada por um event loop.
+
+Uma forma simples é:
+
+```python
+asyncio.run(hello())
+```
+
+Exemplo completo:
+
+```python
+import asyncio
+
+async def hello():
+    print("Olá")
+
+asyncio.run(hello())
+```
+
+---
+
+## 23.4 O que é uma corrotina?
+
+Uma corrotina é uma função assíncrona que pode **suspender sua execução e depois continuar de onde parou**.
+
+Por exemplo:
+
+```python
+async def tarefa():
+    print("Início")
+
+    await asyncio.sleep(2)
+
+    print("Fim")
+```
+
+Durante:
+
+```python
+await asyncio.sleep(2)
+```
+
+a corrotina fica aguardando.
+
+O event loop pode utilizar esse tempo para executar outra tarefa.
+
+Visualmente:
+
+```text
+Tarefa A
+   │
+   ▼
+"Início"
+   │
+   ▼
+await
+   │
+   │  espera
+   │
+   ├──────────────► Event Loop
+   │                    │
+   │                    ▼
+   │                Tarefa B
+   │                    │
+   │                    ▼
+   │                 executa
+   │
+   ▼
+Tarefa A continua
+   │
+   ▼
+"Fim"
+```
+
+---
+
+## 23.5 O que significa `await`?
+
+`await` significa, conceitualmente:
+
+> "Preciso esperar o resultado desta operação assíncrona. Enquanto isso, permita que o event loop execute outras tarefas."
+
+Exemplo:
+
+```python
+await asyncio.sleep(1)
+```
+
+O ponto importante é que isso **não significa necessariamente bloquear a thread inteira**.
+
+A corrotina é suspensa e o event loop pode continuar trabalhando.
+
+---
+
+## 23.6 `asyncio.sleep()` versus `time.sleep()`
+
+Essa diferença é muito importante.
+
+### Bloqueante
+
+```python
+import time
+
+time.sleep(5)
+```
+
+Isso bloqueia a thread durante o período.
+
+### Assíncrono
+
+```python
+await asyncio.sleep(5)
+```
+
+Aqui a corrotina é suspensa e o event loop pode executar outras tarefas.
+
+Por exemplo:
+
+```python
+import asyncio
+
+async def tarefa(nome):
+    print(f"{nome}: iniciou")
+
+    await asyncio.sleep(2)
+
+    print(f"{nome}: terminou")
+
+async def main():
+    await asyncio.gather(
+        tarefa("A"),
+        tarefa("B"),
+    )
+
+asyncio.run(main())
+```
+
+As duas tarefas podem progredir concorrentemente durante a espera.
+
+---
+
+## 23.7 Concorrência não significa paralelismo
+
+Esse conceito continua sendo importante.
+
+Imagine:
+
+```text
+CPU
+ │
+ ▼
+Event Loop
+ │
+ ├── tarefa A
+ ├── tarefa B
+ └── tarefa C
+```
+
+Em um único thread, normalmente temos **concorrência**, não execução simultânea real das três tarefas.
+
+O event loop alterna entre tarefas quando elas cedem o controle.
+
+```text
+tempo →
+
+A A A ──await──
+             B B ──await──
+                       C C C
+             A A
+                  B B
+```
+
+O ganho principal está em aproveitar períodos de espera de I/O.
+
+---
+
+## 23.8 Por que isso funciona bem para I/O?
+
+Imagine um servidor atendendo:
+
+```text
+Cliente A → esperando dados
+Cliente B → esperando dados
+Cliente C → esperando dados
+Cliente D → enviando dados
+```
+
+Se utilizarmos um modelo bloqueante, poderíamos ficar presos esperando um cliente.
+
+Com programação assíncrona:
+
+```text
+Cliente A
+   │
+   └── await I/O
+
+Cliente B
+   │
+   └── await I/O
+
+Cliente C
+   │
+   └── await I/O
+
+Cliente D
+   │
+   └── pronto
+       │
+       ▼
+     processa
+```
+
+O event loop aproveita melhor o tempo em que as tarefas estão esperando.
+
+---
+
+## 23.9 Criando várias tarefas com `asyncio.create_task()`
+
+Podemos criar uma tarefa:
+
+```python
+task = asyncio.create_task(minha_corrotina())
+```
+
+Exemplo:
+
+```python
+import asyncio
+
+async def tarefa(nome):
+    print(f"{nome}: começou")
+
+    await asyncio.sleep(2)
+
+    print(f"{nome}: terminou")
+
+async def main():
+    task1 = asyncio.create_task(tarefa("A"))
+    task2 = asyncio.create_task(tarefa("B"))
+
+    await task1
+    await task2
+
+asyncio.run(main())
+```
+
+Aqui temos duas tarefas controladas pelo event loop.
+
+---
+
+## 23.10 `asyncio.gather()`
+
+Quando queremos executar várias corrotinas e esperar pelos resultados, podemos utilizar:
+
+```python
+asyncio.gather()
+```
+
+Exemplo:
+
+```python
+async def main():
+    await asyncio.gather(
+        tarefa("A"),
+        tarefa("B"),
+        tarefa("C"),
+    )
+```
+
+Podemos visualizar:
+
+```text
+             gather()
+                │
+       ┌────────┼────────┐
+       ▼        ▼        ▼
+    tarefa A tarefa B tarefa C
+       │        │        │
+       └────────┼────────┘
+                ▼
+          todas concluídas
+```
+
+---
+
+## 23.11 Criando um servidor TCP assíncrono
+
+Agora podemos aplicar isso a sockets.
+
+O `asyncio` possui uma API própria para servidores TCP:
+
+```python
+asyncio.start_server()
+```
+
+Um exemplo simples:
+
+```python
+import asyncio
+
+async def handle_client(reader, writer):
+    data = await reader.read(1024)
+
+    print(f"Recebido: {data!r}")
+
+    writer.write(data)
+
+    await writer.drain()
+
+    writer.close()
+    await writer.wait_closed()
+
+async def main():
+    server = await asyncio.start_server(
+        handle_client,
+        "127.0.0.1",
+        4444
+    )
+
+    async with server:
+        await server.serve_forever()
+
+asyncio.run(main())
+```
+
+Esse exemplo cria um servidor TCP assíncrono.
+
+---
+
+## 23.12 `asyncio.start_server()`
+
+A função:
+
+```python
+asyncio.start_server()
+```
+
+é responsável por criar um servidor TCP assíncrono.
+
+Uma forma simplificada da assinatura é:
+
+```python
+asyncio.start_server(
+    client_connected_cb,
+    host=None,
+    port=None,
+    *,
+    family=0,
+    flags=socket.AI_PASSIVE,
+    sock=None,
+    backlog=100,
+    ssl=None,
+    reuse_address=None,
+    reuse_port=None,
+    limit=2**16,
+    **kwds
+)
+```
+
+Os parâmetros mais importantes inicialmente são:
+
+|Parâmetro|Função|
+|---|---|
+|`client_connected_cb`|Função chamada quando um cliente conecta|
+|`host`|Endereço local|
+|`port`|Porta|
+|`family`|Família de endereços|
+|`backlog`|Configuração da fila de conexões|
+|`ssl`|Configuração de TLS|
+|`reuse_address`|Opção relacionada ao endereço|
+|`reuse_port`|Reutilização da porta, quando suportada|
+
+Não é necessário memorizar todos os parâmetros agora.
+
+O essencial é entender:
+
+```python
+server = await asyncio.start_server(
+    handle_client,
+    "127.0.0.1",
+    4444
+)
+```
+
+---
+
+## 23.13 `reader` e `writer`
+
+A função:
+
+```python
+async def handle_client(reader, writer):
+```
+
+recebe dois objetos principais:
+
+```text
+reader → leitura
+writer  → escrita
+```
+
+Podemos pensar:
+
+```text
+             Cliente
+                │
+          ┌─────┴─────┐
+          ▼           ▼
+       Reader       Writer
+          │           │
+        read()      write()
+```
+
+Eles são abstrações assíncronas construídas sobre a comunicação de rede.
+
+---
+
+## 23.14 Lendo dados com `reader.read()`
+
+Exemplo:
+
+```python
+data = await reader.read(1024)
+```
+
+Assim como:
+
+```python
+sock.recv(1024)
+```
+
+isso não significa:
+
+```text
+"receba exatamente uma mensagem de 1024 bytes"
+```
+
+Significa, conceitualmente:
+
+```text
+leia até 1024 bytes disponíveis
+```
+
+Pode retornar menos.
+
+E se o cliente encerrar a conexão de forma ordenada, podemos receber:
+
+```python
+b""
+```
+
+Portanto:
+
+```python
+data = await reader.read(1024)
+
+if not data:
+    ...
+```
+
+continua sendo uma verificação importante.
+
+---
+
+## 23.15 Escrevendo com `writer.write()`
+
+Para enviar dados:
+
+```python
+writer.write(data)
+```
+
+Por exemplo:
+
+```python
+writer.write(b"Hello")
+```
+
+Diferentemente de `socket.sendall()`, essa chamada não deve ser interpretada como "a aplicação já enviou fisicamente todos os bytes para o destino".
+
+Ela coloca dados no mecanismo de escrita do transporte.
+
+Por isso existe:
+
+```python
+await writer.drain()
+```
+
+---
+
+## 23.16 `writer.drain()`
+
+O:
+
+```python
+await writer.drain()
+```
+
+permite aguardar quando necessário para que o fluxo de escrita respeite o controle de fluxo interno.
+
+Exemplo:
+
+```python
+writer.write(data)
+
+await writer.drain()
+```
+
+Podemos imaginar:
+
+```text
+Aplicação
+   │
+   ▼
+writer.write()
+   │
+   ▼
+buffer de escrita
+   │
+   ▼
+drain()
+   │
+   ▼
+transporte
+   │
+   ▼
+TCP
+```
+
+Isso é especialmente relevante quando a aplicação produz dados mais rapidamente do que eles podem ser enviados.
+
+---
+
+## 23.17 Encerrando o `writer`
+
+Depois de terminar a comunicação:
+
+```python
+writer.close()
+```
+
+E podemos aguardar o fechamento:
+
+```python
+await writer.wait_closed()
+```
+
+Fluxo:
+
+```text
+writer.close()
+     │
+     ▼
+inicia encerramento
+     │
+     ▼
+await writer.wait_closed()
+     │
+     ▼
+aguarda fechamento
+```
+
+---
+
+## 23.18 O callback `handle_client`
+
+Quando um cliente conecta, o servidor chama:
+
+```python
+handle_client(reader, writer)
+```
+
+A estrutura pode ser entendida assim:
+
+```text
+Cliente conecta
+       │
+       ▼
+asyncio.start_server()
+       │
+       ▼
+handle_client()
+       │
+       ├── read()
+       ├── processa
+       ├── write()
+       ├── drain()
+       └── close()
+```
+
+Isso elimina a necessidade de escrever manualmente:
+
+```python
+accept()
+```
+
+no código da aplicação.
+
+O próprio `asyncio` gerencia essa parte.
+
+---
+
+## 23.19 Comparando socket tradicional com `asyncio`
+
+### Socket tradicional
+
+```python
+server.accept()
+
+data = client.recv(1024)
+
+client.sendall(data)
+```
+
+### `asyncio`
+
+```python
+data = await reader.read(1024)
+
+writer.write(data)
+
+await writer.drain()
+```
+
+A ideia continua sendo a mesma:
+
+```text
+aceitar
+   ↓
+receber
+   ↓
+processar
+   ↓
+enviar
+   ↓
+encerrar
+```
+
+A diferença está no modelo de execução e nas abstrações usadas.
+
+---
+
+## 23.20 O que acontece internamente?
+
+Podemos pensar no `asyncio` desta forma:
+
+```text
+Código Python
+     │
+     ▼
+async / await
+     │
+     ▼
+Corrotinas
+     │
+     ▼
+Event Loop
+     │
+     ▼
+Mecanismos de I/O do SO
+     │
+     ├── epoll
+     ├── kqueue
+     ├── select
+     └── outros mecanismos
+     │
+     ▼
+Sockets
+     │
+     ▼
+TCP/IP
+     │
+     ▼
+Rede
+```
+
+Portanto, `asyncio` não elimina os mecanismos que estudamos anteriormente.
+
+Ele fornece uma abstração para trabalhar com eles.
+
+---
+
+## 23.21 `asyncio` não torna qualquer código assíncrono
+
+Um erro comum é pensar:
+
+```python
+async def minha_funcao():
+    ...
+```
+
+e concluir:
+
+> "Agora tudo dentro dela é assíncrono."
+
+Não é assim.
+
+Por exemplo:
+
+```python
+async def tarefa():
+    time.sleep(10)
+```
+
+continua sendo bloqueante.
+
+O `asyncio` não consegue simplesmente interromper:
+
+```python
+time.sleep(10)
+```
+
+porque essa chamada bloqueia a thread.
+
+O correto, nesse exemplo, seria:
+
+```python
+async def tarefa():
+    await asyncio.sleep(10)
+```
+
+---
+
+## 23.22 Um erro ainda mais perigoso: I/O bloqueante
+
+Imagine:
+
+```python
+async def handle_client(reader, writer):
+    resultado = requests.get(url)
+```
+
+Se `requests.get()` executar uma operação bloqueante longa, o event loop pode ficar parado durante essa operação.
+
+Visualmente:
+
+```text
+Event Loop
+    │
+    ▼
+handle_client()
+    │
+    ▼
+requests.get()
+    │
+    X
+ bloqueou
+    │
+    X
+outras tarefas esperando
+```
+
+Por isso, em aplicações assíncronas precisamos ter cuidado com bibliotecas bloqueantes.
+
+Existem bibliotecas específicas para operações assíncronas.
+
+---
+
+## 23.23 `asyncio` e CPU-bound
+
+`asyncio` é especialmente interessante para:
+
+- sockets;
+    
+- servidores web;
+    
+- APIs;
+    
+- proxies;
+    
+- clientes HTTP;
+    
+- WebSockets;
+    
+- serviços de rede;
+    
+- muitas conexões simultâneas.
+    
+
+Mas uma tarefa pesada de CPU pode bloquear o event loop.
+
+Por exemplo:
+
+```python
+async def tarefa():
+    for i in range(10_000_000_000):
+        ...
+```
+
+Enquanto essa função estiver executando sem ceder controle:
+
+```text
+Event Loop
+    │
+    ▼
+CPU pesada
+    │
+    X
+outras tarefas não avançam
+```
+
+Nesse cenário, podem ser necessários:
+
+- processos;
+    
+- `ProcessPoolExecutor`;
+    
+- código nativo;
+    
+- outras estratégias de paralelismo.
+    
+
+---
+
+## 23.24 `asyncio` versus `selectors`
+
+Os dois estão relacionados.
+
+Com `selectors`, podemos trabalhar diretamente com o mecanismo de multiplexação:
+
+```text
+selectors
+    │
+    ▼
+select()/poll()/epoll()/kqueue
+    │
+    ▼
+sockets
+```
+
+Com `asyncio`:
+
+```text
+async/await
+    │
+    ▼
+event loop
+    │
+    ▼
+mecanismo de I/O
+    │
+    ▼
+sockets
+```
+
+Ou seja:
+
+> `asyncio` fornece uma abstração de nível mais alto para construir programas concorrentes orientados a I/O.
+
+---
+
+## 23.25 `asyncio` versus threads
+
+Também podemos comparar:
+
+|Característica|Threads|`asyncio`|
+|---|---|---|
+|Modelo|Threads|Corrotinas|
+|Controle|Sistema operacional + Python|Event loop|
+|I/O|Pode bloquear|Normalmente assíncrono|
+|Memória por tarefa|Maior|Geralmente menor|
+|Escala para muitas conexões|Pode ser mais pesada|Muito adequada|
+|Código|Pode ser mais intuitivo|Exige `async`/`await`|
+|CPU-bound|Não resolve automaticamente|Não resolve automaticamente|
+|I/O-bound|Excelente|Excelente|
+
+Não existe uma solução universalmente melhor.
+
+---
+
+## 23.26 Modelo mental final
+
+O modelo mais importante desta parte é:
+
+```text
+                   Aplicação
+                       │
+                       ▼
+                async / await
+                       │
+                       ▼
+                  Corrotinas
+                       │
+                       ▼
+                 Event Loop
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+       Cliente A    Cliente B    Cliente C
+       aguardando   aguardando   executando
+          I/O          I/O
+                       │
+                       ▼
+                 mecanismo de I/O
+                       │
+                       ▼
+                    Socket
+                       │
+                       ▼
+                     TCP
+                       │
+                       ▼
+                     IP
+                       │
+                       ▼
+                    Rede
+```
+
+A grande ideia é:
+
+> **Uma corrotina pode esperar I/O sem bloquear o event loop inteiro, permitindo que outras corrotinas avancem enquanto a operação está aguardando.**
+
+---
+
+## 23.27 Resumo da Parte
+
+- `asyncio` é o framework assíncrono da biblioteca padrão do Python.
+    
+- O modelo é baseado em **corrotinas** e **event loop**.
+    
+- Funções assíncronas são definidas com `async def`.
+    
+- `await` permite suspender uma corrotina durante uma operação aguardável.
+    
+- `asyncio.run()` inicia um event loop para executar a corrotina principal.
+    
+- `asyncio.create_task()` agenda uma corrotina como tarefa.
+    
+- `asyncio.gather()` permite aguardar várias operações concorrentes.
+    
+- `asyncio.start_server()` permite criar servidores TCP assíncronos.
+    
+- `StreamReader` é utilizado para leitura.
+    
+- `StreamWriter` é utilizado para escrita.
+    
+- `reader.read()` continua respeitando as características de stream do TCP.
+    
+- `writer.write()` envia dados para o fluxo de saída.
+    
+- `writer.drain()` ajuda a lidar com o fluxo de escrita e backpressure.
+    
+- `writer.close()` inicia o encerramento.
+    
+- `await writer.wait_closed()` aguarda o fechamento.
+    
+- `asyncio` não transforma automaticamente código bloqueante em assíncrono.
+    
+- Operações bloqueantes dentro do event loop podem prejudicar todas as tarefas.
+    
+- `asyncio` é especialmente útil para aplicações **I/O-bound** com muitas conexões simultâneas.
+    
+- `asyncio` utiliza mecanismos de I/O do sistema operacional por baixo da abstração.
+    
+
+**Modelo final:**
+
+```text
+socket tradicional
+       ↓
+controle manual de I/O
+       ↓
+selectors
+       ↓
+multiplexação
+       ↓
+asyncio
+       ↓
+event loop + corrotinas
+       ↓
+programação assíncrona
+```

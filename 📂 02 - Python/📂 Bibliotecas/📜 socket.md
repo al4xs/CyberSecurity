@@ -50677,4 +50677,2121 @@ Storage / Database / Services
 E esse é o ponto em que os conceitos individuais de sockets começam a formar uma **arquitetura de aplicação de rede completa**.
 
 ---
-	
+# 42. Revisão geral e mapa mental de Sockets
+
+Depois de estudar desde a criação de um socket até protocolos, concorrência, TLS, segurança, testes e arquitetura, é importante juntar tudo em um único modelo mental.
+
+A ideia desta revisão não é simplesmente repetir todas as partes anteriores, mas mostrar **como os conceitos se encaixam** e, principalmente, **como decidir qual recurso utilizar em cada situação**.
+
+---
+
+## 42.1 O modelo mental principal
+
+A primeira coisa que você deve lembrar é:
+
+```text
+APLICAÇÃO
+    ↓
+PROTOCOLO DA APLICAÇÃO
+    ↓
+SOCKET
+    ↓
+TCP / UDP
+    ↓
+IP
+    ↓
+REDE
+```
+
+Por exemplo, em um sistema de chat:
+
+```text
+Chat
+ ↓
+"JOAO: oi\n"
+ ↓
+Protocolo do chat
+ ↓
+Socket TCP
+ ↓
+TCP
+ ↓
+IP
+ ↓
+Rede
+```
+
+Cada camada possui uma responsabilidade diferente.
+
+### Aplicação
+
+É o programa que você escreveu.
+
+Exemplos:
+
+```text
+chat
+servidor de arquivos
+API
+jogo
+sistema de autenticação
+```
+
+---
+
+### Protocolo da aplicação
+
+Define **o significado dos dados**.
+
+Por exemplo:
+
+```text
+AUTH joao senha123
+INFO
+ECHO ola
+QUIT
+```
+
+O TCP não sabe que `AUTH` significa autenticação.
+
+Isso é responsabilidade do seu protocolo.
+
+---
+
+### Socket
+
+É a interface que permite que o programa utilize os recursos de comunicação oferecidos pelo sistema operacional.
+
+Em Python:
+
+```python
+socket.socket(...)
+```
+
+---
+
+### TCP ou UDP
+
+É a camada de transporte.
+
+TCP:
+
+```text
+conexão
+confiabilidade
+ordenação
+fluxo de bytes
+```
+
+UDP:
+
+```text
+datagramas
+sem conexão TCP
+sem garantia de entrega
+sem garantia de ordem
+```
+
+---
+
+### IP
+
+É responsável pelo endereçamento e encaminhamento dos pacotes entre hosts.
+
+Exemplo IPv4:
+
+```text
+192.168.1.20
+```
+
+Exemplo IPv6:
+
+```text
+2001:db8::10
+```
+
+---
+
+## 42.2 Criando um socket
+
+A criação começa normalmente com:
+
+```python
+import socket
+
+sock = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Cada linha possui uma responsabilidade.
+
+### Linha 1
+
+```python
+import socket
+```
+
+Importa o módulo `socket` da biblioteca padrão do Python.
+
+---
+
+### Linha 2
+
+```python
+sock = socket.socket(
+```
+
+Cria um objeto socket.
+
+O retorno é armazenado na variável:
+
+```text
+sock
+```
+
+---
+
+### Primeiro argumento
+
+```python
+socket.AF_INET
+```
+
+Define a família de endereços.
+
+`AF_INET` significa IPv4.
+
+---
+
+### Segundo argumento
+
+```python
+socket.SOCK_STREAM
+```
+
+Define o tipo do socket.
+
+`SOCK_STREAM` normalmente é utilizado com TCP.
+
+---
+
+Portanto:
+
+```python
+socket.AF_INET
+```
+
+define **qual família de endereços** será utilizada.
+
+Enquanto:
+
+```python
+socket.SOCK_STREAM
+```
+
+define **qual modelo de comunicação** será utilizado.
+
+Mentalmente:
+
+```text
+AF_INET
+   ↓
+IPv4
+
+SOCK_STREAM
+   ↓
+fluxo de bytes
+   ↓
+normalmente TCP
+```
+
+---
+
+## 42.3 TCP server: o fluxo completo
+
+Um servidor TCP tradicional segue esta sequência:
+
+```text
+socket()
+   ↓
+setsockopt()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+recv() / send()
+   ↓
+shutdown()
+   ↓
+close()
+```
+
+Vamos entender o papel de cada etapa.
+
+---
+
+### 1. `socket()`
+
+Cria o socket.
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Nesse exemplo:
+
+- `AF_INET` → IPv4
+    
+- `SOCK_STREAM` → comunicação orientada a fluxo, normalmente TCP
+    
+
+---
+
+### 2. `setsockopt()`
+
+Configura opções do socket.
+
+Exemplo:
+
+```python
+server.setsockopt(
+    socket.SOL_SOCKET,
+    socket.SO_REUSEADDR,
+    1
+)
+```
+
+Os parâmetros são:
+
+```text
+socket.SOL_SOCKET
+```
+
+Indica que estamos configurando uma opção pertencente à camada geral do socket.
+
+```text
+socket.SO_REUSEADDR
+```
+
+É a opção que permite determinadas reutilizações do endereço local.
+
+```text
+1
+```
+
+Ativa a opção.
+
+Isso é bastante utilizado em servidores durante desenvolvimento e reinicializações.
+
+---
+
+### 3. `bind()`
+
+Associa o socket a um endereço local.
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+O primeiro elemento:
+
+```text
+"127.0.0.1"
+```
+
+é o endereço IP local.
+
+O segundo:
+
+```text
+4444
+```
+
+é a porta local.
+
+Portanto:
+
+```text
+127.0.0.1:4444
+```
+
+representa o endpoint local no qual o servidor será disponibilizado.
+
+---
+
+### 4. `listen()`
+
+Coloca o socket TCP em modo de escuta.
+
+```python
+server.listen(10)
+```
+
+O argumento:
+
+```text
+10
+```
+
+representa o `backlog`, relacionado à fila de conexões pendentes.
+
+Importante:
+
+```text
+listen()
+```
+
+não aceita uma conexão.
+
+Ele prepara o socket para receber conexões.
+
+---
+
+### 5. `accept()`
+
+Aceita uma conexão pendente.
+
+```python
+client, address = server.accept()
+```
+
+O método retorna dois valores:
+
+```text
+client
+address
+```
+
+`client` é um **novo socket** utilizado para conversar com aquele cliente.
+
+`address` contém o endereço do cliente.
+
+A grande ideia é:
+
+```text
+server
+  ↓
+fica escutando
+
+client
+  ↓
+representa uma conexão específica
+```
+
+---
+
+### 6. `recv()` / `send()`
+
+Depois da conexão estabelecida, os dados podem ser trocados.
+
+```python
+data = client.recv(1024)
+```
+
+O argumento:
+
+```text
+1024
+```
+
+é o tamanho máximo de bytes que aquela chamada tentará receber.
+
+Não significa:
+
+> "receba exatamente 1024 bytes".
+
+Significa:
+
+> "receba no máximo 1024 bytes".
+
+---
+
+Para enviar:
+
+```python
+client.sendall(b"Hello\n")
+```
+
+O argumento:
+
+```text
+b"Hello\n"
+```
+
+é um objeto `bytes`.
+
+`sendall()` tenta enviar todos os bytes fornecidos, até terminar ou ocorrer um erro.
+
+---
+
+### 7. `shutdown()`
+
+Pode indicar que determinada direção da comunicação não será mais utilizada.
+
+```python
+client.shutdown(socket.SHUT_RDWR)
+```
+
+O argumento:
+
+```text
+socket.SHUT_RDWR
+```
+
+indica:
+
+```text
+SHUT_RD
+    ↓
+desabilita leitura
+
+SHUT_WR
+    ↓
+desabilita escrita
+
+SHUT_RDWR
+    ↓
+ambos
+```
+
+---
+
+### 8. `close()`
+
+Fecha o descritor/socket no processo.
+
+```python
+client.close()
+```
+
+Depois disso, aquele objeto não deve mais ser utilizado para comunicação.
+
+---
+
+## 42.4 TCP client: o fluxo completo
+
+No cliente, o fluxo normalmente é:
+
+```text
+socket()
+   ↓
+connect()
+   ↓
+send()/sendall()
+   ↓
+recv()
+   ↓
+shutdown()
+   ↓
+close()
+```
+
+Exemplo:
+
+```python
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+
+client.connect(("127.0.0.1", 4444))
+
+client.sendall(b"PING\n")
+
+response = client.recv(1024)
+
+print(response.decode())
+
+client.close()
+```
+
+### Primeira etapa
+
+```python
+client = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_STREAM
+)
+```
+
+Cria um socket IPv4 orientado a fluxo.
+
+---
+
+### Segunda etapa
+
+```python
+client.connect(("127.0.0.1", 4444))
+```
+
+O argumento é uma tupla:
+
+```python
+("127.0.0.1", 4444)
+```
+
+O primeiro elemento é o IP de destino.
+
+O segundo é a porta de destino.
+
+---
+
+### Terceira etapa
+
+```python
+client.sendall(b"PING\n")
+```
+
+Envia os bytes:
+
+```text
+PING\n
+```
+
+O `\n` pode funcionar como delimitador definido pelo protocolo da aplicação.
+
+---
+
+### Quarta etapa
+
+```python
+response = client.recv(1024)
+```
+
+Recebe até 1024 bytes.
+
+Novamente:
+
+```text
+1024 ≠ tamanho obrigatório
+```
+
+A chamada pode retornar menos bytes.
+
+---
+
+### Quinta etapa
+
+```python
+print(response.decode())
+```
+
+`response` é `bytes`.
+
+Por isso usamos:
+
+```python
+.decode()
+```
+
+para transformar os bytes em texto.
+
+---
+
+### Sexta etapa
+
+```python
+client.close()
+```
+
+Fecha o socket.
+
+---
+
+## 42.5 TCP não possui mensagens
+
+Esse é um dos conceitos mais importantes de toda a matéria.
+
+Se você fizer:
+
+```python
+sock.sendall(b"ABC")
+sock.sendall(b"DEF")
+```
+
+o TCP não preserva necessariamente:
+
+```text
+ABC
+DEF
+```
+
+do outro lado.
+
+O receptor pode receber:
+
+```text
+ABCDEF
+```
+
+ou:
+
+```text
+AB
+CDEF
+```
+
+ou:
+
+```text
+ABCDE
+F
+```
+
+ou outra divisão válida.
+
+Por isso precisamos de um protocolo de aplicação.
+
+---
+
+## 42.6 Framing: transformando bytes em mensagens
+
+Uma solução simples é utilizar delimitador.
+
+Exemplo:
+
+```text
+PING\n
+INFO\n
+ECHO ola\n
+QUIT\n
+```
+
+O `\n` informa:
+
+```text
+fim desta mensagem
+```
+
+O servidor pode manter um buffer:
+
+```python
+buffer += data
+```
+
+E procurar:
+
+```python
+b"\n"
+```
+
+Quando encontrar:
+
+```text
+mensagem completa
+```
+
+O que sobra continua no buffer.
+
+---
+
+## 42.7 Outra solução: tamanho antes dos dados
+
+Podemos enviar:
+
+```text
+[TAMANHO][DADOS]
+```
+
+Por exemplo:
+
+```text
+00000005HELLO
+```
+
+Conceitualmente:
+
+```text
+header
+  ↓
+5 bytes
+
+payload
+  ↓
+HELLO
+```
+
+Isso é muito útil para protocolos binários e transferência de arquivos.
+
+O importante é lembrar:
+
+```text
+TCP fornece bytes
+seu protocolo define mensagens
+```
+
+---
+
+## 42.8 TCP x UDP
+
+A decisão começa normalmente aqui:
+
+|Característica|TCP|UDP|
+|---|---|---|
+|Conexão TCP|Sim|Não|
+|Fluxo de bytes|Sim|Não|
+|Datagramas|Não|Sim|
+|Entrega confiável|Sim|Não|
+|Ordenação|Sim|Não|
+|Retransmissão|Sim|Não|
+|Preserva fronteira de mensagem|Não|Sim|
+|Overhead|Maior|Menor|
+|Uso comum|HTTP, SSH, arquivos|DNS, jogos, streaming|
+
+Não significa que UDP seja simplesmente "melhor" ou TCP seja simplesmente "melhor".
+
+A escolha depende dos requisitos da aplicação.
+
+---
+
+## 42.9 Blocking, timeout e non-blocking
+
+Por padrão, muitas operações de socket são bloqueantes.
+
+Por exemplo:
+
+```python
+data = client.recv(1024)
+```
+
+Se não houver dados, o programa pode ficar esperando.
+
+Podemos definir timeout:
+
+```python
+client.settimeout(5)
+```
+
+O argumento:
+
+```text
+5
+```
+
+representa aproximadamente 5 segundos.
+
+Depois desse período, uma operação bloqueante pode gerar uma exceção de timeout.
+
+Também podemos utilizar:
+
+```python
+client.setblocking(False)
+```
+
+Nesse modo, uma operação que não possa ser realizada imediatamente pode gerar:
+
+```text
+BlockingIOError
+```
+
+Esses três modelos devem ser diferenciados:
+
+```text
+blocking
+    ↓
+espera
+
+timeout
+    ↓
+espera até determinado limite
+
+non-blocking
+    ↓
+não espera indefinidamente
+```
+
+---
+
+## 42.10 Concorrência
+
+Um servidor simples pode funcionar assim:
+
+```text
+aceita cliente
+   ↓
+atende cliente
+   ↓
+cliente termina
+   ↓
+aceita próximo
+```
+
+Problema:
+
+```text
+Cliente A
+   ↓
+recv()
+   ↓
+esperando...
+```
+
+Enquanto isso:
+
+```text
+Cliente B
+   ↓
+esperando atendimento
+```
+
+Uma solução é utilizar threads:
+
+```text
+Servidor
+   │
+   ├── Cliente A → Thread A
+   │
+   ├── Cliente B → Thread B
+   │
+   └── Cliente C → Thread C
+```
+
+Outra possibilidade:
+
+```text
+selectors
+```
+
+onde uma thread monitora vários sockets.
+
+Ou:
+
+```text
+asyncio
+```
+
+onde o event loop coordena várias operações assíncronas.
+
+---
+
+## 42.11 Thread, `selectors` ou `asyncio`?
+
+Uma visão prática:
+
+|Situação|Abordagem|
+|---|---|
+|Aprendizado inicial|Thread|
+|Poucos clientes|Thread|
+|I/O bloqueante existente|Thread|
+|Muitos sockets|`selectors`|
+|Aplicação altamente I/O-bound|`asyncio`|
+|Bibliotecas já assíncronas|`asyncio`|
+|Controle baixo nível de readiness|`selectors`|
+
+Não existe uma solução universal.
+
+A arquitetura depende da aplicação.
+
+---
+
+## 42.12 TLS
+
+TCP não fornece criptografia.
+
+Portanto:
+
+```text
+TCP
+```
+
+sozinho não significa:
+
+```text
+dados protegidos
+```
+
+Para proteger a comunicação podemos adicionar TLS:
+
+```text
+Aplicação
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+IP
+```
+
+Em Python:
+
+```python
+import ssl
+
+context = ssl.create_default_context()
+```
+
+O `ssl.create_default_context()` cria um contexto TLS com configurações de segurança apropriadas para o uso padrão do contexto.
+
+Em um cliente TLS, podemos utilizar:
+
+```python
+secure_socket = context.wrap_socket(
+    sock,
+    server_hostname="example.com"
+)
+```
+
+O primeiro argumento:
+
+```text
+sock
+```
+
+é o socket TCP existente.
+
+O segundo:
+
+```text
+server_hostname
+```
+
+informa o hostname esperado pelo servidor e participa da validação de identidade/SNI.
+
+O resultado é um socket envolvido por TLS.
+
+Mentalmente:
+
+```text
+socket TCP
+    ↓
+TLS
+    ↓
+socket protegido
+```
+
+---
+
+## 42.13 IPv4 e IPv6
+
+IPv4:
+
+```python
+socket.AF_INET
+```
+
+Exemplo:
+
+```text
+127.0.0.1
+```
+
+IPv6:
+
+```python
+socket.AF_INET6
+```
+
+Exemplo:
+
+```text
+::1
+```
+
+Portanto:
+
+```text
+127.0.0.1
+   ↓
+IPv4 loopback
+
+::1
+   ↓
+IPv6 loopback
+```
+
+Um servidor que escuta:
+
+```text
+127.0.0.1
+```
+
+não é automaticamente equivalente a um servidor que escuta:
+
+```text
+0.0.0.0
+```
+
+Da mesma forma:
+
+```text
+::
+```
+
+pode disponibilizar o serviço em interfaces IPv6 dependendo da configuração do sistema.
+
+Sempre pense:
+
+```text
+qual endereço?
+qual interface?
+qual família?
+qual alcance?
+```
+
+---
+
+## 42.14 Unix sockets
+
+Nem toda comunicação precisa utilizar IP.
+
+Para comunicação entre processos na mesma máquina podemos utilizar:
+
+```python
+socket.AF_UNIX
+```
+
+Modelo:
+
+```text
+Processo A
+    ↓
+Unix socket
+    ↓
+Processo B
+```
+
+Não existe necessariamente:
+
+```text
+IP:PORTA
+```
+
+como acontece com TCP/IP.
+
+É bastante útil para IPC local.
+
+---
+
+## 42.15 Broadcast e multicast
+
+UDP também permite modelos diferentes de comunicação.
+
+### Unicast
+
+```text
+A → B
+```
+
+Um emissor para um destinatário.
+
+---
+
+### Broadcast
+
+```text
+        ┌→ B
+A ──────┼→ C
+        └→ D
+```
+
+Um emissor envia para vários hosts de uma rede.
+
+---
+
+### Multicast
+
+```text
+        ┌→ B
+A ──────┼→ C
+        └→ D
+```
+
+Mas os destinatários participam de um grupo multicast específico.
+
+Esses mecanismos são diferentes de simplesmente abrir várias conexões TCP.
+
+---
+
+## 42.16 Diagnóstico
+
+Quando um socket não funciona, não comece imediatamente alterando o código.
+
+Primeiro descubra **em qual camada está o problema**.
+
+### Processo
+
+```bash
+ps aux | grep python
+```
+
+---
+
+### Portas TCP em escuta
+
+```bash
+ss -ltn
+```
+
+---
+
+### Portas com processo
+
+```bash
+ss -ltnp
+```
+
+---
+
+### Porta específica
+
+```bash
+lsof -i :4444
+```
+
+---
+
+### Conexões existentes
+
+```bash
+ss -tan
+```
+
+---
+
+### UDP
+
+```bash
+ss -lun
+```
+
+---
+
+### Teste simples
+
+```bash
+nc 127.0.0.1 4444
+```
+
+O `nc` pode ser usado para testar uma conexão TCP diretamente.
+
+---
+
+### Captura de tráfego
+
+```bash
+sudo tcpdump -i any port 4444
+```
+
+O argumento:
+
+```text
+-i any
+```
+
+instrui o `tcpdump` a capturar nas interfaces disponíveis selecionadas pelo sistema através de `any`.
+
+O filtro:
+
+```text
+port 4444
+```
+
+limita a captura ao tráfego relacionado à porta 4444.
+
+---
+
+## 42.17 Erros que você deve reconhecer rapidamente
+
+### `OSError: [Errno 98] Address already in use`
+
+Normalmente significa que o endereço/porta que você tentou utilizar já está ocupado ou não pode ser reutilizado naquele momento.
+
+Verifique:
+
+```bash
+ss -ltnp | grep :4444
+```
+
+ou:
+
+```bash
+lsof -i :4444
+```
+
+---
+
+### `ConnectionRefusedError`
+
+Normalmente indica que não existe um serviço aceitando conexões naquele endereço/porta ou que a conexão foi recusada.
+
+Pense:
+
+```text
+IP está correto?
+porta está correta?
+servidor está rodando?
+server fez bind?
+server fez listen?
+```
+
+---
+
+### `TimeoutError`
+
+A operação demorou mais que o limite configurado.
+
+Pense:
+
+```text
+host acessível?
+porta acessível?
+servidor respondeu?
+firewall?
+timeout pequeno demais?
+```
+
+---
+
+### `ConnectionResetError`
+
+A conexão TCP foi resetada de maneira abrupta.
+
+Pode acontecer quando o outro lado encerra/reset a conexão ou em outras situações relacionadas à pilha TCP.
+
+---
+
+### `BrokenPipeError`
+
+O programa tentou escrever em uma conexão que já não estava disponível para escrita.
+
+---
+
+### `recv()` retorna:
+
+```python
+b""
+```
+
+Isso possui um significado muito importante em TCP.
+
+Normalmente significa que o peer realizou um encerramento ordenado da conexão.
+
+Não significa:
+
+```text
+"recebi uma mensagem vazia"
+```
+
+É uma indicação de fim do fluxo.
+
+---
+
+## 42.18 Segurança
+
+Uma regra deve ficar gravada:
+
+> Tudo que vem da rede deve ser tratado como entrada não confiável.
+
+Mesmo que seja:
+
+```text
+"meu cliente Python"
+```
+
+o servidor não deve confiar cegamente.
+
+Um atacante pode simplesmente criar:
+
+```text
+outro cliente
+```
+
+e enviar dados manualmente.
+
+Por isso devemos validar:
+
+```text
+mensagens
+tamanhos
+comandos
+arquivos
+nomes
+permissões
+autenticação
+estado da conexão
+```
+
+---
+
+## 42.19 Autenticação x autorização
+
+Esses conceitos não são iguais.
+
+### Autenticação
+
+Pergunta:
+
+```text
+Quem é você?
+```
+
+Exemplo:
+
+```text
+usuário + senha
+certificado
+token
+```
+
+---
+
+### Autorização
+
+Pergunta:
+
+```text
+O que você pode fazer?
+```
+
+Exemplo:
+
+```text
+usuário comum
+    ↓
+INFO
+ECHO
+
+administrador
+    ↓
+INFO
+ECHO
+LIST
+DELETE
+```
+
+Mentalmente:
+
+```text
+Autenticação
+    ↓
+identidade
+
+Autorização
+    ↓
+permissões
+```
+
+---
+
+## 42.20 Transferência de arquivos
+
+Uma transferência robusta não deve depender apenas de:
+
+```text
+"quando a conexão fechar, o arquivo terminou"
+```
+
+Uma abordagem melhor é:
+
+```text
+[TAMANHO]
+[DADOS]
+```
+
+Por exemplo:
+
+```text
+8 bytes
+    ↓
+tamanho do arquivo
+
+N bytes
+    ↓
+conteúdo
+```
+
+O receptor sabe exatamente quantos bytes precisa receber.
+
+Depois pode verificar integridade utilizando SHA-256:
+
+```text
+arquivo recebido
+      ↓
+SHA-256
+      ↓
+hash esperado?
+      ↓
+sim → integridade confirmada
+não → arquivo inconsistente
+```
+
+Importante:
+
+```text
+SHA-256 ≠ criptografia
+```
+
+Ele não substitui TLS.
+
+---
+
+## 42.21 Protocolo binário
+
+Em protocolos binários podemos utilizar:
+
+```python
+import struct
+
+header = struct.pack("!IQ", 1, 5000)
+```
+
+Aqui:
+
+```text
+!
+    ↓
+network byte order / big-endian
+
+I
+    ↓
+inteiro sem sinal de 4 bytes
+
+Q
+    ↓
+inteiro sem sinal de 8 bytes
+```
+
+Os valores:
+
+```text
+1
+5000
+```
+
+são serializados para bytes.
+
+Depois podemos utilizar:
+
+```python
+version, size = struct.unpack("!IQ", header)
+```
+
+O `unpack()` interpreta os bytes novamente de acordo com o formato.
+
+O ponto principal:
+
+```text
+dados estruturados
+      ↓
+serialização
+      ↓
+bytes
+      ↓
+socket
+      ↓
+rede
+      ↓
+bytes
+      ↓
+desserialização
+      ↓
+dados estruturados
+```
+
+---
+
+## 42.22 Testes
+
+Um servidor socket não deve ser testado apenas assim:
+
+```text
+"funcionou uma vez"
+```
+
+Devemos testar:
+
+```text
+mensagem normal
+mensagem fragmentada
+várias mensagens juntas
+mensagem vazia
+mensagem grande
+cliente desconectando
+cliente enviando dados inválidos
+timeout
+vários clientes
+arquivo vazio
+arquivo grande
+arquivo corrompido
+autenticação inválida
+permissão negada
+```
+
+Um dos testes mais importantes é lembrar que TCP pode fragmentar os dados.
+
+Por exemplo, o cliente pode enviar:
+
+```python
+sock.sendall(b"PI")
+sock.sendall(b"NG\n")
+```
+
+O servidor precisa conseguir reconstruir:
+
+```text
+PING
+```
+
+---
+
+## 42.23 Performance
+
+Quando um servidor começa a crescer, precisamos observar:
+
+```text
+latência
+throughput
+CPU
+RAM
+rede
+disco
+número de conexões
+buffers
+threads
+```
+
+Mais threads não significa automaticamente mais performance.
+
+Podemos ter:
+
+```text
+100 clientes
+    ↓
+100 threads
+    ↓
+muito contexto
+    ↓
+mais overhead
+```
+
+Em outras situações:
+
+```text
+10.000 conexões
+    ↓
+selectors / asyncio
+    ↓
+menos threads
+    ↓
+modelo orientado a eventos
+```
+
+A arquitetura precisa ser escolhida de acordo com o workload.
+
+---
+
+## 42.24 Observabilidade
+
+Um servidor real precisa permitir responder:
+
+```text
+Quantos clientes estão conectados?
+
+Quantas requisições estão falhando?
+
+Quanto tempo uma requisição demora?
+
+Qual comando está gerando erro?
+
+Quantos downloads estão ativos?
+
+Quantos bytes estão sendo transferidos?
+```
+
+Para isso utilizamos:
+
+```text
+logs
+metrics
+traces
+```
+
+Uma ferramenta básica em Python:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+logging.info("Servidor iniciado")
+```
+
+Aqui:
+
+```python
+logging.basicConfig(...)
+```
+
+configura o sistema básico de logging.
+
+O parâmetro:
+
+```text
+level=logging.INFO
+```
+
+define o nível mínimo de mensagens que serão registradas.
+
+Depois:
+
+```python
+logging.info(...)
+```
+
+registra uma mensagem no nível `INFO`.
+
+---
+
+## 42.25 O mapa completo
+
+Agora podemos juntar praticamente tudo:
+
+```text
+                         APLICAÇÃO
+                             │
+                             ▼
+                    PROTOCOLO DA APP
+                             │
+                 ┌───────────┴───────────┐
+                 │                       │
+             texto                    binário
+                 │                       │
+          framing                  struct/JSON
+                 │                       │
+                 └───────────┬───────────┘
+                             ▼
+                          SOCKET
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+             TCP            UDP          AF_UNIX
+              │              │
+              │              ├── broadcast
+              │              └── multicast
+              │
+              ├── IPv4
+              └── IPv6
+                             │
+                             ▼
+                         REDE / IPC
+```
+
+E podemos adicionar segurança:
+
+```text
+Aplicação
+    ↓
+Autenticação
+    ↓
+Autorização
+    ↓
+TLS
+    ↓
+Socket
+    ↓
+TCP
+    ↓
+IP
+    ↓
+Rede
+```
+
+---
+
+## 42.26 Árvore de decisão para novos projetos
+
+Quando você começar um novo projeto de sockets, pense nesta sequência.
+
+### 1. Preciso comunicar processos na mesma máquina?
+
+Se sim:
+
+```text
+AF_UNIX
+```
+
+pode ser uma boa opção.
+
+Se não:
+
+```text
+TCP / UDP
+```
+
+---
+
+### 2. Preciso de confiabilidade e ordenação?
+
+Se sim:
+
+```text
+TCP
+```
+
+---
+
+### 3. Preciso de datagramas e aceito lidar com perda/ordenação por conta própria?
+
+Considere:
+
+```text
+UDP
+```
+
+---
+
+### 4. Preciso de criptografia?
+
+Se sim:
+
+```text
+TLS
+```
+
+---
+
+### 5. Tenho mensagens dentro do TCP?
+
+Então preciso definir framing:
+
+```text
+delimiter
+```
+
+ou:
+
+```text
+length-prefix
+```
+
+ou:
+
+```text
+fixed-size
+```
+
+---
+
+### 6. Tenho vários clientes?
+
+Considere:
+
+```text
+threading
+ThreadPoolExecutor
+selectors
+asyncio
+```
+
+---
+
+### 7. Estou transferindo arquivos?
+
+Defina pelo menos:
+
+```text
+nome/metadados
+tamanho
+dados
+integridade
+limites
+```
+
+---
+
+### 8. Tenho autenticação?
+
+Defina:
+
+```text
+quem é o usuário?
+```
+
+e depois:
+
+```text
+o que esse usuário pode fazer?
+```
+
+---
+
+### 9. O serviço ficará exposto na rede?
+
+Então pense em:
+
+```text
+TLS
+autenticação
+autorização
+rate limiting
+timeouts
+limites de tamanho
+logs
+privilégios mínimos
+validação de entrada
+```
+
+---
+
+### 10. Preciso saber se está funcionando?
+
+Implemente:
+
+```text
+logs
+métricas
+health check
+monitoramento
+```
+
+---
+
+## 42.27 O que você NÃO deve confundir
+
+|Conceito|Não confundir com|
+|---|---|
+|`socket()`|conexão estabelecida|
+|`bind()`|`connect()`|
+|`listen()`|`accept()`|
+|listening socket|client socket|
+|TCP|protocolo da aplicação|
+|TCP|criptografia|
+|TLS|autenticação de usuário|
+|autenticação|autorização|
+|`recv(1024)`|receber exatamente 1024 bytes|
+|`send()`|enviar uma mensagem completa|
+|`sendall()`|delimitação de mensagens|
+|`close()`|`shutdown()`|
+|timeout|non-blocking|
+|thread|processo|
+|concorrência|paralelismo|
+|IPv4|IPv6|
+|UDP|comunicação confiável|
+|SHA-256|criptografia|
+|hash|senha criptografada|
+|`SO_REUSEADDR`|ignorar qualquer conflito de porta|
+|socket|protocolo|
+
+Essa tabela é especialmente importante porque muitos erros de implementação acontecem justamente por misturar esses conceitos.
+
+---
+
+## 42.28 O fluxo que você deve conseguir visualizar mentalmente
+
+Imagine:
+
+```text
+Cliente
+   │
+   │ socket()
+   │
+   ▼
+Socket local
+   │
+   │ connect()
+   │
+   ▼
+Rede
+   │
+   ▼
+Servidor
+   │
+   │ socket()
+   │ bind()
+   │ listen()
+   │
+   ▼
+Fila de conexões
+   │
+   │ accept()
+   ▼
+Socket do cliente
+   │
+   │ recv()
+   ▼
+Protocolo da aplicação
+   │
+   │ valida
+   │ autentica
+   │ autoriza
+   ▼
+Lógica da aplicação
+   │
+   │ resposta
+   ▼
+sendall()
+   │
+   ▼
+TCP
+   │
+   ▼
+Rede
+   │
+   ▼
+Cliente
+```
+
+Esse é o modelo mental que você deve levar para os próximos projetos.
+
+---
+
+## 42.29 Checklist para criar um servidor TCP
+
+Antes de considerar um servidor pronto, pergunte:
+
+```text
+[ ] socket foi criado corretamente?
+[ ] família de endereço está correta?
+[ ] tipo do socket está correto?
+[ ] bind está correto?
+[ ] endereço está limitado à interface necessária?
+[ ] listen foi configurado?
+[ ] accept está sendo tratado?
+[ ] clientes possuem tratamento isolado?
+[ ] recv possui limites?
+[ ] existe framing?
+[ ] mensagens inválidas são rejeitadas?
+[ ] existe timeout?
+[ ] desconexões são tratadas?
+[ ] sendall pode gerar exceção?
+[ ] sockets são fechados?
+[ ] existe shutdown quando necessário?
+[ ] há controle de concorrência?
+[ ] existe limite de conexões?
+[ ] existe limite de tamanho?
+[ ] existe autenticação quando necessária?
+[ ] existe autorização?
+[ ] TLS é necessário?
+[ ] entradas são validadas?
+[ ] arquivos são tratados com segurança?
+[ ] logs existem?
+[ ] segredos não aparecem nos logs?
+[ ] existem testes?
+[ ] existe monitoramento?
+```
+
+---
+
+## 42.30 A ideia mais importante de toda a matéria
+
+Se você esquecer detalhes específicos da API, tente lembrar desta sequência:
+
+```text
+1. Escolher o tipo de comunicação
+        ↓
+2. Criar o socket
+        ↓
+3. Configurar
+        ↓
+4. Definir endereço
+        ↓
+5. Conectar ou escutar
+        ↓
+6. Trocar bytes
+        ↓
+7. Interpretar esses bytes com um protocolo
+        ↓
+8. Validar os dados
+        ↓
+9. Autenticar e autorizar quando necessário
+        ↓
+10. Tratar erros e desconexões
+        ↓
+11. Controlar concorrência e recursos
+        ↓
+12. Proteger com TLS quando necessário
+        ↓
+13. Testar
+        ↓
+14. Monitorar
+```
+
+O socket é apenas uma parte do sistema.
+
+Um servidor realmente robusto é a combinação de:
+
+```text
+Socket
++
+Transporte
++
+Protocolo
++
+Lógica
++
+Concorrência
++
+Segurança
++
+Tratamento de erros
++
+Testes
++
+Observabilidade
+```
+
+---
+
+## Resumo da Parte
+
+Depois de toda a sequência de estudos, o modelo mental final é:
+
+```text
+                    ┌──────────────────┐
+                    │    APLICAÇÃO     │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    PROTOCOLO     │
+                    │  framing/comandos│
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │      SOCKET      │
+                    └────────┬─────────┘
+                             │
+                ┌────────────┴────────────┐
+                ▼                         ▼
+              TCP                        UDP
+                │                         │
+                ▼                         ▼
+              IP / IPv4 / IPv6 / AF_UNIX
+                             │
+                             ▼
+                           REDE
+```
+
+E, quando necessário:
+
+```text
+Aplicação
+   ↓
+Autenticação
+   ↓
+Autorização
+   ↓
+TLS
+   ↓
+Socket
+   ↓
+TCP/UDP
+   ↓
+IP
+   ↓
+Rede
+```
+
+A principal conclusão é:
+
+> **Sockets fornecem a interface de comunicação; TCP/UDP fornecem o transporte; o protocolo da aplicação dá significado aos bytes; e a aplicação precisa cuidar de segurança, validação, concorrência, erros, testes e observabilidade.**
+

@@ -48681,3 +48681,1999 @@ Response
 
 ---
 
+# 41. Projeto final: cliente + servidor + protocolo + segurança
+
+Nesta parte vamos montar mentalmente um projeto que reúne praticamente tudo o que estudamos até agora.
+
+A ideia é criar um sistema de comunicação TCP com:
+
+- servidor;
+    
+- cliente;
+    
+- protocolo próprio;
+    
+- framing;
+    
+- autenticação;
+    
+- autorização;
+    
+- múltiplos clientes;
+    
+- transferência de arquivos;
+    
+- tratamento de erros;
+    
+- limites;
+    
+- TLS;
+    
+- logs;
+    
+- encerramento controlado.
+    
+
+Não vamos simplesmente jogar um código enorme na tela.
+
+Primeiro vamos entender **como o sistema é projetado**.
+
+---
+
+## 41.1. O projeto
+
+Vamos imaginar uma aplicação chamada:
+
+```text
+SocketHub
+```
+
+Ela permite que clientes se conectem ao servidor e executem operações.
+
+Por exemplo:
+
+```text
+AUTH
+INFO
+ECHO
+LIST
+DOWNLOAD
+QUIT
+```
+
+O fluxo geral será:
+
+```text
+Cliente
+   │
+   │ TCP
+   ▼
+Servidor
+   │
+   ├── autenticação
+   ├── autorização
+   ├── protocolo
+   ├── arquivos
+   └── logs
+```
+
+---
+
+## 41.2. Objetivo do protocolo
+
+O cliente e o servidor precisam concordar sobre:
+
+> **Como os dados serão estruturados?**
+
+Não basta dizer:
+
+```text
+"vamos enviar bytes"
+```
+
+Precisamos definir:
+
+- como uma mensagem começa;
+    
+- como termina;
+    
+- qual é o comando;
+    
+- quais são os argumentos;
+    
+- como o servidor responde;
+    
+- como erros são representados;
+    
+- como arquivos são transferidos;
+    
+- como sabemos o tamanho dos dados.
+    
+
+Isso é o protocolo da aplicação.
+
+---
+
+## 41.3. Protocolo textual inicial
+
+Para facilitar o estudo, podemos começar com mensagens terminadas por `\n`.
+
+Exemplo:
+
+```text
+AUTH allan senha
+```
+
+Depois:
+
+```text
+INFO
+```
+
+Depois:
+
+```text
+ECHO hello
+```
+
+O `\n` funciona como delimitador:
+
+```text
+AUTH allan senha\n
+INFO\n
+ECHO hello\n
+```
+
+Assim o servidor consegue identificar onde cada mensagem termina.
+
+---
+
+## 41.4. Por que não usar `recv()` como mensagem?
+
+Seria errado fazer:
+
+```python
+data = client.recv(1024)
+
+command = data.decode()
+```
+
+e assumir:
+
+```text
+1 recv()
+=
+1 comando
+```
+
+TCP não funciona assim.
+
+O cliente pode enviar:
+
+```text
+PING\nPONG\n
+```
+
+e o servidor receber tudo de uma vez:
+
+```text
+b"PING\nPONG\n"
+```
+
+Ou pode receber:
+
+```text
+b"PI"
+```
+
+e depois:
+
+```text
+b"NG\n"
+```
+
+Por isso precisamos de um buffer.
+
+---
+
+## 41.5. Buffer da sessão
+
+Podemos ter:
+
+```python
+buffer = b""
+```
+
+A cada `recv()`:
+
+```python
+buffer += data
+```
+
+Depois procuramos:
+
+```python
+b"\n"
+```
+
+Se existir:
+
+```text
+mensagem completa
+```
+
+podemos processá-la.
+
+O restante permanece no buffer.
+
+---
+
+## 41.6. Função para extrair mensagens
+
+Uma implementação simples:
+
+```python
+def extract_messages(buffer):
+    messages = []
+
+    while b"\n" in buffer:
+        message, buffer = buffer.split(b"\n", 1)
+        messages.append(message)
+
+    return messages, buffer
+```
+
+Vamos analisar cada linha.
+
+---
+
+### `def extract_messages(buffer):`
+
+```python
+def extract_messages(buffer):
+```
+
+Cria uma função chamada:
+
+```text
+extract_messages
+```
+
+Ela recebe:
+
+```text
+buffer
+```
+
+que contém bytes recebidos da rede.
+
+---
+
+### `messages = []`
+
+```python
+messages = []
+```
+
+Cria uma lista vazia.
+
+Ela armazenará as mensagens completas encontradas.
+
+---
+
+### `while b"\n" in buffer:`
+
+```python
+while b"\n" in buffer:
+```
+
+Enquanto existir o delimitador:
+
+```text
+\n
+```
+
+dentro do buffer, significa que existe pelo menos uma mensagem completa.
+
+---
+
+### `buffer.split(b"\n", 1)`
+
+```python
+message, buffer = buffer.split(b"\n", 1)
+```
+
+O primeiro parâmetro:
+
+```text
+b"\n"
+```
+
+é o separador.
+
+O segundo:
+
+```text
+1
+```
+
+é o número máximo de divisões.
+
+Isso é importante.
+
+Imagine:
+
+```text
+b"PING\nPONG\n"
+```
+
+Com:
+
+```python
+split(b"\n", 1)
+```
+
+obtemos:
+
+```text
+message → b"PING"
+buffer  → b"PONG\n"
+```
+
+Assim conseguimos processar uma mensagem por vez.
+
+---
+
+### `messages.append(message)`
+
+```python
+messages.append(message)
+```
+
+Adiciona a mensagem completa à lista.
+
+---
+
+### `return`
+
+```python
+return messages, buffer
+```
+
+Retorna dois valores:
+
+```text
+messages
+   ↓
+mensagens completas
+
+buffer
+   ↓
+dados incompletos restantes
+```
+
+---
+
+## 41.7. Exemplo do funcionamento
+
+Inicialmente:
+
+```text
+buffer = b""
+```
+
+Recebemos:
+
+```text
+b"PING\nPON"
+```
+
+Depois:
+
+```text
+messages = [b"PING"]
+buffer = b"PON"
+```
+
+Recebemos mais:
+
+```text
+b"G\n"
+```
+
+O buffer vira:
+
+```text
+b"PONG\n"
+```
+
+Então:
+
+```text
+messages = [b"PONG"]
+buffer = b""
+```
+
+Esse mecanismo é fundamental para protocolos sobre TCP.
+
+---
+
+## 41.8. Limite de tamanho da mensagem
+
+Existe um problema.
+
+Imagine um cliente malicioso enviando:
+
+```text
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...
+```
+
+sem nunca enviar:
+
+```text
+\n
+```
+
+O buffer poderia crescer indefinidamente.
+
+Por isso devemos definir:
+
+```python
+MAX_MESSAGE_SIZE = 64 * 1024
+```
+
+Vamos analisar:
+
+### `64`
+
+Quantidade base.
+
+### `1024`
+
+Multiplicação para converter KiB em bytes.
+
+Portanto:
+
+```text
+64 × 1024
+=
+65.536 bytes
+```
+
+aproximadamente 64 KiB.
+
+---
+
+## 41.9. Verificando o limite
+
+Podemos fazer:
+
+```python
+if len(buffer) > MAX_MESSAGE_SIZE:
+    raise ValueError("Mensagem muito grande")
+```
+
+### `len(buffer)`
+
+Retorna a quantidade de elementos do buffer.
+
+Como o buffer contém `bytes`, o resultado representa a quantidade de bytes.
+
+### `MAX_MESSAGE_SIZE`
+
+É o limite definido pela aplicação.
+
+### `>`
+
+Verifica se o tamanho ultrapassou o limite.
+
+Se ultrapassar:
+
+```python
+raise ValueError(...)
+```
+
+gera uma exceção.
+
+---
+
+# 41.10. Estrutura do protocolo
+
+Nosso protocolo pode ser:
+
+```text
+AUTH <usuario> <senha>
+INFO
+ECHO <texto>
+LIST
+DOWNLOAD <arquivo>
+QUIT
+```
+
+Respostas:
+
+```text
+OK <dados>
+ERROR <codigo> <mensagem>
+```
+
+Por exemplo:
+
+```text
+OK autenticado
+```
+
+ou:
+
+```text
+ERROR AUTH_REQUIRED autenticacao necessaria
+```
+
+---
+
+## 41.11. Comando `AUTH`
+
+O cliente envia:
+
+```text
+AUTH allan senha
+```
+
+O servidor:
+
+```text
+recebe
+  ↓
+interpreta
+  ↓
+extrai usuário
+  ↓
+verifica credencial
+  ↓
+cria sessão autenticada
+```
+
+Se estiver correto:
+
+```text
+OK autenticado
+```
+
+Se estiver errado:
+
+```text
+ERROR AUTH_FAILED credenciais invalidas
+```
+
+---
+
+## 41.12. Comando `INFO`
+
+Depois de autenticado:
+
+```text
+INFO
+```
+
+O servidor pode retornar:
+
+```text
+OK SocketHub/1.0
+```
+
+Mas o servidor precisa decidir se `INFO` exige autenticação.
+
+Essa é uma regra do protocolo.
+
+---
+
+## 41.13. Comando `ECHO`
+
+O cliente:
+
+```text
+ECHO hello mundo
+```
+
+Servidor:
+
+```text
+OK hello mundo
+```
+
+Esse comando é simples, mas excelente para testar:
+
+- conexão;
+    
+- framing;
+    
+- protocolo;
+    
+- múltiplas mensagens;
+    
+- concorrência.
+    
+
+---
+
+## 41.14. Comando `LIST`
+
+O cliente:
+
+```text
+LIST
+```
+
+O servidor poderia retornar:
+
+```text
+OK arquivo1.txt
+arquivo2.pdf
+arquivo3.zip
+```
+
+Porém aqui aparece uma questão importante:
+
+> Como sabemos onde termina a resposta?
+
+Isso mostra novamente que **a resposta também precisa de framing**.
+
+Não basta criar framing somente para requisições.
+
+---
+
+## 41.15. Framing da resposta
+
+Uma solução simples seria:
+
+```text
+OK arquivo1.txt\n
+OK arquivo2.pdf\n
+OK arquivo3.zip\n
+END\n
+```
+
+O cliente continua lendo até receber:
+
+```text
+END
+```
+
+Outra possibilidade é usar tamanho prefixado.
+
+Por exemplo:
+
+```text
+[TAMANHO][DADOS]
+```
+
+Protocolos maiores normalmente precisam definir claramente como respostas complexas serão delimitadas.
+
+---
+
+# 41.16. Comando `DOWNLOAD`
+
+Agora começa uma operação mais interessante.
+
+O cliente envia:
+
+```text
+DOWNLOAD arquivo.pdf
+```
+
+O servidor precisa:
+
+1. verificar autenticação;
+    
+2. verificar autorização;
+    
+3. validar o nome do arquivo;
+    
+4. localizar o arquivo permitido;
+    
+5. descobrir o tamanho;
+    
+6. enviar metadados;
+    
+7. enviar os dados;
+    
+8. permitir que o cliente valide o resultado.
+    
+
+---
+
+## 41.17. Nunca confie diretamente no caminho recebido
+
+Um cliente poderia enviar:
+
+```text
+DOWNLOAD ../../../../etc/passwd
+```
+
+Se o servidor simplesmente fizer:
+
+```python
+open(filename, "rb")
+```
+
+poderá ocorrer **path traversal**.
+
+Por isso precisamos restringir os caminhos.
+
+---
+
+## 41.18. `Path.name`
+
+Uma defesa simples é:
+
+```python
+from pathlib import Path
+
+safe_name = Path(filename).name
+```
+
+O método:
+
+```python
+Path(filename).name
+```
+
+extrai somente o componente final do caminho.
+
+Por exemplo:
+
+```text
+../../arquivo.txt
+```
+
+pode resultar em:
+
+```text
+arquivo.txt
+```
+
+Isso ajuda, mas a segurança de armazenamento deve ser projetada de forma mais completa.
+
+O ideal é trabalhar com um diretório raiz controlado pelo servidor e validar que o caminho final permanece dentro desse diretório.
+
+---
+
+# 41.19. Diretório raiz de arquivos
+
+Imagine:
+
+```text
+storage/
+├── documento.pdf
+├── imagem.png
+└── backup.zip
+```
+
+O servidor define:
+
+```python
+STORAGE_DIR = Path("storage")
+```
+
+O cliente não deveria conseguir escolher arbitrariamente:
+
+```text
+/etc/passwd
+/home/alguem/secreto
+```
+
+A aplicação deve controlar quais arquivos estão disponíveis.
+
+---
+
+# 41.20. Autorização do download
+
+Antes de enviar:
+
+```text
+DOWNLOAD documento.pdf
+```
+
+o servidor verifica:
+
+```text
+cliente autenticado?
+       ↓
+      SIM
+       ↓
+possui DOWNLOAD?
+       ↓
+      SIM
+       ↓
+arquivo permitido?
+       ↓
+      SIM
+       ↓
+enviar
+```
+
+Se não possuir permissão:
+
+```text
+ERROR PERMISSION_DENIED
+```
+
+---
+
+# 41.21. Enviando o tamanho do arquivo
+
+O servidor pode descobrir:
+
+```python
+file_size = path.stat().st_size
+```
+
+Vamos analisar.
+
+### `path`
+
+É um objeto `Path`.
+
+### `.stat()`
+
+Solicita informações do arquivo ao sistema operacional.
+
+### `.st_size`
+
+Obtém o tamanho do arquivo em bytes.
+
+Por exemplo:
+
+```text
+arquivo.pdf
+↓
+1.572.864 bytes
+```
+
+---
+
+## 41.22. Cabeçalho binário
+
+Podemos utilizar `struct`:
+
+```python
+import struct
+
+header = struct.pack("!Q", file_size)
+```
+
+### `struct.pack()`
+
+Serializa um valor Python em bytes.
+
+### `"!Q"`
+
+O formato possui:
+
+```text
+!
+```
+
+network byte order, normalmente big-endian.
+
+E:
+
+```text
+Q
+```
+
+unsigned long long de 8 bytes.
+
+### `file_size`
+
+É o valor que será codificado.
+
+O resultado é um cabeçalho de:
+
+```text
+8 bytes
+```
+
+---
+
+# 41.23. Envio em chunks
+
+Não devemos fazer:
+
+```python
+data = file.read()
+client.sendall(data)
+```
+
+para arquivos gigantes.
+
+Isso pode consumir muita memória.
+
+É melhor:
+
+```python
+with path.open("rb") as file:
+    while True:
+        chunk = file.read(64 * 1024)
+
+        if not chunk:
+            break
+
+        client.sendall(chunk)
+```
+
+---
+
+## 41.24. `path.open("rb")`
+
+```python
+path.open("rb")
+```
+
+Abre o arquivo.
+
+### `"rb"`
+
+Significa:
+
+```text
+r → read
+b → binary
+```
+
+Portanto:
+
+```text
+read binary
+```
+
+O arquivo será lido como bytes.
+
+---
+
+## 41.25. `with`
+
+```python
+with path.open("rb") as file:
+```
+
+O `with` garante que o recurso seja fechado corretamente ao sair do bloco.
+
+Isso evita deixar o descritor do arquivo aberto desnecessariamente.
+
+---
+
+## 41.26. `file.read(64 * 1024)`
+
+```python
+chunk = file.read(64 * 1024)
+```
+
+O argumento:
+
+```text
+64 * 1024
+```
+
+define aproximadamente 64 KiB por leitura.
+
+O resultado é armazenado em:
+
+```text
+chunk
+```
+
+que contém os bytes lidos.
+
+---
+
+## 41.27. Detectando fim do arquivo
+
+```python
+if not chunk:
+    break
+```
+
+Quando não existem mais bytes para ler:
+
+```python
+file.read(...)
+```
+
+retorna:
+
+```python
+b""
+```
+
+Então saímos do loop.
+
+---
+
+# 41.28. Integridade do arquivo
+
+Depois da transferência, podemos verificar se o arquivo recebido é igual ao original.
+
+Uma técnica é SHA-256.
+
+Servidor:
+
+```python
+import hashlib
+
+sha256 = hashlib.sha256()
+```
+
+### `hashlib.sha256()`
+
+Cria um objeto responsável por calcular SHA-256.
+
+Depois, enquanto lemos:
+
+```python
+sha256.update(chunk)
+```
+
+O parâmetro:
+
+```text
+chunk
+```
+
+é o bloco de bytes que será incorporado ao cálculo.
+
+No final:
+
+```python
+digest = sha256.hexdigest()
+```
+
+`hexdigest()` transforma o resultado em uma representação hexadecimal.
+
+---
+
+## 41.29. SHA-256 não é criptografia
+
+É importante novamente:
+
+```text
+SHA-256 ≠ criptografia
+```
+
+SHA-256 pode ajudar a verificar:
+
+```text
+arquivo original
+       ↓
+SHA-256
+       ↓
+hash A
+
+arquivo recebido
+       ↓
+SHA-256
+       ↓
+hash B
+```
+
+Se:
+
+```text
+hash A == hash B
+```
+
+temos evidência de que os dados recebidos correspondem aos dados usados no cálculo.
+
+Mas SHA-256 não protege o conteúdo contra leitura.
+
+Para confidencialidade:
+
+```text
+TLS
+```
+
+é uma das ferramentas apropriadas.
+
+---
+
+# 41.30. Transferência completa
+
+Um protocolo mais robusto poderia usar:
+
+```text
+DOWNLOAD <arquivo>
+        ↓
+DOWNLOAD_OK
+        ↓
+[TAMANHO]
+        ↓
+[SHA-256]
+        ↓
+[DADOS]
+```
+
+O cliente sabe:
+
+```text
+quanto deve receber
+```
+
+e:
+
+```text
+qual integridade deve esperar
+```
+
+---
+
+# 41.31. Recebendo exatamente o cabeçalho
+
+No lado cliente:
+
+```python
+def recv_exactly(sock, size):
+    data = bytearray()
+
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+
+        if not chunk:
+            raise ConnectionError("Conexao encerrada")
+
+        data.extend(chunk)
+
+    return bytes(data)
+```
+
+Vamos analisar.
+
+---
+
+### `bytearray()`
+
+```python
+data = bytearray()
+```
+
+Cria um buffer mutável de bytes.
+
+Ele é útil porque podemos adicionar dados progressivamente.
+
+---
+
+### `len(data)`
+
+```python
+len(data)
+```
+
+Retorna quantos bytes já recebemos.
+
+---
+
+### `size - len(data)`
+
+```python
+size - len(data)
+```
+
+Calcula quantos bytes ainda faltam.
+
+---
+
+### `sock.recv(...)`
+
+```python
+chunk = sock.recv(size - len(data))
+```
+
+Solicita no máximo a quantidade restante.
+
+---
+
+### `data.extend(chunk)`
+
+```python
+data.extend(chunk)
+```
+
+Adiciona os bytes recebidos ao buffer.
+
+---
+
+### `bytes(data)`
+
+```python
+return bytes(data)
+```
+
+Converte o `bytearray` final em um objeto `bytes`.
+
+---
+
+# 41.32. Estado do protocolo durante download
+
+A sessão pode ter estados mais específicos:
+
+```text
+AUTHENTICATED
+      ↓
+WAITING_COMMAND
+      ↓
+DOWNLOADING
+      ↓
+WAITING_COMMAND
+```
+
+Isso evita interpretar dados do arquivo como se fossem comandos.
+
+Por exemplo:
+
+```text
+comando:
+DOWNLOAD arquivo.bin
+
+depois:
+dados binários
+```
+
+Durante a transferência, o servidor precisa saber:
+
+> **Esses bytes agora representam comandos ou conteúdo de arquivo?**
+
+Isso é uma questão de protocolo.
+
+---
+
+# 41.33. Máquina de estados
+
+Podemos visualizar:
+
+```text
+┌───────────────┐
+│   CONNECTED   │
+└───────┬───────┘
+        │
+        ▼
+┌───────────────┐
+│  WAITING_AUTH │
+└───────┬───────┘
+        │ AUTH_OK
+        ▼
+┌────────────────┐
+│ AUTHENTICATED  │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────┐
+│ WAITING_COMMAND│
+└───────┬────────┘
+        │
+        ├── INFO ────────► resposta
+        │
+        ├── ECHO ────────► resposta
+        │
+        ├── LIST ────────► resposta
+        │
+        └── DOWNLOAD
+                 │
+                 ▼
+          ┌──────────────┐
+          │ DOWNLOADING  │
+          └──────┬───────┘
+                 │
+                 ▼
+          WAITING_COMMAND
+```
+
+Esse conceito é muito importante em protocolos mais complexos.
+
+---
+
+# 41.34. Erros do protocolo
+
+Um protocolo também precisa definir erros.
+
+Por exemplo:
+
+```text
+ERROR AUTH_REQUIRED
+ERROR AUTH_FAILED
+ERROR PERMISSION_DENIED
+ERROR INVALID_COMMAND
+ERROR FILE_NOT_FOUND
+ERROR FILE_TOO_LARGE
+ERROR PROTOCOL_ERROR
+```
+
+Isso é melhor do que simplesmente:
+
+```text
+ERROR
+```
+
+porque o cliente consegue saber o motivo.
+
+---
+
+# 41.35. Não revelar informações desnecessárias
+
+Entretanto, mensagens de erro também precisam de cuidado.
+
+Evite revelar informações internas desnecessárias.
+
+Por exemplo:
+
+```text
+ERROR
+/home/mafiaboy/projeto/secreto/storage/private.db
+```
+
+pode revelar a estrutura interna do servidor.
+
+Uma resposta mais apropriada seria:
+
+```text
+ERROR FILE_NOT_FOUND
+```
+
+ou:
+
+```text
+ERROR ACCESS_DENIED
+```
+
+O log interno do servidor pode possuir mais detalhes, mas o cliente não precisa necessariamente receber tudo.
+
+---
+
+# 41.36. Logging
+
+O servidor pode registrar:
+
+```python
+import logging
+
+logging.basicConfig(
+    level=logging.INFO
+)
+```
+
+### `logging.basicConfig()`
+
+Configura o sistema básico de logging.
+
+### `level=logging.INFO`
+
+Define o nível mínimo de mensagens que serão exibidas.
+
+Por exemplo:
+
+```text
+INFO
+WARNING
+ERROR
+```
+
+dependendo da configuração.
+
+---
+
+## 41.37. Log de conexão
+
+Podemos registrar:
+
+```python
+logging.info(
+    "Cliente conectado: %s",
+    address
+)
+```
+
+O primeiro parâmetro:
+
+```text
+"Cliente conectado: %s"
+```
+
+é a mensagem.
+
+O segundo:
+
+```text
+address
+```
+
+é o valor utilizado pelo `%s`.
+
+Evitaríamos colocar senhas no log.
+
+Nunca faça:
+
+```python
+logging.info("Senha recebida: %s", password)
+```
+
+em um sistema real.
+
+---
+
+# 41.38. Identificador da conexão
+
+Uma aplicação pode gerar um identificador para cada conexão:
+
+```text
+connection_id = 8f3a2c
+```
+
+Assim:
+
+```text
+2026-10-04 18:10:00 INFO [8f3a2c] cliente conectado
+2026-10-04 18:10:02 INFO [8f3a2c] autenticacao concluida
+2026-10-04 18:10:10 INFO [8f3a2c] download iniciado
+2026-10-04 18:10:13 INFO [8f3a2c] download concluido
+```
+
+Isso facilita muito a investigação de problemas.
+
+---
+
+# 41.39. Limites de segurança
+
+Nosso projeto deve possuir limites.
+
+Por exemplo:
+
+```text
+MAX_MESSAGE_SIZE
+MAX_FILE_SIZE
+MAX_CONNECTIONS
+AUTH_TIMEOUT
+IDLE_TIMEOUT
+MAX_AUTH_ATTEMPTS
+```
+
+A existência desses limites reduz o risco de consumo ilimitado de recursos.
+
+---
+
+# 41.40. Autenticação
+
+Fluxo:
+
+```text
+cliente
+   │
+   │ AUTH
+   ▼
+servidor
+   │
+   ├── usuário existe?
+   ├── credencial válida?
+   └── conta permitida?
+          │
+          ▼
+       AUTH_OK
+```
+
+Depois:
+
+```text
+session.authenticated = True
+```
+
+e:
+
+```text
+session.username = username
+```
+
+---
+
+# 41.41. Autorização
+
+Quando o cliente pede:
+
+```text
+DOWNLOAD arquivo.pdf
+```
+
+não basta verificar:
+
+```text
+authenticated == True
+```
+
+Também precisamos:
+
+```text
+has_permission("DOWNLOAD")
+```
+
+Portanto:
+
+```text
+autenticado?
+   │
+   ├── NÃO → AUTH_REQUIRED
+   │
+   └── SIM
+         │
+         ▼
+possui DOWNLOAD?
+         │
+         ├── NÃO → PERMISSION_DENIED
+         │
+         └── SIM
+               │
+               ▼
+           executar
+```
+
+---
+
+# 41.42. TLS
+
+Em produção, devemos considerar TLS.
+
+Arquitetura:
+
+```text
+Aplicação
+   ↓
+Protocolo
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+IP
+```
+
+O cliente e o servidor estabelecem a camada TLS antes de trocar informações sensíveis.
+
+Isso protege:
+
+- credenciais;
+    
+- comandos;
+    
+- dados;
+    
+- arquivos;
+    
+- respostas.
+    
+
+---
+
+# 41.43. O servidor ainda precisa validar tudo
+
+Mesmo usando TLS:
+
+```text
+TLS
+  ≠
+entrada confiável
+```
+
+O cliente autenticado ainda pode ser malicioso.
+
+Por exemplo:
+
+```text
+usuário legítimo
+     ↓
+envia:
+DOWNLOAD ../../../../etc/passwd
+```
+
+TLS protege o transporte.
+
+Não transforma o cliente em confiável.
+
+---
+
+# 41.44. Defesa em profundidade
+
+Uma aplicação segura pode possuir:
+
+```text
+TLS
+ ↓
+autenticação
+ ↓
+autorização
+ ↓
+validação
+ ↓
+limites
+ ↓
+rate limiting
+ ↓
+logs
+ ↓
+auditoria
+ ↓
+least privilege
+```
+
+Se uma camada falhar, outras ainda podem impedir ou limitar o impacto.
+
+---
+
+# 41.45. Estrutura final do projeto
+
+Uma estrutura possível:
+
+```text
+sockethub/
+│
+├── server.py
+├── client.py
+│
+├── protocol.py
+├── session.py
+│
+├── auth.py
+├── authorization.py
+│
+├── commands.py
+├── storage.py
+│
+├── config.py
+│
+├── certs/
+│   ├── server.crt
+│   └── server.key
+│
+├── storage/
+│
+└── logs/
+```
+
+---
+
+# 41.46. Responsabilidade de cada arquivo
+
+### `server.py`
+
+Infraestrutura do servidor:
+
+```text
+socket
+bind
+listen
+accept
+concorrência
+shutdown
+```
+
+### `client.py`
+
+Cliente:
+
+```text
+connect
+TLS
+envio
+recebimento
+interface
+```
+
+### `protocol.py`
+
+Protocolo:
+
+```text
+framing
+parsing
+serialização
+respostas
+```
+
+### `session.py`
+
+Estado:
+
+```text
+socket
+buffer
+usuário
+estado
+permissões
+```
+
+### `auth.py`
+
+Autenticação:
+
+```text
+credenciais
+hash
+sessão
+```
+
+### `authorization.py`
+
+Autorização:
+
+```text
+permissões
+roles
+acesso
+```
+
+### `commands.py`
+
+Comandos:
+
+```text
+INFO
+ECHO
+LIST
+DOWNLOAD
+QUIT
+```
+
+### `storage.py`
+
+Arquivos:
+
+```text
+leitura
+escrita
+validação
+hash
+```
+
+### `config.py`
+
+Configurações:
+
+```text
+host
+port
+limites
+diretórios
+timeouts
+```
+
+---
+
+# 41.47. Fluxo completo do sistema
+
+Agora podemos acompanhar uma conexão inteira.
+
+```text
+1. Cliente inicia
+        ↓
+2. conecta ao servidor
+        ↓
+3. TLS é estabelecido
+        ↓
+4. servidor cria ClientSession
+        ↓
+5. cliente envia AUTH
+        ↓
+6. servidor autentica
+        ↓
+7. sessão passa para AUTHENTICATED
+        ↓
+8. cliente envia comando
+        ↓
+9. protocolo interpreta
+        ↓
+10. servidor verifica autorização
+        ↓
+11. aplicação executa operação
+        ↓
+12. resposta é serializada
+        ↓
+13. resposta é enviada
+        ↓
+14. cliente processa resposta
+```
+
+---
+
+# 41.48. Onde cada conceito que estudamos aparece?
+
+|Conceito|Onde aparece|
+|---|---|
+|`socket()`|criação do servidor/cliente|
+|`bind()`|endereço local|
+|`listen()`|espera por conexões|
+|`accept()`|criação de sessão|
+|`connect()`|cliente|
+|`sendall()`|envio|
+|`recv()`|recebimento|
+|TCP|transporte|
+|framing|protocolo|
+|buffer|sessão|
+|threads|concorrência|
+|selectors|alternativa de concorrência|
+|asyncio|alternativa assíncrona|
+|TLS|proteção do canal|
+|autenticação|identidade|
+|autorização|permissões|
+|`struct`|dados binários|
+|SHA-256|integridade|
+|logging|observabilidade|
+|timeout|controle de recursos|
+|`setsockopt()`|configuração|
+|`shutdown()`|encerramento|
+|`close()`|liberação de recursos|
+
+---
+
+# 41.49. O que diferencia um exercício de um servidor real?
+
+Um exercício pode ser:
+
+```python
+server.accept()
+client.recv()
+client.send()
+```
+
+Um servidor mais próximo de produção precisa pensar em:
+
+```text
+protocolo
+framing
+concorrência
+erros
+timeouts
+autenticação
+autorização
+TLS
+limites
+arquivos
+integridade
+logs
+monitoramento
+shutdown
+```
+
+Essa diferença é importante.
+
+Aprender sockets não significa apenas memorizar:
+
+```text
+socket()
+bind()
+listen()
+accept()
+```
+
+Significa entender **como construir um sistema de comunicação confiável sobre essas primitivas**.
+
+---
+
+# 41.50. Modelo mental definitivo
+
+Podemos resumir o projeto inteiro em camadas:
+
+```text
+┌──────────────────────────────────────┐
+│         LÓGICA DA APLICAÇÃO         │
+│  arquivos, comandos, operações      │
+├──────────────────────────────────────┤
+│            AUTORIZAÇÃO               │
+│       o que o usuário pode fazer?   │
+├──────────────────────────────────────┤
+│           AUTENTICAÇÃO              │
+│          quem é o usuário?          │
+├──────────────────────────────────────┤
+│             PROTOCOLO               │
+│   mensagens, framing, comandos      │
+├──────────────────────────────────────┤
+│               TLS                    │
+│      confidencialidade/integridade   │
+├──────────────────────────────────────┤
+│               TCP                    │
+│          fluxo confiável             │
+├──────────────────────────────────────┤
+│                IP                    │
+│       endereçamento da rede          │
+└──────────────────────────────────────┘
+```
+
+A aplicação fica no topo.
+
+O TCP não sabe o significado de `AUTH`, `DOWNLOAD` ou `DELETE`.
+
+O TLS não sabe quais permissões um usuário possui.
+
+A autorização não sabe como os pacotes são transportados.
+
+Cada camada possui sua responsabilidade.
+
+---
+
+## 41.51. Resumo da Parte
+
+Nesta parte projetamos um sistema completo de sockets.
+
+Aprendemos que:
+
+- um protocolo precisa definir como mensagens e respostas são estruturadas;
+    
+- TCP não fornece fronteiras de mensagens;
+    
+- precisamos de framing;
+    
+- buffers são necessários para lidar com mensagens fragmentadas;
+    
+- buffers precisam possuir limites;
+    
+- autenticação identifica o usuário;
+    
+- autorização controla suas operações;
+    
+- arquivos devem ser enviados em chunks;
+    
+- o tamanho do arquivo pode ser enviado antes dos dados;
+    
+- `struct` pode ser usado para representar metadados binários;
+    
+- SHA-256 pode ser utilizado para verificar integridade;
+    
+- SHA-256 não fornece criptografia;
+    
+- TLS protege os dados durante o transporte;
+    
+- caminhos recebidos do cliente não devem ser confiados;
+    
+- path traversal deve ser tratado;
+    
+- erros precisam fazer parte do protocolo;
+    
+- logs ajudam a investigar problemas;
+    
+- senhas e tokens não devem ser registrados em logs;
+    
+- timeouts e limites ajudam a controlar consumo de recursos;
+    
+- cada conexão pode possuir uma sessão própria;
+    
+- sessões podem possuir buffers e estados próprios;
+    
+- servidores podem utilizar threads, pools, `selectors` ou `asyncio`;
+    
+- graceful shutdown é importante;
+    
+- separar o projeto em módulos facilita manutenção e evolução.
+    
+
+O modelo final é:
+
+```text
+Cliente
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+Servidor
+   ↓
+Session
+   ↓
+Buffer
+   ↓
+Protocol
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Application Logic
+   ↓
+Storage / Database / Services
+```
+
+E esse é o ponto em que os conceitos individuais de sockets começam a formar uma **arquitetura de aplicação de rede completa**.
+
+---

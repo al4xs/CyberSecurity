@@ -52795,3 +52795,1417 @@ A principal conclusão é:
 
 > **Sockets fornecem a interface de comunicação; TCP/UDP fornecem o transporte; o protocolo da aplicação dá significado aos bytes; e a aplicação precisa cuidar de segurança, validação, concorrência, erros, testes e observabilidade.**
 
+---
+# 43. Exercícios práticos e desafios finais
+
+Agora que os principais conceitos de sockets foram estudados, o próximo passo é transformar conhecimento teórico em prática.
+
+A melhor forma de saber se você realmente entendeu sockets não é decorar:
+
+```python
+socket.socket(...)
+bind(...)
+listen(...)
+accept(...)
+```
+
+mas conseguir olhar para um problema e decidir:
+
+```text
+Qual protocolo usar?
+TCP ou UDP?
+Como definir as mensagens?
+Como detectar o fim de uma mensagem?
+Como tratar vários clientes?
+Como lidar com desconexões?
+Como validar os dados?
+Como proteger o servidor?
+```
+
+Nesta parte, os exercícios são organizados progressivamente.
+
+---
+
+## 43.1 Exercício 1 — Servidor TCP mínimo
+
+Crie um servidor TCP que:
+
+1. Utilize IPv4.
+    
+2. Escute em `127.0.0.1`.
+    
+3. Utilize a porta `4444`.
+    
+4. Aceite uma conexão.
+    
+5. Receba uma mensagem.
+    
+6. Mostre a mensagem no terminal.
+    
+7. Envie uma resposta.
+    
+8. Feche a conexão.
+    
+
+A estrutura esperada é:
+
+```text
+socket()
+   ↓
+bind()
+   ↓
+listen()
+   ↓
+accept()
+   ↓
+recv()
+   ↓
+sendall()
+   ↓
+close()
+```
+
+### Objetivo
+
+Você deve conseguir explicar a função de cada etapa sem consultar a documentação.
+
+---
+
+## 43.2 Exercício 2 — Cliente TCP
+
+Agora crie um cliente que:
+
+1. Crie um socket IPv4/TCP.
+    
+2. Conecte ao servidor.
+    
+3. Envie uma mensagem.
+    
+4. Receba a resposta.
+    
+5. Mostre a resposta.
+    
+6. Feche a conexão.
+    
+
+Fluxo:
+
+```text
+socket()
+   ↓
+connect()
+   ↓
+sendall()
+   ↓
+recv()
+   ↓
+close()
+```
+
+### Pergunta
+
+Explique por que o cliente utiliza:
+
+```python
+connect()
+```
+
+enquanto o servidor utiliza:
+
+```python
+bind()
+listen()
+accept()
+```
+
+---
+
+## 43.3 Exercício 3 — Echo Server
+
+Modifique o servidor para funcionar como um **echo server**.
+
+O cliente envia:
+
+```text
+hello
+```
+
+O servidor responde:
+
+```text
+hello
+```
+
+Se enviar:
+
+```text
+python
+```
+
+recebe:
+
+```text
+python
+```
+
+Fluxo:
+
+```text
+Cliente
+   │
+   │ "hello"
+   ▼
+Servidor
+   │
+   │ "hello"
+   ▼
+Cliente
+```
+
+### Objetivo
+
+Praticar:
+
+```text
+recv()
+sendall()
+```
+
+e entender o fluxo bidirecional.
+
+---
+
+## 43.4 Exercício 4 — Descobrindo o problema do `recv()`
+
+Faça o cliente enviar:
+
+```python
+sock.sendall(b"ABC")
+sock.sendall(b"DEF")
+```
+
+No servidor, utilize:
+
+```python
+data = client.recv(3)
+```
+
+Observe o resultado.
+
+Depois altere para:
+
+```python
+data = client.recv(1024)
+```
+
+Compare.
+
+### Pergunta importante
+
+Por que não podemos afirmar que:
+
+```python
+recv(1024)
+```
+
+significa:
+
+> "receba exatamente uma mensagem de 1024 bytes"?
+
+A resposta correta deve envolver o conceito de:
+
+```text
+TCP = fluxo de bytes
+```
+
+---
+
+## 43.5 Exercício 5 — Criando um protocolo com `\n`
+
+Crie um protocolo simples:
+
+```text
+PING
+INFO
+ECHO <mensagem>
+QUIT
+```
+
+Cada comando deve terminar com:
+
+```text
+\n
+```
+
+Exemplo:
+
+```text
+PING\n
+```
+
+O servidor deve responder:
+
+```text
+PONG\n
+```
+
+Para:
+
+```text
+INFO\n
+```
+
+pode responder:
+
+```text
+SERVER Python\n
+```
+
+Para:
+
+```text
+ECHO ola\n
+```
+
+responder:
+
+```text
+ola\n
+```
+
+Para:
+
+```text
+QUIT\n
+```
+
+encerrar a conexão.
+
+---
+
+## 43.6 Exercício 6 — Buffer de mensagens
+
+Agora crie uma situação em que o cliente envie várias mensagens de uma vez:
+
+```python
+sock.sendall(
+    b"PING\nINFO\nECHO ola\n"
+)
+```
+
+O servidor pode receber tudo em uma única chamada:
+
+```text
+PING\nINFO\nECHO ola\n
+```
+
+ou receber apenas uma parte.
+
+Por isso, crie um buffer:
+
+```python
+buffer = b""
+```
+
+Depois:
+
+```python
+buffer += data
+```
+
+E extraia mensagens completas.
+
+A lógica deve ser aproximadamente:
+
+```text
+buffer
+   ↓
+procura \n
+   ↓
+encontra mensagem
+   ↓
+processa
+   ↓
+remove mensagem do buffer
+   ↓
+repete
+```
+
+### Objetivo
+
+Esse exercício é fundamental.
+
+Ele demonstra na prática por que **framing** é necessário em TCP.
+
+---
+
+## 43.7 Exercício 7 — Mensagens fragmentadas
+
+Faça o cliente enviar uma mensagem dividida artificialmente:
+
+```python
+sock.sendall(b"EC")
+sock.sendall(b"HO ")
+sock.sendall(b"hello")
+sock.sendall(b"\n")
+```
+
+O servidor deve reconstruir:
+
+```text
+ECHO hello
+```
+
+Mesmo que os dados tenham chegado em partes diferentes.
+
+### O que esse exercício prova?
+
+Que seu protocolo não pode depender de:
+
+```text
+uma chamada send()
+=
+uma chamada recv()
+```
+
+Essa relação não existe no TCP.
+
+---
+
+## 43.8 Exercício 8 — Vários clientes
+
+Modifique o servidor para aceitar vários clientes.
+
+A primeira versão pode utilizar:
+
+```python
+threading.Thread
+```
+
+Estrutura:
+
+```text
+Servidor
+   │
+   ├── Cliente A → Thread A
+   │
+   ├── Cliente B → Thread B
+   │
+   └── Cliente C → Thread C
+```
+
+Cada cliente deve possuir seu próprio socket.
+
+### Objetivo
+
+Entender por que:
+
+```python
+client, address = server.accept()
+```
+
+retorna um novo socket.
+
+O socket de escuta continua existindo.
+
+---
+
+## 43.9 Exercício 9 — Timeout
+
+Adicione um timeout:
+
+```python
+client.settimeout(30)
+```
+
+O argumento:
+
+```text
+30
+```
+
+representa o número aproximado de segundos que uma operação bloqueante poderá esperar antes de ocorrer um timeout.
+
+Faça um cliente conectar e permanecer sem enviar dados.
+
+Observe o comportamento.
+
+### Objetivo
+
+Entender que uma conexão aberta não deve necessariamente ficar consumindo recursos indefinidamente.
+
+---
+
+## 43.10 Exercício 10 — Tratando desconexão
+
+Faça o cliente conectar e fechar imediatamente.
+
+No servidor:
+
+```python
+data = client.recv(1024)
+```
+
+verifique se:
+
+```python
+data == b""
+```
+
+Quando isso acontecer, trate como encerramento ordenado da conexão.
+
+Modelo:
+
+```python
+if data == b"":
+    print("Cliente desconectou")
+```
+
+Aqui:
+
+```text
+data
+```
+
+é o resultado de `recv()`.
+
+```text
+b""
+```
+
+indica que não existem mais dados porque o peer encerrou o fluxo de maneira ordenada.
+
+---
+
+## 43.11 Exercício 11 — Tratando erros
+
+Faça seu servidor tratar pelo menos:
+
+```text
+ConnectionResetError
+BrokenPipeError
+TimeoutError
+OSError
+```
+
+Mas evite:
+
+```python
+except Exception:
+    pass
+```
+
+Isso simplesmente esconde problemas.
+
+Prefira tratar os erros de maneira explícita.
+
+Por exemplo:
+
+```python
+try:
+    data = client.recv(1024)
+except socket.timeout:
+    print("Cliente demorou demais")
+```
+
+Aqui:
+
+```text
+try
+    ↓
+executa operação que pode falhar
+
+except socket.timeout
+    ↓
+trata especificamente timeout
+```
+
+---
+
+## 43.12 Exercício 12 — Autenticação
+
+Crie um protocolo:
+
+```text
+AUTH usuario senha
+```
+
+Exemplo:
+
+```text
+AUTH joao senha123
+```
+
+O servidor deve verificar as credenciais.
+
+Se forem válidas:
+
+```text
+OK AUTH
+```
+
+Se forem inválidas:
+
+```text
+ERROR AUTH
+```
+
+Depois da autenticação, permita:
+
+```text
+INFO
+ECHO
+QUIT
+```
+
+Antes da autenticação:
+
+```text
+INFO
+ECHO
+```
+
+devem ser rejeitados.
+
+---
+
+## 43.13 Exercício 13 — Estado da conexão
+
+Agora implemente uma máquina de estados:
+
+```text
+CONNECTED
+    ↓
+WAITING_AUTH
+    ↓
+AUTHENTICATED
+    ↓
+ACTIVE
+    ↓
+CLOSING
+    ↓
+CLOSED
+```
+
+Por exemplo:
+
+```text
+Cliente conecta
+      ↓
+WAITING_AUTH
+      ↓
+AUTH válida
+      ↓
+AUTHENTICATED
+      ↓
+comandos
+      ↓
+ACTIVE
+```
+
+Se o cliente enviar:
+
+```text
+QUIT
+```
+
+o estado pode mudar para:
+
+```text
+CLOSING
+```
+
+e depois:
+
+```text
+CLOSED
+```
+
+### Objetivo
+
+Aprender que protocolos reais normalmente possuem **estado**.
+
+---
+
+## 43.14 Exercício 14 — Autorização
+
+Adicione dois níveis:
+
+```text
+user
+admin
+```
+
+Usuário normal:
+
+```text
+INFO
+ECHO
+```
+
+Administrador:
+
+```text
+INFO
+ECHO
+LIST
+```
+
+O servidor deve verificar a permissão antes de executar o comando.
+
+Mentalmente:
+
+```text
+usuário autenticado
+        ↓
+qual é sua identidade?
+        ↓
+quais permissões possui?
+        ↓
+pode executar este comando?
+```
+
+---
+
+## 43.15 Exercício 15 — Limite de tamanho
+
+Defina:
+
+```python
+MAX_MESSAGE_SIZE = 4096
+```
+
+O valor:
+
+```text
+4096
+```
+
+representa o número máximo de bytes permitido para uma mensagem.
+
+Se o cliente enviar mais que isso:
+
+```text
+ERROR MESSAGE_TOO_LARGE
+```
+
+O objetivo é impedir que um cliente tente consumir memória indefinidamente.
+
+---
+
+## 43.16 Exercício 16 — Servidor UDP
+
+Agora faça uma versão UDP.
+
+Crie:
+
+```python
+server = socket.socket(
+    socket.AF_INET,
+    socket.SOCK_DGRAM
+)
+```
+
+Os argumentos são:
+
+```text
+socket.AF_INET
+    ↓
+IPv4
+
+socket.SOCK_DGRAM
+    ↓
+datagramas UDP
+```
+
+Depois utilize:
+
+```python
+server.bind(("127.0.0.1", 4444))
+```
+
+Para receber:
+
+```python
+data, address = server.recvfrom(1024)
+```
+
+Os valores retornados são:
+
+```text
+data
+    ↓
+dados recebidos
+
+address
+    ↓
+endereço do remetente
+```
+
+Para responder:
+
+```python
+server.sendto(data, address)
+```
+
+O primeiro argumento:
+
+```text
+data
+```
+
+é o conteúdo que será enviado.
+
+O segundo:
+
+```text
+address
+```
+
+é o endereço do destinatário.
+
+---
+
+## 43.17 Exercício 17 — Comparando TCP e UDP
+
+Faça dois pequenos programas:
+
+```text
+tcp_server.py
+tcp_client.py
+```
+
+e:
+
+```text
+udp_server.py
+udp_client.py
+```
+
+Compare:
+
+```text
+socket()
+bind()
+listen()
+accept()
+connect()
+recv()
+sendall()
+recvfrom()
+sendto()
+```
+
+Monte uma tabela própria explicando:
+
+```text
+qual função existe em TCP?
+qual função existe em UDP?
+qual função possui comportamento diferente?
+```
+
+---
+
+## 43.18 Exercício 18 — Transferência de arquivo
+
+Crie um protocolo:
+
+```text
+DOWNLOAD arquivo.txt
+```
+
+O servidor deve:
+
+1. Validar o nome.
+    
+2. Localizar o arquivo.
+    
+3. Obter o tamanho.
+    
+4. Enviar o tamanho.
+    
+5. Enviar os dados em chunks.
+    
+6. Calcular hash.
+    
+7. Permitir que o cliente valide a integridade.
+    
+
+O fluxo:
+
+```text
+DOWNLOAD arquivo.txt
+        ↓
+validação
+        ↓
+arquivo encontrado
+        ↓
+tamanho
+        ↓
+dados
+        ↓
+SHA-256
+```
+
+---
+
+## 43.19 Exercício 19 — Evitando Path Traversal
+
+Teste entradas como:
+
+```text
+../../etc/passwd
+```
+
+ou:
+
+```text
+../../../arquivo
+```
+
+Seu servidor **não deve simplesmente fazer**:
+
+```python
+path = storage_dir / filename
+```
+
+sem validação.
+
+Uma proteção básica é:
+
+```python
+from pathlib import Path
+
+safe_name = Path(filename).name
+```
+
+O parâmetro:
+
+```text
+filename
+```
+
+é o nome recebido do cliente.
+
+`Path(filename).name` extrai apenas o componente final do caminho.
+
+Por exemplo, conceitualmente:
+
+```text
+../../arquivo.txt
+        ↓
+arquivo.txt
+```
+
+Isso não substitui uma política completa de autorização de arquivos, mas elimina componentes de diretório da entrada.
+
+---
+
+## 43.20 Exercício 20 — Integridade com SHA-256
+
+Ao enviar um arquivo, calcule:
+
+```text
+SHA-256 do arquivo original
+```
+
+Depois que o cliente receber:
+
+```text
+SHA-256 do arquivo recebido
+```
+
+Compare os dois.
+
+Se forem iguais:
+
+```text
+integridade confirmada
+```
+
+Se forem diferentes:
+
+```text
+arquivo inconsistente
+```
+
+Lembre:
+
+```text
+SHA-256
+    ↓
+integridade
+
+TLS
+    ↓
+confidencialidade + integridade da comunicação + autenticação do servidor
+```
+
+São problemas diferentes.
+
+---
+
+## 43.21 Exercício 21 — Servidor usando `selectors`
+
+Reescreva o servidor de múltiplos clientes sem criar uma thread para cada conexão.
+
+Utilize:
+
+```python
+import selectors
+```
+
+Crie:
+
+```python
+selector = selectors.DefaultSelector()
+```
+
+O resultado é um objeto que gerencia os sockets monitorados.
+
+Depois registre o servidor:
+
+```python
+selector.register(
+    server,
+    selectors.EVENT_READ
+)
+```
+
+Os parâmetros são:
+
+```text
+server
+    ↓
+socket que será monitorado
+
+selectors.EVENT_READ
+    ↓
+interesse em eventos de leitura
+```
+
+Depois:
+
+```python
+events = selector.select()
+```
+
+A chamada:
+
+```text
+select()
+```
+
+espera até que existam sockets prontos para alguma operação registrada.
+
+### Objetivo
+
+Entender multiplexação de I/O na prática.
+
+---
+
+## 43.22 Exercício 22 — Servidor `asyncio`
+
+Depois de entender threads e selectors, faça uma versão utilizando:
+
+```python
+import asyncio
+```
+
+A ideia é utilizar:
+
+```text
+async def
+await
+asyncio.start_server()
+asyncio.run()
+```
+
+O objetivo não é decorar a API.
+
+Você deve conseguir explicar:
+
+```text
+O que é uma coroutine?
+O que é await?
+O que é o event loop?
+Por que time.sleep() pode bloquear o event loop?
+```
+
+---
+
+## 43.23 Exercício 23 — TLS
+
+Pegue o servidor TCP e coloque TLS sobre ele.
+
+A arquitetura deverá ser:
+
+```text
+Cliente
+   ↓
+TLS
+   ↓
+TCP
+   ↓
+Servidor
+```
+
+Utilize:
+
+```python
+import ssl
+```
+
+Crie um contexto apropriado para cliente ou servidor.
+
+No cliente, utilize validação de certificado.
+
+Evite transformar o cliente em:
+
+```python
+context.check_hostname = False
+```
+
+e:
+
+```python
+context.verify_mode = ssl.CERT_NONE
+```
+
+sem uma razão específica de laboratório.
+
+Essas configurações desabilitam proteções importantes da validação TLS.
+
+---
+
+## 43.24 Exercício 24 — Diagnóstico de porta ocupada
+
+Execute seu servidor:
+
+```text
+127.0.0.1:4444
+```
+
+Depois tente iniciar uma segunda instância.
+
+Observe:
+
+```text
+OSError: [Errno 98] Address already in use
+```
+
+Agora descubra quem está utilizando a porta:
+
+```bash
+ss -ltnp | grep :4444
+```
+
+ou:
+
+```bash
+lsof -i :4444
+```
+
+### Objetivo
+
+Aprender a diagnosticar o problema em vez de simplesmente trocar a porta.
+
+---
+
+## 43.25 Exercício 25 — Projeto final
+
+Agora junte tudo.
+
+Crie:
+
+```text
+socket_project/
+│
+├── server.py
+├── client.py
+├── protocol.py
+├── auth.py
+├── authorization.py
+├── storage.py
+├── config.py
+│
+├── storage/
+│
+└── logs/
+```
+
+O servidor deverá possuir:
+
+```text
+TCP
++
+framing
++
+autenticação
++
+autorização
++
+múltiplos clientes
++
+timeouts
++
+limites
++
+tratamento de erros
++
+transferência de arquivos
++
+SHA-256
++
+logs
+```
+
+Um protocolo possível:
+
+```text
+AUTH usuario senha
+INFO
+ECHO mensagem
+LIST
+DOWNLOAD arquivo
+QUIT
+```
+
+Respostas:
+
+```text
+OK ...
+ERROR ...
+```
+
+---
+
+## 43.26 Fluxo completo do projeto
+
+O sistema final deverá funcionar aproximadamente assim:
+
+```text
+Cliente
+   │
+   │ CONNECT
+   ▼
+Servidor
+   │
+   │ TLS
+   ▼
+Sessão
+   │
+   │ AUTH
+   ▼
+Autenticação
+   │
+   ▼
+Autorização
+   │
+   ▼
+Comando
+   │
+   ├── INFO
+   ├── ECHO
+   ├── LIST
+   ├── DOWNLOAD
+   └── QUIT
+   │
+   ▼
+Resposta
+   │
+   ▼
+Cliente
+```
+
+Para `DOWNLOAD`:
+
+```text
+DOWNLOAD arquivo
+       ↓
+validar nome
+       ↓
+verificar autorização
+       ↓
+verificar existência
+       ↓
+obter tamanho
+       ↓
+enviar header
+       ↓
+enviar chunks
+       ↓
+calcular/verificar integridade
+       ↓
+finalizar
+```
+
+---
+
+## 43.27 Desafio extra — detectar erros de protocolo
+
+Crie mensagens inválidas:
+
+```text
+ABC
+AUTH
+AUTH usuario
+UNKNOWN teste
+ECHO
+DOWNLOAD
+```
+
+O servidor deve responder com erros apropriados.
+
+Por exemplo:
+
+```text
+ERROR INVALID_COMMAND
+```
+
+ou:
+
+```text
+ERROR INVALID_ARGUMENTS
+```
+
+O objetivo é fazer o parser aceitar apenas aquilo que o protocolo realmente definiu.
+
+---
+
+## 43.28 Desafio extra — cliente malicioso
+
+Não pense apenas no cliente correto.
+
+Imagine que alguém escreva:
+
+```python
+import socket
+
+sock = socket.socket()
+sock.connect(("127.0.0.1", 4444))
+```
+
+E envie:
+
+```text
+10 MB de dados
+```
+
+sem respeitar o protocolo.
+
+Seu servidor deve continuar funcionando.
+
+Depois imagine:
+
+```text
+100 conexões
+1000 conexões
+mensagens enormes
+conexões que ficam abertas
+autenticação repetida
+comandos inválidos
+downloads simultâneos
+```
+
+Agora você começa a pensar como quem desenvolve um serviço de rede real.
+
+---
+
+## 43.29 Checklist final de domínio
+
+Antes de considerar que você realmente dominou sockets básicos/intermediários, tente explicar sem consultar:
+
+```text
+[ ] O que é um socket?
+[ ] O que é um endpoint?
+[ ] O que é IP + porta?
+[ ] O que é AF_INET?
+[ ] O que é AF_INET6?
+[ ] O que é AF_UNIX?
+[ ] O que é SOCK_STREAM?
+[ ] O que é SOCK_DGRAM?
+[ ] O que faz socket()?
+[ ] O que faz bind()?
+[ ] O que faz listen()?
+[ ] O que faz accept()?
+[ ] O que faz connect()?
+[ ] O que faz send()?
+[ ] O que faz sendall()?
+[ ] O que faz recv()?
+[ ] O que significa recv() retornar b""?
+[ ] O que faz shutdown()?
+[ ] O que faz close()?
+[ ] Por que TCP não possui mensagens?
+[ ] O que é framing?
+[ ] O que é um protocolo de aplicação?
+[ ] O que é timeout?
+[ ] O que é non-blocking?
+[ ] O que é threading?
+[ ] O que são selectors?
+[ ] O que é asyncio?
+[ ] O que é TLS?
+[ ] O que é uma CA?
+[ ] O que é autenticação?
+[ ] O que é autorização?
+[ ] O que é SHA-256?
+[ ] Como transferir um arquivo com segurança?
+[ ] O que é Path Traversal?
+[ ] Como diagnosticar uma porta ocupada?
+[ ] Como testar vários clientes?
+[ ] Como monitorar um servidor?
+```
+
+Se você consegue explicar cada item **com suas próprias palavras e exemplos**, você já não está apenas decorando a API do Python: está começando a entender como aplicações de rede realmente funcionam.
+
+---
+
+## Resumo da Parte
+
+Os exercícios seguiram a mesma progressão dos conceitos:
+
+```text
+socket básico
+     ↓
+cliente/servidor
+     ↓
+TCP
+     ↓
+framing
+     ↓
+buffer
+     ↓
+múltiplos clientes
+     ↓
+timeouts
+     ↓
+tratamento de erros
+     ↓
+autenticação
+     ↓
+autorização
+     ↓
+UDP
+     ↓
+transferência de arquivos
+     ↓
+integridade
+     ↓
+selectors
+     ↓
+asyncio
+     ↓
+TLS
+     ↓
+segurança
+     ↓
+projeto completo
+```
+
+A partir daqui, o mais importante não é aprender mais funções de `socket` por decorar.
+
+É conseguir **construir, testar, quebrar, diagnosticar e corrigir** aplicações que utilizam sockets.
+
+> **Conhecer sockets é saber como os bytes saem da aplicação, atravessam o sistema e a rede, chegam ao outro lado e são transformados novamente em informação útil pela aplicação.**
+
+---

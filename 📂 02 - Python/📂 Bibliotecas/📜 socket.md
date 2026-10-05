@@ -50677,3 +50677,4 @@ Storage / Database / Services
 E esse é o ponto em que os conceitos individuais de sockets começam a formar uma **arquitetura de aplicação de rede completa**.
 
 ---
+	

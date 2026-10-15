@@ -780,3 +780,760 @@ Pratique fluxos de autenticação, sessões e testes de requisição em aplicaç
 |`response.raise_for_status()`|Gera uma exceção para respostas HTTP de erro.|
 |`response.json()`|Interpreta o corpo da resposta como JSON.|
 |`timeout`|Define limites de espera de conexão e leitura.|
+
+---
+# 📜 Requests — Consumo de APIs REST
+
+## 1. O que é uma API REST?
+
+Uma API (_Application Programming Interface_) é uma interface que permite que sistemas diferentes se comuniquem por meio de regras definidas.
+
+REST (_Representational State Transfer_) é um estilo arquitetural utilizado na construção de APIs que operam sobre recursos. Muitas APIs REST utilizam HTTP para receber requisições e devolver respostas em formatos como JSON.
+
+Por exemplo, uma aplicação pode disponibilizar recursos de usuários:
+
+```
+GET    /api/users       → Consultar usuários
+GET    /api/users/10    → Consultar o usuário de ID 10
+POST   /api/users       → Criar um usuário
+PUT    /api/users/10    → Substituir o usuário de ID 10
+PATCH  /api/users/10    → Atualizar parcialmente o usuário de ID 10
+DELETE /api/users/10    → Excluir o usuário de ID 10
+```
+
+Esses caminhos são exemplos ilustrativos. Os métodos permitidos e o comportamento de cada endpoint dependem da API utilizada.
+
+### 1.1. Como funciona a comunicação
+
+```
+┌─────────────────────────┐
+│ Programa Python         │
+│                         │
+│ requests.get(...)       │
+└────────────┬────────────┘
+             │
+             │ Requisição HTTP
+             ▼
+┌─────────────────────────┐
+│ API REST                │
+│                         │
+│ Valida a requisição     │
+│ Executa a operação      │
+│ Prepara a resposta      │
+└────────────┬────────────┘
+             │
+             │ Resposta HTTP
+             ▼
+┌─────────────────────────┐
+│ Programa Python         │
+│                         │
+│ status_code             │
+│ headers                 │
+│ json()                  │
+└─────────────────────────┘
+```
+
+O programa Python envia uma requisição para um endpoint. A API processa a solicitação e devolve uma resposta HTTP, que pode conter dados, uma mensagem de erro ou nenhum conteúdo.
+
+## 2. O que é JSON?
+
+JSON (_JavaScript Object Notation_) é um formato textual utilizado para representar dados estruturados. É muito comum em APIs porque permite transmitir objetos, listas, números, textos, valores booleanos e valores nulos.
+
+Exemplo de JSON:
+
+```
+{
+  "id": 10,
+  "nome": "João",
+  "ativo": true,
+  "permissoes": ["leitura", "consulta"],
+  "perfil": null
+}
+```
+
+Nesse objeto:
+
+- `id`: número inteiro.
+    
+- `nome`: texto.
+    
+- `ativo`: valor booleano.
+    
+- `permissoes`: lista de textos.
+    
+- `perfil`: valor nulo.
+    
+
+O Python possui tipos equivalentes:
+
+|JSON|Python|
+|---|---|
+|Objeto `{}`|`dict`|
+|Array `[]`|`list`|
+|String|`str`|
+|Número inteiro|`int`|
+|Número decimal|`float`|
+|`true` / `false`|`True` / `False`|
+|`null`|`None`|
+
+A biblioteca `requests` consegue interpretar JSON recebido em uma resposta utilizando o método `response.json()`.
+
+## 3. Fazendo uma requisição GET para uma API
+
+Para aprender a consumir uma API, utilizaremos o JSONPlaceholder, um serviço público de testes que disponibiliza dados fictícios.
+
+Endpoint de exemplo:
+
+```
+https://jsonplaceholder.typicode.com/users
+```
+
+### 3.1. Código inicial
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/users"
+
+response = requests.get(
+    url,
+    timeout=10
+)
+
+response.raise_for_status()
+
+users = response.json()
+
+print(users)
+```
+
+### 3.2. Explicação linha por linha
+
+**Linha 1 — Importação**
+
+```
+import requests
+```
+
+Importa a biblioteca utilizada para realizar requisições HTTP.
+
+**Linha 2 — Definição da URL**
+
+```
+url = "https://jsonplaceholder.typicode.com/users"
+```
+
+Armazena o endpoint da API em uma variável.
+
+Separar a URL do restante do código facilita sua reutilização e manutenção.
+
+**Linhas 3 a 6 — Requisição GET**
+
+```
+response = requests.get(
+    url,
+    timeout=10
+)
+```
+
+- `requests.get()`: realiza uma requisição HTTP GET.
+    
+- `url`: endereço do recurso que será consultado.
+    
+- `timeout=10`: define limites de espera para conexão e leitura da resposta.
+    
+- `response`: recebe o objeto `Response`, que contém o status, os cabeçalhos e o conteúdo retornado.
+    
+
+**Linha 7 — Verificação do status HTTP**
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção para respostas HTTP de erro, como 404 ou 500.
+
+Sem essa verificação, o programa poderia tentar processar uma resposta de erro como se fosse uma resposta válida.
+
+**Linha 8 — Conversão do JSON**
+
+```
+users = response.json()
+```
+
+Interpreta o corpo da resposta como JSON e converte os dados para estruturas Python.
+
+Como o endpoint `/users` retorna uma lista de objetos, a variável `users` normalmente será uma lista de dicionários.
+
+**Linha 9 — Exibição**
+
+```
+print(users)
+```
+
+Exibe a lista completa no terminal. Para trabalhar com os dados individualmente, é melhor percorrer a lista.
+
+## 4. Acessando os dados retornados
+
+Suponha que a API retorne um objeto como este:
+
+```
+{
+  "id": 1,
+  "name": "Leanne Graham",
+  "username": "Bret",
+  "email": "leanne@example.test"
+}
+```
+
+Depois de executar `response.json()`, esses campos podem ser acessados como valores de um dicionário.
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/users/1"
+
+response = requests.get(url, timeout=10)
+response.raise_for_status()
+
+user = response.json()
+
+print("ID:", user["id"])
+print("Nome:", user["name"])
+print("Usuário:", user["username"])
+print("E-mail:", user["email"])
+```
+
+### Entendendo os acessos
+
+- `user["id"]`: obtém o valor associado à chave `id`.
+    
+- `user["name"]`: obtém o nome.
+    
+- `user["username"]`: obtém o nome de usuário.
+    
+- `user["email"]`: obtém o e-mail.
+    
+
+A notação com colchetes gera `KeyError` se a chave não existir.
+
+Quando o campo for opcional, você pode utilizar `dict.get()`:
+
+```
+email = user.get("email")
+telefone = user.get("phone", "Não informado")
+
+print(email)
+print(telefone)
+```
+
+- `user.get("email")`: devolve o valor de `email` ou `None` se a chave não existir.
+    
+- `user.get("phone", "Não informado")`: devolve o telefone ou o texto alternativo se a chave não existir.
+    
+
+Isso ajuda a construir clientes mais tolerantes a campos opcionais. Não use valores padrão para esconder silenciosamente a ausência de campos obrigatórios.
+
+## 5. Percorrendo listas de objetos
+
+Muitas APIs devolvem listas contendo diversos registros.
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/users"
+
+response = requests.get(url, timeout=10)
+response.raise_for_status()
+
+users = response.json()
+
+for user in users:
+    print(f"ID: {user['id']}")
+    print(f"Nome: {user['name']}")
+    print(f"E-mail: {user['email']}")
+    print("-" * 30)
+```
+
+### Explicação do fluxo
+
+1. A requisição GET consulta o endpoint.
+    
+2. `raise_for_status()` verifica se houve um erro HTTP.
+    
+3. `response.json()` transforma a resposta em uma lista de dicionários.
+    
+4. `for user in users` percorre cada registro.
+    
+5. `user['id']`, `user['name']` e `user['email']` acessam os campos do registro atual.
+    
+6. `"-" * 30` repete o caractere `-` trinta vezes para separar os resultados visualmente.
+    
+
+Esse padrão é útil para ferramentas que precisam consultar inventários, registros de laboratório, informações públicas ou dados de serviços internos autorizados.
+
+## 6. Enviando parâmetros de consulta com `params`
+
+Uma API pode permitir filtros, pesquisas, paginação ou ordenação por meio de parâmetros na URL.
+
+Por exemplo:
+
+```
+https://api.example.test/users?ativo=true&limite=10
+```
+
+Os parâmetros são os valores que aparecem depois de `?`. O caractere `&` separa os parâmetros.
+
+Com `requests`, é preferível utilizar `params` em vez de montar manualmente a query string.
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/posts"
+
+params = {
+    "userId": 1
+}
+
+response = requests.get(
+    url,
+    params=params,
+    timeout=10
+)
+
+response.raise_for_status()
+
+posts = response.json()
+
+print("URL consultada:", response.url)
+print("Quantidade de registros:", len(posts))
+```
+
+### Explicação dos parâmetros
+
+- `url`: endpoint que será consultado.
+    
+- `params`: dicionário contendo os parâmetros de consulta.
+    
+- `"userId": 1`: solicita os posts associados ao usuário de ID 1, conforme o comportamento desse serviço.
+    
+- `response.url`: mostra a URL final construída pelo `requests`.
+    
+- `len(posts)`: retorna a quantidade de elementos da lista.
+    
+
+O `requests` codifica os parâmetros conforme necessário. Isso evita erros comuns de montagem manual de URLs.
+
+**Atenção:** parâmetros de consulta não são mecanismos de autorização. Uma API deve validar permissões no servidor, independentemente dos filtros enviados pelo cliente.
+
+## 7. Enviando dados com POST
+
+O método POST é utilizado frequentemente para criar recursos ou enviar dados para processamento.
+
+O comportamento exato depende do endpoint.
+
+### 7.1. Enviando JSON
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/posts"
+
+payload = {
+    "title": "Estudo de APIs",
+    "body": "Exemplo de envio de dados usando Python.",
+    "userId": 1
+}
+
+response = requests.post(
+    url,
+    json=payload,
+    timeout=10
+)
+
+response.raise_for_status()
+
+created_post = response.json()
+
+print("Status:", response.status_code)
+print("Resposta:", created_post)
+```
+
+### Explicação linha por linha
+
+**Definição dos dados**
+
+```
+payload = {
+    "title": "Estudo de APIs",
+    "body": "Exemplo de envio de dados usando Python.",
+    "userId": 1
+}
+```
+
+Cria um dicionário Python com os campos que serão enviados.
+
+O nome `payload` é uma convenção comum para identificar os dados transportados na requisição.
+
+**Envio da requisição**
+
+```
+response = requests.post(
+    url,
+    json=payload,
+    timeout=10
+)
+```
+
+- `requests.post()`: realiza uma requisição HTTP POST.
+    
+- `url`: endpoint de destino.
+    
+- `json=payload`: serializa o dicionário para JSON e configura o cabeçalho de conteúdo apropriado.
+    
+- `timeout=10`: define os limites de espera para conexão e leitura.
+    
+
+O argumento `json=` é diferente de `data=`. Quando você usa `json=`, o `requests` realiza a serialização JSON automaticamente.
+
+**Leitura da resposta**
+
+```
+created_post = response.json()
+```
+
+Interpreta o corpo da resposta como JSON.
+
+O JSONPlaceholder simula a criação de recursos para fins de teste; não se deve presumir que o registro será persistido de forma permanente.
+
+### 7.2. Diferença entre `json=` e `data=`
+
+|Argumento|Comportamento|
+|---|---|
+|`json=payload`|Serializa os dados em JSON.|
+|`data=payload` com dicionário|Envia os dados normalmente como formulário URL-encoded.|
+|`data=texto`|Envia o texto fornecido como corpo, sem serialização JSON automática.|
+
+Exemplo de envio como formulário:
+
+```
+response = requests.post(
+    "https://httpbin.org/post",
+    data={
+        "username": "aluno",
+        "curso": "Python"
+    },
+    timeout=10
+)
+
+response.raise_for_status()
+
+print(response.json())
+```
+
+O HTTPBin permite observar como o servidor recebeu os dados enviados.
+
+Utilize o formato exigido pela API. Enviar JSON quando o endpoint espera um formulário pode resultar em erro ou em dados não reconhecidos.
+
+## 8. Outros métodos HTTP
+
+Além de GET e POST, APIs podem utilizar PUT, PATCH e DELETE.
+
+### 8.1. PUT
+
+É utilizado frequentemente para substituir a representação de um recurso existente.
+
+```
+response = requests.put(
+    "https://jsonplaceholder.typicode.com/posts/1",
+    json={
+        "id": 1,
+        "title": "Título atualizado",
+        "body": "Conteúdo atualizado",
+        "userId": 1
+    },
+    timeout=10
+)
+
+response.raise_for_status()
+
+print(response.json())
+```
+
+O exemplo utiliza um serviço de demonstração. O comportamento real de PUT depende da API.
+
+### 8.2. PATCH
+
+É utilizado para solicitar uma atualização parcial de um recurso.
+
+```
+response = requests.patch(
+    "https://jsonplaceholder.typicode.com/posts/1",
+    json={
+        "title": "Novo título"
+    },
+    timeout=10
+)
+
+response.raise_for_status()
+
+print(response.json())
+```
+
+Neste exemplo, o corpo contém apenas o campo que se pretende atualizar. A API precisa implementar o comportamento esperado para PATCH.
+
+### 8.3. DELETE
+
+É utilizado para solicitar a remoção de um recurso.
+
+```
+response = requests.delete(
+    "https://jsonplaceholder.typicode.com/posts/1",
+    timeout=10
+)
+
+response.raise_for_status()
+
+print("Status:", response.status_code)
+```
+
+Uma resposta bem-sucedida pode utilizar status como 200 ou 204, dependendo da API.
+
+Não presuma que toda resposta de sucesso contenha JSON. Um status 204 indica que a resposta não contém corpo; nesse caso, chamar `response.json()` não é apropriado.
+
+**Importante:** operações de escrita devem ser realizadas apenas em recursos de teste ou sistemas nos quais você tenha autorização.
+
+## 9. Utilizando `requests.Session()` com uma API
+
+Se várias requisições precisarem compartilhar cabeçalhos, cookies ou configurações, uma sessão pode simplificar o código.
+
+```
+import requests
+
+base_url = "https://jsonplaceholder.typicode.com"
+
+with requests.Session() as session:
+    session.headers.update({
+        "Accept": "application/json"
+    })
+
+    response = session.get(
+        f"{base_url}/users",
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+    users = response.json()
+
+    for user in users:
+        print(user["id"], user["name"])
+```
+
+### O que muda ao utilizar uma sessão?
+
+- `requests.Session()` cria um objeto reutilizável.
+    
+- `session.headers.update()` define um cabeçalho padrão.
+    
+- `session.get()` executa a requisição utilizando a sessão.
+    
+- O bloco `with` fecha a sessão automaticamente ao terminar.
+    
+
+Para uma única requisição simples, utilizar `requests.get()` diretamente costuma ser suficiente. Para várias requisições relacionadas, uma sessão facilita o reaproveitamento de configurações e conexões.
+
+Autenticação por token ou cookie pode ser integrada à sessão quando a API exigir, respeitando as regras de segurança do serviço.
+
+## 10. Tratamento de erros em clientes de API
+
+Um cliente robusto precisa lidar com erros de rede, respostas HTTP inesperadas e dados inválidos.
+
+```
+import requests
+
+url = "https://jsonplaceholder.typicode.com/users"
+
+try:
+    response = requests.get(
+        url,
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+    users = response.json()
+
+    if not isinstance(users, list):
+        raise ValueError("Formato inesperado: era esperada uma lista.")
+
+    print("Usuários encontrados:", len(users))
+
+except requests.exceptions.Timeout:
+    print("A requisição excedeu o tempo de espera.")
+
+except requests.exceptions.ConnectionError:
+    print("Não foi possível estabelecer a conexão.")
+
+except requests.exceptions.HTTPError as error:
+    print("Erro HTTP:", error)
+
+except requests.exceptions.RequestException as error:
+    print("Erro de comunicação:", error)
+
+except ValueError as error:
+    print("Erro ao interpretar os dados:", error)
+```
+
+### Por que verificar o tipo de dado?
+
+```
+if not isinstance(users, list):
+```
+
+A função `isinstance()` verifica se um valor é de determinado tipo.
+
+Neste caso, o código espera que `users` seja uma lista. Se a API devolver um objeto, uma string ou outra estrutura inesperada, o programa gera uma exceção em vez de continuar assumindo que os dados estão no formato correto.
+
+A exceção `ValueError` também pode ser gerada por `response.json()` quando o corpo não contém JSON válido. O tratamento acima permite informar o problema ao usuário, embora em um programa maior seja útil distinguir erros de parsing de erros de validação da estrutura.
+
+## 11. Paginação em APIs
+
+Algumas APIs dividem grandes conjuntos de resultados em páginas para evitar retornar milhares de registros de uma só vez.
+
+Um serviço pode utilizar parâmetros como:
+
+```
+?page=1&limit=20
+```
+
+Ou pode devolver um link para a página seguinte dentro da própria resposta.
+
+Os nomes e o funcionamento desses parâmetros dependem da API.
+
+Exemplo ilustrativo de paginação baseada em número de página:
+
+```
+import requests
+
+base_url = "https://api.example.test/items"
+
+page = 1
+limit = 20
+
+with requests.Session() as session:
+    while True:
+        response = session.get(
+            base_url,
+            params={
+                "page": page,
+                "limit": limit
+            },
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        items = response.json()
+
+        if not items:
+            break
+
+        for item in items:
+            print(item)
+
+        page += 1
+```
+
+Esse exemplo pressupõe que a API retorna uma lista em cada página e uma lista vazia quando não existem mais resultados. É necessário adaptar a condição de parada ao contrato real da API.
+
+### Explicação do fluxo
+
+1. `page = 1`: define a página inicial.
+    
+2. `limit = 20`: solicita até vinte registros por página, se esse parâmetro for suportado.
+    
+3. `while True`: inicia um laço que continua até encontrar uma condição explícita de parada.
+    
+4. `params={...}`: envia os parâmetros de paginação.
+    
+5. `response.raise_for_status()`: interrompe o processamento quando a resposta apresenta um status HTTP de erro.
+    
+6. `items = response.json()`: converte a resposta para uma estrutura Python.
+    
+7. `if not items`: encerra o laço quando a lista está vazia.
+    
+8. `for item in items`: processa cada registro.
+    
+9. `page += 1`: avança para a página seguinte.
+    
+
+Em aplicações reais, estabeleça limites de páginas, controle de erros e condições de parada. Um laço de paginação sem controle pode gerar requisições desnecessárias se a API não indicar corretamente o fim dos resultados.
+
+## 12. Respostas HTTP que merecem tratamento específico
+
+|Status|Significado geral|Tratamento possível|
+|---|---|---|
+|200|Requisição concluída com sucesso|Processar a resposta conforme o formato esperado.|
+|201|Recurso criado|Ler o resultado se houver corpo.|
+|204|Sucesso sem conteúdo|Não tentar interpretar um corpo JSON inexistente.|
+|400|Requisição inválida|Verificar parâmetros e formato dos dados.|
+|401|Não autenticado ou credenciais inválidas|Verificar o mecanismo de autenticação.|
+|403|Acesso proibido|Verificar permissões e políticas de acesso.|
+|404|Recurso não encontrado|Conferir o endpoint e o identificador.|
+|429|Muitas requisições|Respeitar limites e cabeçalhos de espera, quando fornecidos.|
+|500|Erro interno do servidor|Tratar a falha e consultar a documentação do serviço.|
+|503|Serviço temporariamente indisponível|Considerar uma nova tentativa controlada, quando apropriado.|
+
+Os códigos são significados HTTP gerais. A API pode fornecer detalhes adicionais em seu corpo de resposta.
+
+### 12.1. Limites de requisições e status 429
+
+Algumas APIs limitam a frequência de requisições por usuário, token ou endereço de origem.
+
+Uma resposta 429 pode incluir o cabeçalho `Retry-After`, indicando quanto tempo o cliente deve esperar antes de tentar novamente.
+
+Não implemente tentativas infinitas. Use limites de repetição, atrasos apropriados e respeite as regras de uso do serviço.
+
+## 13. Boas práticas para clientes de API
+
+- Defina `timeout` nas requisições para evitar esperas sem limite configurado.
+    
+- Utilize `raise_for_status()` quando o programa precisar interromper o processamento em caso de erro HTTP.
+    
+- Valide a estrutura e os tipos dos dados recebidos.
+    
+- Não presuma que toda resposta seja JSON.
+    
+- Não exponha senhas, cookies ou tokens em logs.
+    
+- Armazene credenciais fora do código-fonte.
+    
+- Respeite a documentação, os limites de requisição e as permissões da API.
+    
+- Utilize `Session` quando houver benefício em compartilhar configurações ou reutilizar conexões.
+    
+- Implemente paginação de acordo com o contrato da API.
+    
+- Para operações de escrita, considere os efeitos que a repetição de uma requisição pode produzir.
+    
+
+## 14. Referência rápida
+
+|Método ou recurso|Finalidade|
+|---|---|
+|`requests.get()`|Consultar um recurso.|
+|`requests.post()`|Enviar dados para processamento ou criação.|
+|`requests.put()`|Solicitar substituição de um recurso.|
+|`requests.patch()`|Solicitar atualização parcial.|
+|`requests.delete()`|Solicitar remoção de um recurso.|
+|`params=`|Enviar parâmetros de consulta na URL.|
+|`json=`|Serializar e enviar dados em JSON.|
+|`data=`|Enviar dados como formulário ou corpo fornecido.|
+|`response.json()`|Interpretar o corpo da resposta como JSON.|
+|`response.status_code`|Consultar o status HTTP.|
+|`response.raise_for_status()`|Gerar exceção para status HTTP de erro.|
+|`response.url`|Consultar a URL final da resposta.|
+|`response.headers`|Consultar os cabeçalhos da resposta.|
+|`timeout=`|Definir limites de espera para conexão e leitura.|
+|`requests.Session()`|Reutilizar configurações e conexões entre requisições.|

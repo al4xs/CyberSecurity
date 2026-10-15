@@ -1,5 +1,3 @@
-# 📜 Requests — Sessões HTTP e Autenticação
-
 ## 1. O que é uma sessão HTTP?
 
 Uma sessão HTTP permite que um cliente mantenha determinados dados entre várias requisições feitas a um servidor.

@@ -2378,3 +2378,440 @@ print(f"Arq
 ```
 
 ---
+# 📜 Requests — Upload de Arquivos e Multipart/Form-Data
+
+## 1. O que é upload de arquivos?
+
+O upload é o processo de enviar dados de um cliente para um servidor. Com Python e `requests`, podemos enviar arquivos, imagens, documentos e outros dados para endpoints HTTP que aceitam esse tipo de operação.
+
+Enquanto um download transfere dados do servidor para o cliente, um upload normalmente transfere dados do cliente para o servidor.
+
+```
+UPLOAD
+
+Programa Python
+      |
+      | POST + arquivo
+      v
+Servidor HTTP
+      |
+      v
+Processamento do arquivo
+```
+
+Um upload pode ser utilizado em aplicações web, APIs REST, sistemas de armazenamento e ferramentas de automação autorizadas.
+
+O servidor precisa oferecer um endpoint que aceite uploads. Enviar um arquivo para uma URL que não implementa essa funcionalidade não fará com que ele seja armazenado automaticamente.
+
+---
+
+## 2. O argumento `files`
+
+O Requests permite enviar arquivos por meio do argumento `files`, geralmente em uma requisição POST.
+
+Exemplo:
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with open("documento.pdf", "rb") as arquivo:
+    response = requests.post(
+        url,
+        files={"arquivo": arquivo},
+        timeout=30,
+    )
+
+response.raise_for_status()
+print(response.status_code)
+```
+
+Esse exemplo envia o arquivo local `documento.pdf` para um serviço de teste HTTP. O endpoint utilizado é ilustrativo para experimentação; não representa um sistema de armazenamento permanente.
+
+### Entendendo cada parte
+
+- `import requests`: importa a biblioteca responsável pelas requisições HTTP.
+    
+- `url`: define o endereço do endpoint que receberá o upload.
+    
+- `open("documento.pdf", "rb")`: abre o arquivo em modo de leitura binária.
+    
+- `with`: garante o fechamento do arquivo ao sair do bloco.
+    
+- `arquivo`: variável que representa o objeto de arquivo aberto.
+    
+- `requests.post(...)`: envia uma requisição HTTP POST.
+    
+- `files={"arquivo": arquivo}`: informa ao Requests que o corpo da requisição deve incluir um arquivo no campo chamado `arquivo`.
+    
+- `timeout=30`: configura os limites de espera da requisição.
+    
+- `response.raise_for_status()`: gera uma exceção caso o servidor retorne um status HTTP de erro.
+    
+- `response.status_code`: permite consultar o código HTTP retornado pelo servidor.
+    
+
+### Por que abrir com `"rb"`?
+
+O modo `"rb"` significa _read binary_ — leitura binária.
+
+- `r`: leitura.
+    
+- `b`: modo binário.
+    
+
+Esse modo permite ler os bytes originais do arquivo sem tentar decodificá-los como texto. É apropriado para PDFs, imagens, arquivos ZIP e outros formatos binários.
+
+---
+
+## 3. Como funciona o `multipart/form-data`?
+
+Quando utilizamos `files`, o Requests normalmente prepara o corpo da requisição usando o tipo de conteúdo `multipart/form-data`.
+
+Esse formato permite enviar vários campos em uma única requisição, incluindo campos de texto e arquivos.
+
+Uma requisição simplificada pode ter esta estrutura:
+
+```
+POST /upload HTTP/1.1
+Host: exemplo.com
+Content-Type: multipart/form-data; boundary=----abc123
+
+------abc123
+Content-Disposition: form-data; name="descricao"
+
+Documento de teste
+------abc123
+Content-Disposition: form-data; name="arquivo"; filename="documento.pdf"
+Content-Type: application/pdf
+
+[bytes do arquivo]
+------abc123--
+```
+
+O exemplo acima é ilustrativo. Em uma requisição real, o Requests gera automaticamente o delimitador (`boundary`) e monta as partes do corpo.
+
+### Conceitos importantes
+
+- `multipart/form-data`: tipo de conteúdo utilizado para representar várias partes de um formulário.
+    
+- `boundary`: sequência que separa as partes do corpo.
+    
+- `Content-Disposition`: indica como cada parte deve ser interpretada, incluindo o nome do campo e, para arquivos, o nome do arquivo.
+    
+- `filename`: nome do arquivo informado na parte do formulário.
+    
+- `Content-Type`: tipo de conteúdo declarado para a requisição ou para uma parte específica.
+    
+
+**Não defina manualmente o cabeçalho** `**Content-Type: multipart/form-data**` **em uma requisição feita com** `**files**`, a menos que você também esteja montando corretamente o corpo e seu `boundary`. Normalmente, deixe o Requests gerar esse cabeçalho.
+
+---
+
+## 4. Enviando um arquivo e campos de texto
+
+Muitos formulários exigem informações adicionais junto ao arquivo, como uma descrição, uma categoria ou um identificador.
+
+Para isso, podemos combinar `files` e `data`.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with open("documento.pdf", "rb") as arquivo:
+    response = requests.post(
+        url,
+        data={
+            "descricao": "Documento de teste",
+            "categoria": "relatorio",
+        },
+        files={
+            "arquivo": arquivo,
+        },
+        timeout=30,
+    )
+
+response.raise_for_status()
+print(response.status_code)
+```
+
+### O que cada argumento representa?
+
+`data` contém campos comuns do formulário:
+
+```
+data={
+    "descricao": "Documento de teste",
+    "categoria": "relatorio",
+}
+```
+
+Nesse dicionário:
+
+- `descricao` é o nome de um campo.
+    
+- `"Documento de teste"` é o valor enviado.
+    
+- `categoria` é outro campo.
+    
+- `"relatorio"` é o valor desse segundo campo.
+    
+
+Já `files` contém o arquivo que será enviado:
+
+```
+files={
+    "arquivo": arquivo,
+}
+```
+
+A chave `"arquivo"` é o nome do campo esperado pelo endpoint. O nome precisa corresponder ao que a aplicação do servidor espera.
+
+Os nomes `descricao`, `categoria` e `arquivo` são exemplos. Uma API real pode utilizar outros nomes.
+
+---
+
+## 5. Enviando mais de um arquivo
+
+O Requests também permite enviar vários arquivos em uma única requisição, desde que o endpoint aceite esse formato.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with (
+    open("documento.pdf", "rb") as pdf,
+    open("imagem.png", "rb") as imagem,
+):
+    response = requests.post(
+        url,
+        files=[
+            ("arquivos", ("documento.pdf", pdf, "application/pdf")),
+            ("arquivos", ("imagem.png", imagem, "image/png")),
+        ],
+        timeout=30,
+    )
+
+response.raise_for_status()
+print(response.status_code)
+```
+
+### Entendendo a estrutura de `files`
+
+Cada item dessa lista representa uma parte do formulário:
+
+```
+("arquivos", ("documento.pdf", pdf, "application/pdf"))
+```
+
+A estrutura é:
+
+```
+(nome_do_campo, (nome_do_arquivo, objeto_arquivo, tipo_mime))
+```
+
+- `"arquivos"`: nome do campo recebido pelo servidor.
+    
+- `"documento.pdf"`: nome do arquivo informado na requisição.
+    
+- `pdf`: objeto de arquivo aberto.
+    
+- `"application/pdf"`: tipo MIME declarado para o conteúdo.
+    
+
+O segundo item segue a mesma estrutura para a imagem.
+
+Uma lista de tuplas permite repetir o mesmo nome de campo, o que é útil quando um formulário aceita vários arquivos com o mesmo identificador.
+
+O uso de `with (...)` com múltiplos gerenciadores de contexto é suportado nas versões modernas do Python. Ele mantém os dois arquivos abertos durante a requisição e os fecha ao sair do bloco.
+
+---
+
+## 6. Informando o tipo MIME
+
+O tipo MIME descreve a natureza do conteúdo transmitido. Exemplos comuns:
+
+|Tipo MIME|Uso habitual|
+|---|---|
+|`application/pdf`|PDF|
+|`image/jpeg`|Imagem JPEG|
+|`image/png`|Imagem PNG|
+|`text/plain`|Texto simples|
+|`application/zip`|Arquivo ZIP|
+|`application/octet-stream`|Dados binários genéricos|
+
+É possível informar o tipo MIME no valor associado ao arquivo:
+
+```
+files = {
+    "arquivo": (
+        "documento.pdf",
+        arquivo,
+        "application/pdf",
+    )
+}
+```
+
+O formato é:
+
+```
+(nome_do_arquivo, objeto_arquivo, tipo_mime)
+```
+
+O tipo MIME declarado é apenas uma informação transmitida ao servidor. Ele não comprova que o conteúdo realmente corresponde àquele formato. A aplicação que recebe o upload deve validar os arquivos de acordo com seus requisitos de segurança.
+
+---
+
+## 7. Enviando dados com `data` versus `json` versus `files`
+
+Esses três argumentos têm finalidades diferentes.
+
+|Argumento|Uso habitual|Formato|
+|---|---|---|
+|`data=`|Campos de formulário|Formulário codificado ou multipart quando combinado com `files`|
+|`json=`|Enviar dados estruturados de uma API|JSON|
+|`files=`|Enviar arquivos|Normalmente `multipart/form-data`|
+
+### Exemplo com `data`
+
+```
+response = requests.post(
+    url,
+    data={"usuario": "teste"},
+)
+```
+
+Esse formato é útil para enviar campos simples de formulário.
+
+### Exemplo com `json`
+
+```
+response = requests.post(
+    url,
+    json={
+        "usuario": "teste",
+        "ativo": True,
+    },
+)
+```
+
+O argumento `json` serializa os dados para JSON e configura o cabeçalho apropriado.
+
+### Exemplo com `files`
+
+```
+with open("documento.pdf", "rb") as arquivo:
+    response = requests.post(
+        url,
+        files={"arquivo": arquivo},
+    )
+```
+
+Esse formato é apropriado quando o endpoint espera receber um arquivo.
+
+Não escolha o argumento apenas pelo tipo de informação que você possui. Consulte a documentação da API para saber qual estrutura o endpoint exige.
+
+---
+
+## 8. Tratamento de erros em uploads
+
+Uma requisição de upload pode falhar por problemas de conexão, timeout, autenticação, validação ou limitações do servidor.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+try:
+    with open("documento.pdf", "rb") as arquivo:
+        response = requests.post(
+            url,
+            files={"arquivo": arquivo},
+            timeout=(5, 30),
+        )
+
+    response.raise_for_status()
+    print("Resposta HTTP:", response.status_code)
+
+except FileNotFoundError:
+    print("O arquivo local não foi encontrado.")
+
+except PermissionError:
+    print("Sem permissão para ler o arquivo.")
+
+except requests.exceptions.Timeout:
+    print("A requisição excedeu o tempo limite.")
+
+except requests.exceptions.HTTPError as erro:
+    print("O servidor retornou um erro HTTP:", erro)
+
+except requests.exceptions.RequestException as erro:
+    print("Falha na requisição:", erro)
+
+except OSError as erro:
+    print("Erro ao acessar o arquivo:", erro)
+```
+
+### Entendendo os tipos de exceção
+
+- `FileNotFoundError`: o caminho especificado não corresponde a um arquivo acessível.
+    
+- `PermissionError`: o sistema operacional não permite a operação solicitada.
+    
+- `Timeout`: a requisição excedeu um limite de espera.
+    
+- `HTTPError`: `raise_for_status()` detectou uma resposta HTTP de erro.
+    
+- `RequestException`: classe-base para diversas falhas relacionadas às requisições do Requests.
+    
+- `OSError`: categoria de erros de operações do sistema, incluindo problemas de acesso a arquivos.
+    
+
+A ordem dos `except` importa: coloque as exceções mais específicas antes das mais abrangentes.
+
+**Atenção:** um timeout não significa necessariamente que o servidor não recebeu o arquivo. Se a conexão falhar depois de o servidor processar o upload, repetir a requisição pode causar duplicação. Quando a API oferecer suporte, utilize mecanismos como chaves de idempotência ou identificadores únicos de operação.
+
+---
+
+## 9. Boas práticas de segurança
+
+Ao desenvolver uma aplicação que envia arquivos:
+
+1. **Confirme o endpoint correto.** Um upload deve ser enviado somente a um serviço que aceite esse tipo de operação.
+    
+2. **Use HTTPS.** Isso protege os dados em trânsito quando o certificado TLS é validado corretamente.
+    
+3. **Configure timeouts.** Evite esperas excessivas durante operações de rede.
+    
+4. **Trate os erros HTTP.** Não considere todo status de resposta um sucesso.
+    
+5. **Evite expor credenciais.** Tokens, senhas e chaves não devem ser escritos diretamente no código nem registrados em logs.
+    
+6. **Respeite os limites da API.** O servidor pode impor restrições de tamanho, formato e quantidade de arquivos.
+    
+7. **Valide os arquivos no servidor.** Nome, extensão e tipo MIME informados pelo cliente não são suficientes para garantir segurança.
+    
+8. **Evite repetição cega.** Uma falha de comunicação pode ocorrer após o servidor ter recebido e processado o upload.
+    
+9. **Feche os arquivos.** Utilize `with` para garantir a liberação dos recursos.
+    
+10. **Use somente endpoints autorizados.** Em laboratórios de segurança, trabalhe com serviços de teste sob seu controle ou com permissão.
+    
+
+## 10. Referência rápida
+
+|Objetivo|Recurso|
+|---|---|
+|Enviar um arquivo|`files={"arquivo": objeto_arquivo}`|
+|Enviar campos de formulário|`data={"campo": "valor"}`|
+|Enviar JSON|`json={"campo": "valor"}`|
+|Enviar arquivo binário|`open(caminho, "rb")`|
+|Informar nome e MIME|`("nome.pdf", arquivo, "application/pdf")`|
+|Enviar vários arquivos|Lista de tuplas em `files`|
+|Verificar erro HTTP|`response.raise_for_status()`|
+|Definir timeout|`timeout=(5, 30)`|
+|Fechar o arquivo automaticamente|`with open(...) as arquivo`|
+|Tratar falhas de rede|`requests.exceptions.RequestException`|

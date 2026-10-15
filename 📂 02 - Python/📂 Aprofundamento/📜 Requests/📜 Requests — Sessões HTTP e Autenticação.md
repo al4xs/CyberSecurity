@@ -6302,3 +6302,500 @@ O recorte dos primeiros 500 caracteres ajuda a inspecionar uma resposta textual.
 
 ---
 
+# 📜 Requests — Redirecionamentos HTTP e Histórico de Requisições
+
+## 1. O que são redirecionamentos HTTP?
+
+Um redirecionamento HTTP acontece quando um servidor responde indicando que o cliente deve buscar um recurso em outro endereço.
+
+Isso é comum quando:
+
+- Uma página mudou de URL.
+    
+- Um site redireciona HTTP para HTTPS.
+    
+- Uma rota antiga aponta para uma nova.
+    
+- Um sistema direciona o usuário para uma página de autenticação.
+    
+- Uma aplicação encaminha uma requisição para outro endpoint.
+    
+
+Os redirecionamentos são identificados principalmente pelos códigos de status HTTP da família `3xx`.
+
+Exemplo simplificado:
+
+```
+Cliente Python
+     |
+     | GET /pagina-antiga
+     v
+Servidor
+     |
+     | 302 Found
+     | Location: /pagina-nova
+     v
+Cliente Python
+     |
+     | GET /pagina-nova
+     v
+Servidor
+     |
+     | 200 OK
+     v
+Resposta final
+```
+
+O cabeçalho `Location` indica o endereço para o qual o cliente deve ser direcionado.
+
+Por padrão, métodos como `requests.get()` seguem redirecionamentos automaticamente, dentro dos limites configurados pelo Requests.
+
+## 2. Fazendo uma requisição que segue redirecionamentos
+
+```
+import requests
+
+url = "http://httpbin.org/redirect/2"
+
+response = requests.get(
+    url,
+    timeout=15,
+)
+
+print(response.status_code)
+print(response.url)
+print(response.history)
+```
+
+### Explicação linha por linha
+
+**Importar a biblioteca**
+
+```
+import requests
+```
+
+Importa o Requests para realizar requisições HTTP.
+
+**Definir a URL**
+
+```
+url = "http://httpbin.org/redirect/2"
+```
+
+Define um endpoint de demonstração que realiza dois redirecionamentos.
+
+**Enviar a requisição**
+
+```
+response = requests.get(
+    url,
+    timeout=15,
+)
+```
+
+- `requests.get()` envia uma requisição GET.
+    
+- `url` é o endereço inicial.
+    
+- `timeout=15` define os limites de espera da conexão e da leitura.
+    
+- O Requests segue redirecionamentos automaticamente por padrão para GET.
+    
+
+**Consultar o status final**
+
+```
+print(response.status_code)
+```
+
+Exibe o código de status da resposta final recebida. No exemplo, espera-se normalmente `200`.
+
+**Consultar a URL final**
+
+```
+print(response.url)
+```
+
+Exibe a URL associada à resposta final após os redirecionamentos.
+
+**Consultar o histórico**
+
+```
+print(response.history)
+```
+
+Retorna uma lista de objetos `Response` correspondentes às respostas intermediárias dos redirecionamentos.
+
+Cada objeto permite examinar o status, os cabeçalhos e a URL daquela etapa.
+
+## 3. A propriedade `response.history`
+
+A propriedade `history` é útil quando precisamos entender o caminho percorrido por uma requisição.
+
+```
+for etapa in response.history:
+    print(etapa.status_code, etapa.url)
+```
+
+### Explicação
+
+- `response.history`: lista das respostas intermediárias.
+    
+- `for etapa in ...`: percorre cada resposta intermediária.
+    
+- `etapa.status_code`: consulta o status daquela etapa.
+    
+- `etapa.url`: consulta a URL associada à resposta.
+    
+
+A variável `etapa` é apenas um nome escolhido para representar cada objeto `Response` do histórico.
+
+Para também visualizar a resposta final:
+
+```
+print("Status final:", response.status_code)
+print("URL final:", response.url)
+```
+
+O histórico não substitui o status final. Uma cadeia de redirecionamentos pode terminar em sucesso, erro HTTP ou outra resposta que precise ser tratada.
+
+## 4. Desativando os redirecionamentos automáticos
+
+Em algumas situações, queremos analisar a primeira resposta do servidor sem seguir o destino indicado.
+
+Para isso, usamos `allow_redirects=False`.
+
+```
+import requests
+
+response = requests.get(
+    "http://httpbin.org/redirect/1",
+    allow_redirects=False,
+    timeout=15,
+)
+
+print(response.status_code)
+print(response.headers.get("Location"))
+```
+
+### O que muda?
+
+`**allow_redirects=False**`
+
+Desativa o acompanhamento automático dos redirecionamentos nessa requisição.
+
+Assim, o objeto `response` representa a resposta inicial do servidor, permitindo inspecionar seu status e o cabeçalho `Location`.
+
+O valor de `Location` pode ser uma URL absoluta ou um caminho relativo.
+
+Quando o redirecionamento não é seguido, `response.history` normalmente fica vazio, porque não houve uma sequência automática de respostas intermediárias.
+
+## 5. Entendendo os códigos de redirecionamento
+
+Nem todos os códigos `3xx` possuem exatamente o mesmo significado.
+
+|Código|Nome|Significado geral|
+|---|---|---|
+|`301`|Moved Permanently|O recurso foi movido permanentemente|
+|`302`|Found|Redirecionamento temporário|
+|`303`|See Other|Indica buscar outro recurso, normalmente com GET|
+|`304`|Not Modified|Indica que a representação não mudou em uma requisição condicional|
+|`307`|Temporary Redirect|Redirecionamento temporário que preserva o método|
+|`308`|Permanent Redirect|Redirecionamento permanente que preserva o método|
+
+O código `304` é uma resposta especial associada a requisições condicionais e cache. Ele não deve ser tratado como um redirecionamento comum para outra URL.
+
+### Por que `307` e `308` são importantes?
+
+Esses códigos indicam que o cliente deve preservar o método HTTP utilizado na requisição original.
+
+Por exemplo, se a requisição original for POST, o redirecionamento não deve transformá-la em GET.
+
+Em contraste, comportamentos históricos associados a `301` e `302` podem levar clientes a transformar POST em GET. O código `303` indica explicitamente a obtenção de outro recurso, normalmente usando GET.
+
+O comportamento concreto também depende do cliente HTTP e da forma como ele implementa o protocolo.
+
+## 6. Inspecionando os cabeçalhos de uma resposta de redirecionamento
+
+Os cabeçalhos fornecem informações sobre a resposta e o destino indicado pelo servidor.
+
+```
+import requests
+
+response = requests.get(
+    "http://httpbin.org/redirect/1",
+    allow_redirects=False,
+    timeout=15,
+)
+
+print("Status:", response.status_code)
+print("Location:", response.headers.get("Location"))
+print("Content-Type:", response.headers.get("Content-Type"))
+```
+
+### Elementos utilizados
+
+- `response.status_code`: código HTTP da resposta inicial.
+    
+- `response.headers`: coleção de cabeçalhos.
+    
+- `.get("Location")`: consulta o destino indicado pelo servidor.
+    
+- `.get("Content-Type")`: consulta o tipo de conteúdo declarado na resposta.
+    
+
+Se um cabeçalho não existir, `.get()` retorna `None`, a menos que outro valor padrão seja especificado.
+
+Por exemplo:
+
+```
+destino = response.headers.get("Location", "sem destino informado")
+```
+
+Nesse caso, `destino` receberá o valor do cabeçalho ou o texto alternativo caso ele esteja ausente.
+
+## 7. Resolvendo URLs relativas com `urljoin()`
+
+O cabeçalho `Location` pode conter apenas um caminho, como `/nova-pagina`, em vez de uma URL completa.
+
+Para combinar um endereço base com um destino relativo, utilizamos `urljoin()` da biblioteca padrão `urllib.parse`.
+
+```
+from urllib.parse import urljoin
+
+base = "https://example.com/pagina-antiga"
+destino = "/nova-pagina"
+
+url_final = urljoin(base, destino)
+
+print(url_final)
+```
+
+Resultado esperado:
+
+```
+https://example.com/nova-pagina
+```
+
+### Explicação
+
+**Importar** `**urljoin()**`
+
+```
+from urllib.parse import urljoin
+```
+
+Importa a função responsável por combinar uma URL base com outra referência.
+
+**Definir o endereço base**
+
+```
+base = "https://example.com/pagina-antiga"
+```
+
+Representa a URL a partir da qual a referência relativa será resolvida.
+
+**Definir o destino**
+
+```
+destino = "/nova-pagina"
+```
+
+É um caminho relativo à raiz do domínio.
+
+**Combinar os valores**
+
+```
+url_final = urljoin(base, destino)
+```
+
+Gera a URL resultante.
+
+**Atenção:** `urljoin()` também aceita destinos absolutos. Se o valor recebido vier de uma fonte não confiável, ele poderá apontar para outro domínio. Antes de seguir manualmente um destino, valide o esquema e o domínio permitidos.
+
+## 8. Acompanhando redirecionamentos manualmente
+
+Desativar o acompanhamento automático permite analisar cada resposta individualmente. Também é possível implementar um fluxo manual quando a aplicação precisa validar os destinos.
+
+O exemplo abaixo limita o número de etapas e aceita apenas destinos HTTPS no mesmo domínio do endereço inicial.
+
+```
+from urllib.parse import urljoin, urlparse
+
+import requests
+
+url_atual = "https://httpbin.org/redirect/1"
+dominio_permitido = urlparse(url_atual).hostname
+max_redirecionamentos = 5
+
+with requests.Session() as session:
+    for etapa in range(max_redirecionamentos + 1):
+        response = session.get(
+            url_atual,
+            allow_redirects=False,
+            timeout=15,
+        )
+
+        if response.status_code not in (301, 302, 303, 307, 308):
+            response.raise_for_status()
+            print("URL final:", response.url)
+            print("Status:", response.status_code)
+            break
+
+        location = response.headers.get("Location")
+
+        if not location:
+            raise RuntimeError("Redirecionamento sem cabeçalho Location.")
+
+        proxima_url = urljoin(url_atual, location)
+        partes = urlparse(proxima_url)
+
+        if partes.scheme != "https":
+            raise RuntimeError("Redirecionamento fora do esquema HTTPS.")
+
+        if partes.hostname != dominio_permitido:
+            raise RuntimeError("Redirecionamento para domínio não permitido.")
+
+        url_atual = proxima_url
+    else:
+        raise RuntimeError("Limite de redirecionamentos excedido.")
+```
+
+### Explicação das partes principais
+
+`**urlparse()**`
+
+Separa uma URL em componentes, como esquema, hostname, caminho e parâmetros.
+
+`**dominio_permitido**`
+
+Guarda o hostname inicial. No exemplo, o código permite apenas redirecionamentos para o mesmo hostname.
+
+`**max_redirecionamentos**`
+
+Define o limite de etapas que o programa pode acompanhar.
+
+`**allow_redirects=False**`
+
+Permite que o programa valide cada destino antes de fazer a próxima requisição.
+
+`**response.status_code not in (...)**`
+
+Verifica se a resposta não pertence aos códigos de redirecionamento selecionados. Caso não pertença, o programa trata a resposta como resultado final desse fluxo.
+
+`**response.raise_for_status()**`
+
+Gera uma exceção se o status final indicar erro HTTP.
+
+`**urljoin(url_atual, location)**`
+
+Resolve o destino informado pelo servidor, inclusive quando ele é relativo.
+
+**Validação do esquema e hostname**
+
+O código só aceita HTTPS e o hostname definido inicialmente. Essa verificação é uma proteção básica, não uma política completa contra todas as formas de SSRF (_Server-Side Request Forgery_).
+
+Em aplicações que acessam URLs controladas por usuários, também podem ser necessárias restrições de IP, DNS, portas, destinos internos e mudanças de endereço durante a resolução.
+
+O exemplo utiliza GET em todas as etapas. Fluxos com outros métodos exigem atenção especial às regras de preservação do método e do corpo.
+
+## 9. Redirecionamentos e autenticação
+
+Redirecionamentos podem interferir no comportamento da autenticação.
+
+Considere um cliente que envia:
+
+```
+headers = {
+    "Authorization": "Bearer TOKEN_DE_EXEMPLO",
+}
+```
+
+Se o servidor redirecionar a requisição para outro endereço, o cliente precisa tratar as credenciais de forma segura.
+
+O Requests possui regras para lidar com cabeçalhos de autenticação durante redirecionamentos, mas não se deve presumir que qualquer redirecionamento será seguro para qualquer tipo de credencial.
+
+Boas práticas:
+
+- Prefira HTTPS desde a URL inicial.
+    
+- Não siga automaticamente destinos desconhecidos quando a requisição contém credenciais sensíveis.
+    
+- Verifique o domínio de destino quando a aplicação exige que as requisições permaneçam em um serviço específico.
+    
+- Evite inserir tokens diretamente em URLs.
+    
+- Não registre cabeçalhos de autenticação em logs.
+    
+- Consulte as regras de autenticação e redirecionamento da API utilizada.
+    
+
+## 10. Redirecionamentos não são o mesmo que uma sessão autenticada
+
+Uma resposta `302` que leva a uma página de login não significa que a autenticação foi concluída.
+
+Da mesma forma, uma resposta `200 OK` após seguir um redirecionamento não comprova que o usuário está autenticado: a resposta pode ser apenas o HTML da página de login.
+
+Em aplicações web, verifique sinais específicos do fluxo de autenticação, como:
+
+- Cookies esperados.
+    
+- Conteúdo da página final.
+    
+- Dados retornados pela API.
+    
+- Código de estado ou resposta documentada pelo serviço.
+    
+
+O comportamento depende da aplicação. Não existe um único indicador universal de autenticação válida para todos os sites.
+
+## 11. Erros e limitações comuns
+
+### O histórico está vazio
+
+**Possível causa:** nenhum redirecionamento automático ocorreu ou a requisição foi realizada com `allow_redirects=False`.
+
+**Como verificar:**
+
+```
+print(response.url)
+print(response.history)
+```
+
+### A URL final é diferente da URL inicial
+
+Isso pode ser normal quando o servidor redireciona para outro endereço.
+
+Inspecione o histórico e os códigos de status para identificar as etapas.
+
+### O redirecionamento aponta para outro domínio
+
+Pode ser legítimo, mas também pode ser inesperado. Quando o domínio de destino importa para a segurança, valide-o antes de continuar.
+
+### O servidor entra em um ciclo de redirecionamentos
+
+Um servidor pode direcionar para uma URL que leva novamente à anterior. O Requests limita o acompanhamento automático e pode gerar `TooManyRedirects`.
+
+Se estiver implementando acompanhamento manual, estabeleça um limite explícito de etapas.
+
+### A resposta final possui status `4xx` ou `5xx`
+
+O redirecionamento pode ter ocorrido corretamente, mas o destino final pode ter falhado. Utilize `raise_for_status()` para tratar esses casos.
+
+## 12. Referência rápida
+
+|Elemento|Finalidade|
+|---|---|
+|`allow_redirects=False`|Desativar redirecionamentos automáticos|
+|`response.history`|Consultar respostas intermediárias|
+|`response.url`|Consultar a URL associada à resposta final|
+|`response.status_code`|Consultar o status HTTP|
+|`response.headers.get("Location")`|Obter o destino indicado pelo servidor|
+|`urljoin(base, destino)`|Resolver um destino relativo|
+|`urlparse(url)`|Separar componentes de uma URL|
+|`TooManyRedirects`|Indicar que o limite de redirecionamentos foi excedido|
+|`response.raise_for_status()`|Gerar exceção para status HTTP de erro|
+|`timeout=15`|Definir limites de espera para a requisição|
+
+---

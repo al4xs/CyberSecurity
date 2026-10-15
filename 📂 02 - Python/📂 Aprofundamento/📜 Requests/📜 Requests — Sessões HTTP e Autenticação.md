@@ -6799,3 +6799,490 @@ O redirecionamento pode ter ocorrido corretamente, mas o destino final pode ter 
 |`timeout=15`|Definir limites de espera para a requisição|
 
 ---
+# 📜 Requests — Cache HTTP, ETag e Requisições Condicionais
+
+## 1. O que é cache HTTP?
+
+O cache HTTP é um mecanismo que permite reutilizar respostas anteriores quando elas ainda podem ser utilizadas.
+
+Imagine um programa que consulta a mesma API repetidamente. Se o conteúdo não mudou, talvez não seja necessário transferir novamente toda a resposta.
+
+O cache pode ajudar a:
+
+- Reduzir o volume de dados transferidos.
+    
+- Diminuir a latência de determinadas requisições.
+    
+- Reduzir o trabalho de servidores e clientes.
+    
+- Evitar downloads desnecessários.
+    
+- Melhorar a eficiência de programas que consultam recursos repetidamente.
+    
+
+O cache pode existir no navegador, em um proxy, em uma CDN, no servidor ou na própria aplicação Python.
+
+**Importante:** o Requests não implementa automaticamente um sistema completo de cache persistente para todas as respostas. Ele fornece acesso aos cabeçalhos HTTP necessários para que a aplicação implemente ou utilize uma estratégia de cache.
+
+## 2. Como funciona o cache HTTP?
+
+Um servidor pode informar por quanto tempo uma resposta pode ser reutilizada sem precisar ser revalidada.
+
+Por exemplo:
+
+```
+Cache-Control: max-age=300
+```
+
+Esse cabeçalho informa que a resposta pode ser considerada fresca por até 300 segundos, ou cinco minutos, segundo as regras aplicáveis ao cache.
+
+Fluxo simplificado:
+
+```
+Aplicação Python
+       |
+       | GET /dados
+       v
+Servidor HTTP
+       |
+       | 200 OK
+       | Cache-Control: max-age=300
+       v
+Aplicação recebe os dados
+       |
+       | Guarda a resposta em cache
+       v
+Nova consulta dentro do prazo
+       |
+       | Reutiliza os dados em cache
+       v
+Evita uma nova transferência
+```
+
+Esse fluxo é conceitual. Para reutilizar a resposta no próprio programa, é necessário implementar o armazenamento em cache ou utilizar uma biblioteca que ofereça essa funcionalidade.
+
+## 3. Inspecionando cabeçalhos de cache com Requests
+
+Podemos consultar os cabeçalhos de uma resposta HTTP para entender as instruções de cache fornecidas pelo servidor.
+
+```
+import requests
+
+url = "https://httpbin.org/cache/60"
+
+response = requests.get(
+    url,
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.status_code)
+print(response.headers.get("Cache-Control"))
+print(response.headers.get("Expires"))
+print(response.headers.get("Date"))
+```
+
+### Explicação linha por linha
+
+**Importar Requests**
+
+```
+import requests
+```
+
+Importa a biblioteca para realizar a requisição HTTP.
+
+**Definir a URL**
+
+```
+url = "https://httpbin.org/cache/60"
+```
+
+Define um endpoint de demonstração relacionado a cache. O comportamento e os cabeçalhos recebidos dependem da resposta efetivamente fornecida pelo serviço.
+
+**Enviar a requisição**
+
+```
+response = requests.get(url, timeout=15)
+```
+
+- `requests.get()` envia uma requisição GET.
+    
+- `url` indica o recurso.
+    
+- `timeout=15` define os limites de espera da conexão e da leitura.
+    
+
+**Validar o status HTTP**
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção quando a resposta indica um erro HTTP `4xx` ou `5xx`.
+
+**Consultar os cabeçalhos**
+
+```
+response.headers.get("Cache-Control")
+```
+
+Consulta as instruções de cache fornecidas pelo servidor.
+
+Os outros cabeçalhos consultados são:
+
+- `Expires`: pode indicar uma data e hora de expiração.
+    
+- `Date`: indica a data e hora associadas à mensagem HTTP.
+    
+
+Esses cabeçalhos não precisam estar presentes em todas as respostas.
+
+## 4. O cabeçalho `Cache-Control`
+
+`Cache-Control` é um dos principais cabeçalhos utilizados para controlar o comportamento do cache HTTP.
+
+Algumas diretivas importantes:
+
+|Diretiva|Significado geral|
+|---|---|
+|`max-age=300`|A resposta pode permanecer fresca por até 300 segundos|
+|`no-cache`|A resposta armazenada precisa ser revalidada antes de ser reutilizada|
+|`no-store`|O cache não deve armazenar a resposta|
+|`private`|A resposta é destinada a cache privado, como o do cliente|
+|`public`|A resposta pode ser armazenada por caches compartilhados, respeitadas as regras aplicáveis|
+|`must-revalidate`|Uma resposta vencida precisa ser revalidada antes de ser reutilizada|
+
+### Atenção à diferença entre `no-cache` e `no-store`
+
+Essas diretivas não significam a mesma coisa.
+
+- `no-cache` não proíbe necessariamente o armazenamento. Ele exige revalidação antes da reutilização da resposta armazenada.
+    
+- `no-store` instrui os caches a não armazenarem a resposta.
+    
+
+Essas diretivas não substituem uma política completa de segurança para dados sensíveis. A aplicação deve considerar também logs, armazenamento local, permissões e o ciclo de vida dos dados.
+
+## 5. O que é ETag?
+
+`ETag` é um validador associado a uma representação de um recurso HTTP.
+
+O servidor pode retornar um cabeçalho semelhante a:
+
+```
+ETag: "versao-abc123"
+```
+
+O valor identifica uma versão específica da representação. Ele pode ser baseado em um hash, em uma versão interna ou em outro mecanismo implementado pelo servidor.
+
+A ETag não precisa ser um hash criptográfico e não deve ser tratada automaticamente como prova de integridade ou autenticidade.
+
+Quando a representação muda, o servidor pode fornecer uma ETag diferente.
+
+Isso permite que o cliente pergunte se a representação ainda corresponde à versão que já possui.
+
+## 6. O cabeçalho `If-None-Match`
+
+Depois de receber uma ETag, o cliente pode enviá-la em uma requisição posterior usando `If-None-Match`.
+
+Exemplo:
+
+```
+If-None-Match: "versao-abc123"
+```
+
+O significado é, de forma simplificada: “envie a representação se ela não corresponder a este validador”.
+
+Se a representação não tiver mudado e as condições HTTP forem atendidas, o servidor poderá responder:
+
+```
+304 Not Modified
+```
+
+Nesse caso, o servidor informa que a representação não precisa ser transferida novamente para aquela requisição condicional.
+
+O cliente pode reutilizar a representação que já possui, respeitando as regras de cache HTTP.
+
+## 7. Implementando uma requisição condicional com Requests
+
+O exemplo a seguir mostra como enviar manualmente uma ETag em uma segunda requisição.
+
+```
+import requests
+
+url = "https://example.com/recurso"
+
+primeira = requests.get(
+    url,
+    timeout=15,
+)
+
+primeira.raise_for_status()
+
+etag = primeira.headers.get("ETag")
+
+if etag:
+    segunda = requests.get(
+        url,
+        headers={"If-None-Match": etag},
+        timeout=15,
+    )
+
+    if segunda.status_code == 304:
+        print("A representação continua válida.")
+    else:
+        segunda.raise_for_status()
+        print("A representação foi atualizada.")
+        print(segunda.text)
+else:
+    print("O servidor não forneceu uma ETag.")
+```
+
+### Explicação das etapas
+
+**Primeira requisição**
+
+```
+primeira = requests.get(url, timeout=15)
+```
+
+Obtém a resposta inicial do recurso.
+
+**Validar a resposta**
+
+```
+primeira.raise_for_status()
+```
+
+Verifica se a resposta inicial indica um erro HTTP.
+
+**Obter a ETag**
+
+```
+etag = primeira.headers.get("ETag")
+```
+
+Obtém o valor do cabeçalho `ETag`, caso esteja presente.
+
+**Enviar** `**If-None-Match**`
+
+```
+headers={"If-None-Match": etag}
+```
+
+Solicita que o servidor compare a representação atual com o validador fornecido.
+
+**Tratar** `**304**`
+
+```
+if segunda.status_code == 304:
+```
+
+Verifica se o servidor indicou que a representação não foi modificada para a requisição condicional.
+
+O status `304` não é um erro HTTP. Por isso, não se deve esperar que `raise_for_status()` o trate como falha.
+
+**Limitação do exemplo:** o código demonstra a validação condicional, mas não implementa um cache completo. Para reutilizar o conteúdo anterior, a aplicação precisa guardar a representação inicial e associá-la à ETag, além de respeitar os cabeçalhos e as regras de cache pertinentes.
+
+## 8. O cabeçalho `Last-Modified`
+
+Alguns servidores fornecem `Last-Modified` para indicar quando a representação foi modificada pela última vez.
+
+Exemplo:
+
+```
+Last-Modified: Tue, 13 Oct 2026 12:00:00 GMT
+```
+
+O cliente pode usar esse valor em uma requisição posterior:
+
+```
+If-Modified-Since: Tue, 13 Oct 2026 12:00:00 GMT
+```
+
+Se o recurso não tiver sido modificado desde a data informada, o servidor poderá responder com `304 Not Modified`.
+
+### Exemplo com Requests
+
+```
+import requests
+
+url = "https://example.com/recurso"
+
+primeira = requests.get(
+    url,
+    timeout=15,
+)
+
+primeira.raise_for_status()
+
+ultima_modificacao = primeira.headers.get("Last-Modified")
+
+if ultima_modificacao:
+    segunda = requests.get(
+        url,
+        headers={"If-Modified-Since": ultima_modificacao},
+        timeout=15,
+    )
+
+    if segunda.status_code == 304:
+        print("O recurso não foi modificado.")
+    else:
+        segunda.raise_for_status()
+        print("Resposta atualizada recebida.")
+```
+
+O servidor pode não fornecer `Last-Modified`, e a precisão desse mecanismo depende da implementação e das regras HTTP aplicáveis.
+
+Quando ETag e data de modificação são utilizados juntos, as regras de precedência dos validadores HTTP devem ser respeitadas. Não presuma que todos os servidores suportam ambos.
+
+## 9. ETag forte e ETag fraca
+
+Existem duas formas comuns de ETag.
+
+Uma ETag forte:
+
+```
+ETag: "abc123"
+```
+
+Uma ETag fraca:
+
+```
+ETag: W/"abc123"
+```
+
+O prefixo `W/` indica uma ETag fraca.
+
+Em termos gerais:
+
+- Uma ETag forte identifica uma representação com critérios mais rigorosos de equivalência.
+    
+- Uma ETag fraca indica equivalência semântica, permitindo diferenças que não alterem o significado relevante da representação.
+    
+
+Essa distinção importa porque os validadores podem ser comparados de maneiras diferentes dependendo do cabeçalho condicional utilizado.
+
+Para a maioria dos programas Python que consomem APIs, o comportamento correto é preservar o valor fornecido pelo servidor e seguir as regras HTTP, em vez de tentar interpretar ou modificar manualmente a ETag.
+
+## 10. Cache e respostas de APIs
+
+Uma API pode utilizar cache para recursos relativamente estáveis, como:
+
+- Listas públicas de categorias.
+    
+- Metadados de produtos.
+    
+- Informações de documentação.
+    
+- Arquivos estáticos.
+    
+- Dados públicos que não mudam frequentemente.
+    
+
+Por outro lado, respostas personalizadas, informações privadas e dados que mudam constantemente podem exigir políticas diferentes.
+
+Não é adequado armazenar indiscriminadamente todas as respostas em cache. A decisão deve considerar:
+
+1. Se o conteúdo pode ser reutilizado.
+    
+2. Por quanto tempo pode ser considerado válido.
+    
+3. Se a resposta depende da identidade do usuário.
+    
+4. Se o servidor permite armazenamento.
+    
+5. Se existem dados sensíveis.
+    
+6. Como invalidar o conteúdo quando ele muda.
+    
+
+Em particular, respostas que dependem de cookies ou de cabeçalhos de autorização exigem cuidado para que os dados de um usuário não sejam reutilizados para outro.
+
+## 11. Por que o Requests não resolve todo o cache automaticamente?
+
+O Requests é principalmente uma biblioteca de cliente HTTP. Ele envia requisições, recebe respostas e disponibiliza ferramentas para interpretar e manipular esses dados.
+
+Embora possa manter conexões reutilizáveis por meio de `Session`, **reutilizar uma conexão não é a mesma coisa que reutilizar uma resposta em cache**.
+
+Uma sessão:
+
+```
+import requests
+
+with requests.Session() as session:
+    primeira = session.get(
+        "https://example.com",
+        timeout=15,
+    )
+
+    segunda = session.get(
+        "https://example.com",
+        timeout=15,
+    )
+```
+
+Pode reutilizar conexões TCP quando isso for possível, mas não significa que a segunda requisição receberá automaticamente o corpo da primeira resposta sem consultar o servidor.
+
+Para adicionar cache de respostas, é possível implementar armazenamento e validação próprios ou utilizar uma biblioteca complementar compatível com Requests.
+
+## 12. Erros e limitações comuns
+
+### O servidor não fornece `ETag`
+
+Nem todas as respostas possuem ETag. Nesse caso, o cliente pode utilizar outros mecanismos suportados pelo servidor, como `Last-Modified`, ou simplesmente realizar a requisição normal.
+
+### O servidor retorna `304`, mas o programa não possui o conteúdo anterior
+
+O status `304` não fornece uma nova representação completa. O cliente precisa ter a versão armazenada e saber como reutilizá-la. Sem isso, não há conteúdo anterior disponível para recuperar apenas a partir da resposta `304`.
+
+### A resposta continua sendo consultada toda vez
+
+Isso pode ser esperado. Uma requisição condicional ainda faz uma chamada HTTP; a economia está principalmente na possibilidade de evitar a transferência do corpo completo.
+
+### O conteúdo em cache fica desatualizado
+
+O programa pode ter implementado uma política incorreta de expiração ou ignorado os cabeçalhos do servidor. Utilize validadores HTTP e respeite as diretivas de cache aplicáveis.
+
+### Dados privados são reutilizados indevidamente
+
+Isso pode ocorrer quando o cache não diferencia usuários, sessões ou contextos de autorização. Não compartilhe respostas personalizadas entre usuários sem uma política que garanta a separação correta.
+
+## 13. Boas práticas
+
+- Inspecione `Cache-Control`, `ETag` e `Last-Modified` quando precisar entender a política de cache do servidor.
+    
+- Utilize `If-None-Match` ou `If-Modified-Since` conforme os validadores disponibilizados.
+    
+- Trate `304 Not Modified` separadamente de respostas de sucesso com corpo completo.
+    
+- Não presuma que o Requests possui cache persistente automático.
+    
+- Não confunda reutilização de conexões por `Session` com cache de respostas.
+    
+- Respeite as diretivas HTTP de armazenamento e revalidação.
+    
+- Não armazene dados sensíveis indiscriminadamente.
+    
+- Evite implementar cache próprio sem considerar expiração, invalidação, concorrência e separação de usuários.
+    
+- Não trate uma ETag como prova criptográfica de autenticidade ou integridade.
+    
+
+## 14. Referência rápida
+
+|Elemento|Finalidade|
+|---|---|
+|`Cache-Control`|Controlar políticas de cache|
+|`max-age`|Definir o tempo máximo de frescor, em segundos|
+|`no-cache`|Exigir revalidação antes da reutilização|
+|`no-store`|Instruir caches a não armazenar a resposta|
+|`ETag`|Identificar uma versão de representação|
+|`If-None-Match`|Revalidar usando uma ETag|
+|`Last-Modified`|Informar quando a representação foi modificada|
+|`If-Modified-Since`|Revalidar usando uma data de modificação|
+|`304 Not Modified`|Indicar que a representação não precisa ser retransmitida|
+|`response.headers.get()`|Consultar cabeçalhos HTTP|
+|`requests.Session()`|Reutilizar configurações e conexões, não necessariamente respostas em cache|

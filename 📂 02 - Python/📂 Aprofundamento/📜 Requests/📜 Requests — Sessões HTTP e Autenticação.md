@@ -1520,20 +1520,20 @@ Não implemente tentativas infinitas. Use limites de repetição, atrasos apropr
 
 ## 14. Referência rápida
 
-|Método ou recurso|Finalidade|
-|---|---|
-|`requests.get()`|Consultar um recurso.|
-|`requests.post()`|Enviar dados para processamento ou criação.|
-|`requests.put()`|Solicitar substituição de um recurso.|
-|`requests.patch()`|Solicitar atualização parcial.|
-|`requests.delete()`|Solicitar remoção de um recurso.|
-|`params=`|Enviar parâmetros de consulta na URL.|
-|`json=`|Serializar e enviar dados em JSON.|
-|`data=`|Enviar dados como formulário ou corpo fornecido.|
-|`response.json()`|Interpretar o corpo da resposta como JSON.|
-|`response.status_code`|Consultar o status HTTP.|
-|`response.raise_for_status()`|Gerar exceção para status HTTP de erro.|
-|`response.url`|Consultar a URL final da resposta.|
-|`response.headers`|Consultar os cabeçalhos da resposta.|
-|`timeout=`|Definir limites de espera para conexão e leitura.|
-|`requests.Session()`|Reutilizar configurações e conexões entre requisições.|
+| Método ou recurso             | Finalidade                                             |
+| ----------------------------- | ------------------------------------------------------ |
+| `requests.get()`              | Consultar um recurso.                                  |
+| `requests.post()`             | Enviar dados para processamento ou criação.            |
+| `requests.put()`              | Solicitar substituição de um recurso.                  |
+| `requests.patch()`            | Solicitar atualização parcial.                         |
+| `requests.delete()`           | Solicitar remoção de um recurso.                       |
+| `params=`                     | Enviar parâmetros de consulta na URL.                  |
+| `json=`                       | Serializar e enviar dados em JSON.                     |
+| `data=`                       | Enviar dados como formulário ou corpo fornecido.       |
+| `response.json()`             | Interpretar o corpo da resposta como JSON.             |
+| `response.status_code`        | Consultar o status HTTP.                               |
+| `response.raise_for_status()` | Gerar exceção para status HTTP de erro.                |
+| `response.url`                | Consultar a URL final da resposta.                     |
+| `response.headers`            | Consultar os cabeçalhos da resposta.                   |
+| `timeout=`                    | Definir limites de espera para conexão e leitura.      |
+| `requests.Session()`          | Reutilizar configurações e conexões entre requisições. |

@@ -6299,3 +6299,6 @@ O recorte dos primeiros 500 caracteres ajuda a inspecionar uma resposta textual.
 | `Content-Encoding`            | Indicar a codificação aplicada ao conteúdo, como gzip           |
 | `Content-Length`              | Informar o tamanho do corpo, quando disponível                  |
 | `response.raise_for_status()` | Gerar exceção para status HTTP de erro                          |
+
+---
+

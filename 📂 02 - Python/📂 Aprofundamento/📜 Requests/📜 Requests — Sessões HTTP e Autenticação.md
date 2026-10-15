@@ -7286,3 +7286,583 @@ Isso pode ocorrer quando o cache não diferencia usuários, sessões ou contexto
 |`304 Not Modified`|Indicar que a representação não precisa ser retransmitida|
 |`response.headers.get()`|Consultar cabeçalhos HTTP|
 |`requests.Session()`|Reutilizar configurações e conexões, não necessariamente respostas em cache|
+
+---
+# 📜 Requests — Rate Limiting, HTTP 429 e Retry-After
+
+## 1. O que é rate limiting?
+
+Rate limiting é um mecanismo que limita a quantidade de requisições que um cliente pode realizar durante determinado período.
+
+Uma API pode estabelecer, por exemplo, um limite de 60 requisições por minuto para determinado usuário, token ou endereço IP.
+
+Os limites variam conforme o serviço e podem depender de diferentes fatores:
+
+- Identidade do usuário.
+    
+- Token de autenticação.
+    
+- Endereço IP de origem.
+    
+- Endpoint consultado.
+    
+- Plano de acesso.
+    
+- Volume de requisições em determinado intervalo.
+    
+
+O objetivo pode ser proteger a infraestrutura, distribuir recursos entre clientes e reduzir abusos ou sobrecarga.
+
+**Importante:** não existe um limite universal de requisições por minuto. É necessário consultar a documentação da API utilizada.
+
+## 2. O que significa HTTP 429?
+
+O status `429 Too Many Requests` indica que o cliente realizou requisições em uma frequência superior à permitida pelo servidor.
+
+Exemplo de resposta:
+
+```
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 30
+```
+
+Nesse exemplo, o servidor indica que o cliente deve aguardar 30 segundos antes de tentar novamente.
+
+O cabeçalho `Retry-After` pode informar um intervalo em segundos ou uma data HTTP. Seu significado e a política de repetição devem ser interpretados conforme o protocolo e a documentação do serviço.
+
+Uma resposta `429` não significa necessariamente que o endereço IP foi bloqueado permanentemente. O limite pode ser temporário, vinculado à conta ou específico de um endpoint.
+
+## 3. Identificando uma resposta 429 com Requests
+
+Podemos verificar o status HTTP antes de decidir como tratar a resposta.
+
+```
+import requests
+
+url = "https://api.example.com/dados"
+
+response = requests.get(
+    url,
+    timeout=15,
+)
+
+if response.status_code == 429:
+    print("Limite de requisições atingido.")
+elif response.status_code >= 400:
+    print(f"Erro HTTP: {response.status_code}")
+else:
+    print("Requisição concluída.")
+```
+
+### Explicação linha por linha
+
+**Enviar a requisição**
+
+```
+response = requests.get(url, timeout=15)
+```
+
+- `requests.get()` envia uma requisição GET.
+    
+- `url` contém o endereço do endpoint.
+    
+- `timeout=15` define os limites de espera da conexão e da leitura.
+    
+- `response` armazena a resposta HTTP.
+    
+
+O domínio `api.example.com` é ilustrativo. Para utilizar o exemplo, substitua-o por um endpoint real e autorizado.
+
+**Verificar o status 429**
+
+```
+if response.status_code == 429:
+```
+
+A condição compara o código HTTP recebido com `429`.
+
+**Verificar outros erros HTTP**
+
+```
+elif response.status_code >= 400:
+```
+
+Códigos HTTP de `400` a `599` normalmente representam erros do cliente ou do servidor.
+
+**Tratar os demais resultados**
+
+```
+else:
+    print("Requisição concluída.")
+```
+
+Essa mensagem apenas indica que o status não entrou nas condições anteriores. Em uma aplicação real, valide também o status esperado e o conteúdo da resposta.
+
+## 4. Consultando o cabeçalho `Retry-After`
+
+O servidor pode informar quanto tempo o cliente deve esperar antes de realizar outra tentativa.
+
+```
+retry_after = response.headers.get("Retry-After")
+
+print(retry_after)
+```
+
+### Entendendo o código
+
+- `response.headers` contém os cabeçalhos HTTP recebidos.
+    
+- `.get("Retry-After")` consulta o cabeçalho.
+    
+- `retry_after` recebe uma string com o valor informado ou `None` se o cabeçalho não existir.
+    
+
+O valor não deve ser presumido como um número. O cabeçalho também pode conter uma data HTTP.
+
+### Exemplo em segundos
+
+```
+Retry-After: 30
+```
+
+Nesse caso, o valor representa um intervalo de 30 segundos.
+
+### Exemplo com data HTTP
+
+```
+Retry-After: Thu, 15 Oct 2026 17:00:00 GMT
+```
+
+Nesse formato, o servidor indica uma data e hora após a qual a nova tentativa pode ser realizada.
+
+É importante distinguir esses dois formatos para não interpretar uma data como se fosse um número de segundos.
+
+## 5. Convertendo `Retry-After` em tempo de espera
+
+O exemplo a seguir aceita os dois formatos comuns do cabeçalho.
+
+```
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+
+
+def calcular_espera(valor):
+    if not valor:
+        return None
+
+    try:
+        segundos = int(valor)
+        return max(0, segundos)
+    except ValueError:
+        pass
+
+    try:
+        data_retentativa = parsedate_to_datetime(valor)
+
+        if data_retentativa.tzinfo is None:
+            data_retentativa = data_retentativa.replace(
+                tzinfo=timezone.utc
+            )
+
+        agora = datetime.now(timezone.utc)
+
+        return max(
+            0,
+            (data_retentativa - agora).total_seconds(),
+        )
+
+    except (TypeError, ValueError, OverflowError):
+        return None
+```
+
+### Explicação
+
+**Importar ferramentas de data e hora**
+
+```
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+```
+
+- `datetime` permite trabalhar com datas e horários.
+    
+- `timezone.utc` representa o fuso horário UTC.
+    
+- `parsedate_to_datetime()` interpreta datas no formato utilizado por cabeçalhos HTTP, quando válidas.
+    
+
+**Definir a função**
+
+```
+def calcular_espera(valor):
+```
+
+Cria uma função que recebe o valor de `Retry-After` e tenta convertê-lo em uma quantidade de segundos.
+
+**Verificar se o cabeçalho existe**
+
+```
+if not valor:
+    return None
+```
+
+Se o valor estiver ausente ou vazio, a função retorna `None`, indicando que não conseguiu calcular uma espera a partir do cabeçalho.
+
+**Tentar interpretar um número**
+
+```
+segundos = int(valor)
+return max(0, segundos)
+```
+
+Se o valor puder ser convertido para inteiro, a função o interpreta como segundos.
+
+`max(0, segundos)` impede que um número negativo resulte em uma espera negativa.
+
+**Interpretar uma data**
+
+```
+data_retentativa = parsedate_to_datetime(valor)
+```
+
+Se a conversão numérica falhar, a função tenta interpretar o valor como uma data HTTP.
+
+**Calcular a diferença**
+
+```
+(data_retentativa - agora).total_seconds()
+```
+
+Subtrai a data atual da data informada pelo servidor e transforma a diferença em segundos.
+
+O resultado é limitado a zero ou mais.
+
+**Tratar valores inválidos**
+
+Se a string não representar um número válido nem uma data reconhecível, a função retorna `None`.
+
+Em aplicações reais, também é prudente estabelecer um limite máximo de espera e evitar depender exclusivamente do relógio local, que pode estar incorreto.
+
+## 6. Implementando uma tentativa com espera
+
+Uma forma simples de lidar com `429` é consultar o cabeçalho e aguardar antes de tentar novamente.
+
+```
+import time
+import requests
+
+url = "https://api.example.com/dados"
+
+response = requests.get(
+    url,
+    timeout=15,
+)
+
+if response.status_code == 429:
+    retry_after = response.headers.get("Retry-After")
+
+    if retry_after and retry_after.isdigit():
+        espera = int(retry_after)
+        time.sleep(espera)
+
+        response = requests.get(
+            url,
+            timeout=15,
+        )
+
+response.raise_for_status()
+```
+
+### Explicação
+
+**Importar** `**time**`
+
+```
+import time
+```
+
+Importa funções relacionadas ao tempo.
+
+**Consultar** `**Retry-After**`
+
+```
+retry_after = response.headers.get("Retry-After")
+```
+
+Obtém o tempo indicado pelo servidor, se estiver disponível.
+
+**Verificar se é numérico**
+
+```
+if retry_after and retry_after.isdigit():
+```
+
+A condição verifica se o cabeçalho existe e contém apenas dígitos.
+
+Esse exemplo simples só trata o formato em segundos. Ele não interpreta o formato de data HTTP.
+
+**Aguardar**
+
+```
+time.sleep(espera)
+```
+
+Suspende a execução da thread atual durante o intervalo especificado.
+
+**Repetir a requisição**
+
+O programa realiza uma nova requisição depois da espera.
+
+**Validar o resultado**
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção se a resposta final indicar um status HTTP de erro.
+
+### Limitações desse exemplo
+
+- Realiza no máximo uma nova tentativa.
+    
+- Não interpreta datas HTTP em `Retry-After`.
+    
+- Não estabelece um limite máximo para a espera.
+    
+- Não trata especificamente falhas de conexão.
+    
+- Não garante que repetir a requisição seja seguro para qualquer endpoint.
+    
+
+O exemplo serve para demonstrar o mecanismo básico, não como implementação completa para produção.
+
+## 7. Implementando tentativas limitadas
+
+Em uma aplicação real, é útil definir um número máximo de tentativas e uma política de espera.
+
+```
+import time
+
+import requests
+
+
+def consultar_api(url, max_tentativas=3):
+    for tentativa in range(max_tentativas):
+        response = requests.get(
+            url,
+            timeout=(5, 20),
+        )
+
+        if response.status_code != 429:
+            response.raise_for_status()
+            return response
+
+        retry_after = response.headers.get("Retry-After")
+
+        if retry_after and retry_after.isdigit():
+            espera = int(retry_after)
+        else:
+            espera = 2 ** tentativa
+
+        if tentativa < max_tentativas - 1:
+            time.sleep(espera)
+
+    raise RuntimeError(
+        "Limite de tentativas atingido após respostas HTTP 429."
+    )
+```
+
+### Explicação das partes principais
+
+**Parâmetro** `**max_tentativas**`
+
+Define o número máximo de requisições que a função tentará realizar.
+
+**Laço** `**for**`
+
+```
+for tentativa in range(max_tentativas):
+```
+
+Percorre os índices das tentativas, começando em zero.
+
+Com `max_tentativas=3`, os índices serão `0`, `1` e `2`.
+
+**Verificar se a resposta não é 429**
+
+```
+if response.status_code != 429:
+    response.raise_for_status()
+    return response
+```
+
+Se o servidor não retornou `429`, a função verifica se existe outro erro HTTP. Se não houver, retorna o objeto `Response`.
+
+**Calcular a espera**
+
+```
+espera = 2 ** tentativa
+```
+
+O operador `**` realiza exponenciação.
+
+A sequência de espera será de 1, 2 e 4 segundos para os índices 0, 1 e 2, respectivamente, quando esse caminho for utilizado.
+
+**Evitar esperar após a última tentativa**
+
+```
+if tentativa < max_tentativas - 1:
+    time.sleep(espera)
+```
+
+Não há motivo para aguardar se o programa não fará outra tentativa.
+
+**Informar que as tentativas acabaram**
+
+```
+raise RuntimeError(...)
+```
+
+Gera uma exceção quando todas as tentativas terminam em `429`.
+
+### Limitações
+
+Esse exemplo é didático. Uma implementação de produção deve:
+
+- Interpretar os dois formatos de `Retry-After`.
+    
+- Limitar o tempo máximo de espera.
+    
+- Tratar falhas de rede e timeouts.
+    
+- Considerar jitter para evitar que vários clientes repitam simultaneamente.
+    
+- Registrar tentativas sem expor informações sensíveis.
+    
+- Respeitar os limites documentados pelo serviço.
+    
+
+Também é importante observar que o código só repete respostas `429`; ele não tenta novamente automaticamente diante de falhas de conexão.
+
+## 8. O que é exponential backoff?
+
+Exponential backoff é uma estratégia em que o intervalo entre tentativas aumenta progressivamente.
+
+Uma fórmula simples é:
+
+[  
+t_n = \min(t_{\max}, t_0 \times 2^n)  
+]
+
+Onde:
+
+- (t_n): tempo de espera da tentativa atual.
+    
+- (t_{\max}): limite máximo de espera.
+    
+- (t_0): intervalo inicial.
+    
+- (n): índice da tentativa.
+    
+
+Por exemplo, com intervalo inicial de 1 segundo e limite máximo de 8 segundos:
+
+|Índice|Espera calculada|
+|---|---|
+|0|1 segundo|
+|1|2 segundos|
+|2|4 segundos|
+|3|8 segundos|
+|4|8 segundos|
+|5|8 segundos|
+
+A estratégia reduz a frequência de tentativas quando um serviço está sobrecarregado.
+
+### Jitter
+
+Jitter adiciona uma variação aleatória à espera para evitar que vários clientes façam novas tentativas exatamente no mesmo instante.
+
+Um exemplo conceitual é escolher um tempo aleatório entre zero e o intervalo calculado.
+
+O jitter deve ser combinado com limites razoáveis de tempo e com a política de repetição apropriada para o serviço.
+
+## 9. O cabeçalho `Retry-After` e a política de repetição
+
+Quando o servidor fornece `Retry-After`, o cliente deve considerar essa indicação ao planejar a próxima tentativa.
+
+Uma estratégia cuidadosa pode:
+
+1. Ler o cabeçalho.
+    
+2. Interpretar o intervalo ou a data.
+    
+3. Aplicar limites operacionais à espera.
+    
+4. Aguardar pelo tempo apropriado.
+    
+5. Repetir somente se a operação puder ser repetida com segurança.
+    
+
+Se a política do serviço exigir aguardar um intervalo maior do que o limite operacional do cliente, não é correto ignorar silenciosamente a orientação e repetir imediatamente. O programa pode encerrar a operação, agendar a tentativa para depois ou informar que o limite de espera foi excedido.
+
+## 10. Rate limiting não é o mesmo que bloquear o cliente
+
+Uma resposta `429` normalmente representa uma limitação de frequência, mas os sistemas podem aplicar políticas diferentes.
+
+Por exemplo:
+
+- Limite por minuto.
+    
+- Limite diário.
+    
+- Limite de requisições simultâneas.
+    
+- Limite por endpoint.
+    
+- Limite por usuário ou token.
+    
+
+Algumas APIs informam limites e cotas por meio de cabeçalhos próprios. Os nomes e a semântica desses cabeçalhos não são universais.
+
+Não presuma que mudar de IP, criar novas sessões ou repetir requisições rapidamente seja uma solução apropriada. O correto é respeitar a política de acesso, autenticação e frequência do serviço.
+
+## 11. Boas práticas
+
+- Consulte a documentação da API antes de definir a frequência das requisições.
+    
+- Trate `429` explicitamente quando o serviço utilizar esse status para rate limiting.
+    
+- Considere `Retry-After` quando estiver presente.
+    
+- Defina limites de tentativas e de tempo total de espera.
+    
+- Utilize backoff com jitter quando apropriado.
+    
+- Não repita operações que possam gerar efeitos duplicados sem verificar sua segurança.
+    
+- Separe erros HTTP de falhas de rede.
+    
+- Evite laços de repetição infinitos.
+    
+- Não utilize tentativas automáticas para contornar controles de acesso.
+    
+- Registre informações úteis para diagnóstico sem expor tokens ou dados sensíveis.
+    
+
+## 12. Referência rápida
+
+|Elemento|Finalidade|
+|---|---|
+|`429 Too Many Requests`|Indicar excesso de requisições|
+|`Retry-After`|Informar quando uma nova tentativa pode ocorrer|
+|`response.status_code`|Consultar o status HTTP|
+|`response.headers.get()`|Consultar um cabeçalho|
+|`time.sleep(segundos)`|Suspender a execução durante um intervalo|
+|`range(max_tentativas)`|Controlar o número de tentativas|
+|`2 ** tentativa`|Calcular uma espera exponencial simples|
+|Exponential backoff|Aumentar progressivamente o intervalo entre tentativas|
+|Jitter|Introduzir variação no intervalo entre tentativas|
+|`response.raise_for_status()`|Gerar exceção para status HTTP de erro|
+
+---

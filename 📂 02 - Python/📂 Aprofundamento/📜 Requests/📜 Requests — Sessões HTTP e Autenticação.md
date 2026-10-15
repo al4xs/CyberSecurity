@@ -3708,3 +3708,451 @@ O exemplo utiliza uma API pública de testes. A validação apresentada é inten
 |Preservar causa de uma exceção|`raise NovaExcecao(...) from erro`|
 
 ---
+# 📜 Requests — Paginação, Limites de Requisição e Rate Limiting
+
+## 1. O que é paginação em APIs?
+
+Quando uma API possui muitos registros, ela pode não retornar todos de uma vez. Em vez disso, divide os resultados em páginas. Esse mecanismo é chamado de **paginação** (_pagination_).
+
+Imagine uma API que disponibiliza 1.000 usuários. Retornar todos em uma única resposta pode aumentar o consumo de memória, o tempo de processamento e o tamanho da transferência.
+
+Uma API paginada pode retornar 100 registros por requisição, exigindo várias consultas para obter o conjunto completo.
+
+```
+API com 1.000 registros
+          |
+          v
+   +------+------+
+   |      |      |
+ Página  Página  Página
+   1       2       3
+ 100     100     100
+registros registros registros
+```
+
+A quantidade de registros por página e a forma de navegar entre elas dependem da API. Não existe um único padrão de paginação para todos os serviços.
+
+## 2. Paginação com `page` e `limit`
+
+Um modelo comum utiliza dois parâmetros:
+
+- `page`: indica qual página deve ser consultada.
+    
+- `limit`: define a quantidade máxima de registros solicitados por página.
+    
+
+Exemplo de URL:
+
+```
+https://api.example.com/users?page=2&limit=100
+```
+
+Nesse exemplo, o cliente solicita a segunda página, com um limite de 100 registros.
+
+Com Requests, os parâmetros podem ser enviados utilizando `params`:
+
+```
+import requests
+
+url = "https://httpbin.org/get"
+
+response = requests.get(
+    url,
+    params={
+        "page": 2,
+        "limit": 100,
+    },
+    timeout=10,
+)
+
+response.raise_for_status()
+print(response.url)
+```
+
+### Entendendo o código
+
+- `params`: recebe os parâmetros da query string.
+    
+- `"page": 2`: informa o valor do parâmetro `page`.
+    
+- `"limit": 100`: informa o limite solicitado.
+    
+- `response.url`: mostra a URL efetivamente utilizada pelo Requests.
+    
+
+O Requests codifica os parâmetros para compor a URL. O endpoint `httpbin.org/get` é apenas um serviço de teste que permite observar a requisição; ele não implementa uma API real de usuários paginados.
+
+## 3. Percorrendo páginas com um laço
+
+Quando a API utiliza números de página, podemos usar um laço `while` ou `for` para percorrer os resultados.
+
+O exemplo abaixo demonstra o fluxo utilizando uma estrutura de resposta fictícia, sem depender de um serviço externo específico.
+
+```
+def processar_paginas(buscar_pagina, limite=100):
+    pagina = 1
+    registros = []
+
+    while True:
+        resposta = buscar_pagina(
+            page=pagina,
+            limit=limite,
+        )
+
+        itens = resposta["items"]
+
+        if not itens:
+            break
+
+        registros.extend(itens)
+        pagina += 1
+
+    return registros
+```
+
+### Entendendo cada parte
+
+`**def processar_paginas(buscar_pagina, limite=100):**`
+
+Define uma função que recebe outra função, `buscar_pagina`, e um limite de registros por página.
+
+O parâmetro `limite=100` tem um valor padrão: se o chamador não informar outro valor, será utilizado `100`.
+
+`**pagina = 1**`
+
+Inicializa a paginação na primeira página. Algumas APIs começam em zero, portanto é necessário consultar a documentação do serviço.
+
+`**registros = []**`
+
+Cria uma lista vazia para reunir os itens obtidos.
+
+`**while True:**`
+
+Inicia um laço que continuará até que uma condição interna provoque sua interrupção.
+
+`**resposta = buscar_pagina(...)**`
+
+Chama a função responsável por consultar a API. O exemplo pressupõe que ela aceite os argumentos `page` e `limit`.
+
+`**itens = resposta["items"]**`
+
+Obtém a lista de itens de uma resposta cujo formato esperado contém a chave `items`.
+
+`**if not itens: break**`
+
+Interrompe o laço quando a página não contém itens. Esse critério só é adequado se a API documentar que uma lista vazia indica o fim dos resultados.
+
+`**registros.extend(itens)**`
+
+Adiciona os elementos de `itens` individualmente à lista `registros`.
+
+`**pagina += 1**`
+
+Avança para a próxima página.
+
+`**return registros**`
+
+Devolve a lista completa acumulada.
+
+### Limitações do exemplo
+
+A função pressupõe um formato específico de resposta e não implementa tratamento de erros, limite máximo de páginas nem proteção contra APIs que repetem indefinidamente a mesma página.
+
+Além disso, algumas APIs retornam metadados como `total_pages`, `next`, `has_more` ou um cursor. Nesses casos, a condição de parada deve seguir o contrato real do serviço.
+
+## 4. Implementando a consulta HTTP de cada página
+
+Veja como conectar a ideia anterior a uma função que utiliza Requests:
+
+```
+import requests
+
+
+def buscar_pagina(page: int, limit: int = 100) -> dict:
+    response = requests.get(
+        "https://api.example.com/users",
+        params={
+            "page": page,
+            "limit": limit,
+        },
+        timeout=(3, 10),
+    )
+
+    response.raise_for_status()
+    return response.json()
+```
+
+Essa função é um modelo para adaptar a uma API real.
+
+- `page: int`: anota o parâmetro `page` como inteiro.
+    
+- `limit: int = 100`: define um limite padrão de 100 registros.
+    
+- `timeout=(3, 10)`: define os timeouts de conexão e leitura.
+    
+- `raise_for_status()`: interrompe o fluxo se houver um erro HTTP.
+    
+- `response.json()`: interpreta o corpo como JSON.
+    
+
+O domínio `api.example.com` é ilustrativo. Para utilizá-la, substitua a URL e confirme os nomes dos parâmetros e o formato da resposta na documentação da API escolhida.
+
+## 5. Outros modelos de paginação
+
+Nem toda API utiliza `page` e `limit`. Existem vários modelos comuns.
+
+### Offset e limit
+
+O parâmetro `offset` indica quantos registros devem ser ignorados antes de retornar os próximos resultados.
+
+```
+params = {
+    "offset": 200,
+    "limit": 100,
+}
+```
+
+Nesse exemplo, o cliente solicita até 100 registros após os primeiros 200.
+
+### Cursor
+
+Algumas APIs retornam um cursor que identifica a posição a partir da qual a próxima página deve ser obtida.
+
+```
+params = {
+    "cursor": "CURSOR_DE_EXEMPLO",
+}
+```
+
+O valor do cursor costuma ser fornecido pela própria API. Ele não deve ser inventado nem tratado como um número de página.
+
+### Link para a próxima página
+
+Outra possibilidade é a resposta fornecer uma URL ou um campo `next` indicando a próxima página.
+
+```
+{
+    "items": [
+        {"id": 1},
+        {"id": 2}
+    ],
+    "next": "https://api.example.com/users?cursor=abc"
+}
+```
+
+Nesse modelo, o programa deve seguir o mecanismo de navegação documentado pela API. O exemplo de JSON acima é ilustrativo.
+
+## 6. O que é rate limiting?
+
+**Rate limiting** é um mecanismo utilizado por servidores para limitar a frequência ou a quantidade de requisições feitas por um cliente durante determinado período.
+
+Por exemplo, uma API pode permitir até 60 requisições por minuto para uma credencial. Ao ultrapassar esse limite, pode responder com o status HTTP `429 Too Many Requests`.
+
+Os limites podem ser aplicados por usuário, token, endereço IP, endpoint ou outros critérios definidos pelo serviço.
+
+### Exemplo de fluxo
+
+```
+Cliente Python
+      |
+      v
+Envia requisições
+      |
+      v
+Servidor verifica o limite
+      |
+   +--+--+
+   |     |
+ Dentro  Limite
+ limite  excedido
+   |     |
+   v     v
+Resposta 429
+normal   Too Many Requests
+```
+
+Os limites reais dependem da política da API. Não presuma que todos os serviços utilizam o mesmo número de requisições ou o mesmo período.
+
+## 7. Detectando o status `429`
+
+Uma forma simples de identificar uma resposta de rate limiting é consultar o status HTTP.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/status/429",
+    timeout=10,
+)
+
+if response.status_code == 429:
+    print("O servidor informou que o limite foi excedido.")
+else:
+    response.raise_for_status()
+    print("Resposta sem erro HTTP.")
+```
+
+O endpoint de teste retorna o status `429`. Em uma API real, o comportamento e os cabeçalhos adicionais dependerão do serviço.
+
+Observe que esse código trata o status explicitamente. Se chamássemos `raise_for_status()` antes da condição, uma resposta `429` geraria `HTTPError` e a condição posterior não seria executada, a menos que a exceção fosse capturada.
+
+## 8. Interpretando `Retry-After`
+
+Uma resposta `429` ou `503` pode conter o cabeçalho `Retry-After`, que informa quanto tempo o cliente deve aguardar antes de tentar novamente.
+
+O valor pode ser expresso como um número de segundos ou como uma data HTTP, conforme a especificação.
+
+```
+retry_after = response.headers.get("Retry-After")
+
+if retry_after is not None:
+    print("Valor de Retry-After:", retry_after)
+```
+
+O método `.get()` retorna o valor do cabeçalho ou `None` caso ele não exista.
+
+Não interprete sempre o valor como um inteiro: ele também pode conter uma data. Para implementar uma espera correta, consulte a especificação HTTP e a documentação da API.
+
+Quando o cabeçalho estiver ausente, o cliente precisa seguir uma política de espera própria, com limites apropriados.
+
+## 9. Pausa entre requisições
+
+Em automações autorizadas, pode ser útil controlar a frequência das consultas.
+
+```
+import time
+import requests
+
+url = "https://httpbin.org/get"
+
+for numero in range(3):
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+
+    print("Requisição concluída:", numero + 1)
+    time.sleep(1)
+```
+
+### Entendendo o controle de frequência
+
+- `range(3)`: gera três valores, de `0` a `2`.
+    
+- `numero + 1`: transforma esses valores em números de tentativa de `1` a `3` para exibição.
+    
+- `time.sleep(1)`: pausa a execução por aproximadamente um segundo entre as iterações.
+    
+
+A pausa reduz a frequência das chamadas feitas por esse laço, mas não garante o cumprimento de todos os limites de uma API. Outros processos, usuários ou políticas do servidor também podem afetar o rate limiting.
+
+O exemplo é uma demonstração básica, não uma política completa de retries.
+
+## 10. Combinando paginação, timeout e tratamento de erros
+
+Ao consultar muitas páginas, é importante evitar loops ilimitados e tratar falhas de comunicação.
+
+O exemplo abaixo demonstra uma estrutura adaptável para APIs que retornam `items` e `next_page`.
+
+```
+import requests
+
+
+def obter_todos_os_itens(url: str) -> list:
+    itens_completos = []
+    pagina = 1
+    max_paginas = 1000
+
+    with requests.Session() as session:
+        while pagina <= max_paginas:
+            try:
+                response = session.get(
+                    url,
+                    params={"page": pagina, "limit": 100},
+                    timeout=(3, 10),
+                )
+
+                response.raise_for_status()
+                dados = response.json()
+
+            except requests.exceptions.RequestException as erro:
+                raise RuntimeError(
+                    f"Falha ao consultar a página {pagina}."
+                ) from erro
+
+            if not isinstance(dados, dict):
+                raise ValueError("A resposta precisa ser um objeto JSON.")
+
+            itens = dados.get("items")
+
+            if not isinstance(itens, list):
+                raise ValueError("O campo 'items' precisa ser uma lista.")
+
+            if not itens:
+                return itens_completos
+
+            itens_completos.extend(itens)
+
+            proxima_pagina = dados.get("next_page")
+
+            if proxima_pagina is None:
+                return itens_completos
+
+            pagina = proxima_pagina
+
+    raise RuntimeError("O limite máximo de páginas foi atingido.")
+```
+
+### O que esse exemplo pressupõe?
+
+A API precisa retornar um objeto JSON com:
+
+- `items`: lista de registros da página.
+    
+- `next_page`: número da próxima página, ou `null` quando não houver outra página.
+    
+
+Esse formato é hipotético. APIs reais podem utilizar outras estruturas.
+
+O limite `max_paginas` funciona como uma proteção adicional. Ele não substitui o mecanismo oficial de paginação nem garante que todos os registros tenham sido obtidos.
+
+Também é necessário validar o tipo e o valor de `next_page` antes de atribuí-lo a `pagina` em um programa de produção.
+
+## 11. Boas práticas
+
+1. Leia a documentação da API para descobrir o mecanismo de paginação.
+    
+2. Não presuma que a primeira página é `0` ou `1`; confirme o padrão do serviço.
+    
+3. Defina um timeout para cada requisição.
+    
+4. Respeite os limites de frequência informados pela API.
+    
+5. Trate o status `429` e considere o cabeçalho `Retry-After`.
+    
+6. Limite a quantidade máxima de páginas ou iterações.
+    
+7. Valide o formato da resposta antes de acessar seus campos.
+    
+8. Evite acumular milhões de registros em uma única lista se o processamento puder ser feito por página.
+    
+9. Utilize uma `Session` quando fizer sentido reutilizar conexões e configurações.
+    
+10. Evite repetir automaticamente operações que possam alterar dados sem considerar idempotência e duplicação.
+    
+
+## 12. Referência rápida
+
+|Objetivo|Recurso|
+|---|---|
+|Paginação por página|`params={"page": 1, "limit": 100}`|
+|Paginação por offset|`params={"offset": 0, "limit": 100}`|
+|Enviar cursor|`params={"cursor": cursor}`|
+|Identificar rate limiting|`response.status_code == 429`|
+|Ler a orientação de espera|`response.headers.get("Retry-After")`|
+|Pausar execução|`time.sleep(segundos)`|
+|Reutilizar conexões|`requests.Session()`|
+|Limitar iterações|`max_paginas`|
+|Validar lista recebida|`isinstance(itens, list)`|
+|Detectar erros HTTP|`response.raise_for_status()`|
+|Configurar timeout|`timeout=(3, 10)`|
+
+---

@@ -5863,15 +5863,439 @@ Não presuma que todo `POST` pode ser repetido sem efeitos colaterais.
 
 ## 13. Referência rápida
 
-|Elemento|Finalidade|
+| Elemento                         | Finalidade                                   |
+| -------------------------------- | -------------------------------------------- |
+| `data=`                          | Enviar campos de formulário                  |
+| `json=`                          | Serializar e enviar dados JSON               |
+| `files=`                         | Enviar arquivos em `multipart/form-data`     |
+| `"rb"`                           | Abrir um arquivo para leitura binária        |
+| `timeout=30`                     | Configurar o tempo de espera                 |
+| `response.raise_for_status()`    | Detectar status HTTP de erro                 |
+| `requests.Session()`             | Reutilizar configurações, cookies e conexões |
+| `headers={"Authorization": ...}` | Enviar um cabeçalho de autorização           |
+| `os.environ.get()`               | Obter uma variável de ambiente               |
+| `with open(...)`                 | Garantir o fechamento do arquivo             |
+
+---
+
+# 📜 Requests — Download de Dados, Codificação e Compressão HTTP
+
+## 1. Entendendo os dados recebidos por HTTP
+
+Quando o Requests recebe uma resposta HTTP, o corpo da resposta pode conter diferentes tipos de dados:
+
+- Texto HTML de uma página web.
+    
+- Dados estruturados em JSON.
+    
+- Imagens e documentos binários.
+    
+- Conteúdo comprimido durante a transferência.
+    
+- Dados que precisam ser interpretados com uma codificação específica.
+    
+
+O Requests disponibiliza diferentes formas de acessar o corpo da resposta. A escolha depende do tipo de conteúdo e do que o programa precisa fazer com ele.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/json",
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.status_code)
+print(response.headers.get("Content-Type"))
+print(response.text)
+```
+
+### Explicação
+
+- `requests.get(...)`: envia uma requisição HTTP GET.
+    
+- `timeout=15`: define os limites de espera da conexão e da leitura.
+    
+- `response.raise_for_status()`: gera uma exceção se o status HTTP indicar erro.
+    
+- `response.status_code`: retorna o código de status da resposta.
+    
+- `response.headers.get("Content-Type")`: consulta o tipo de conteúdo informado pelo servidor.
+    
+- `response.text`: disponibiliza o corpo como texto, utilizando a codificação selecionada pelo Requests.
+    
+
+O exemplo usa um endpoint público de demonstração. Em aplicações reais, a URL e o conteúdo recebido dependem do serviço consultado.
+
+## 2. Diferença entre `response.content` e `response.text`
+
+Essas propriedades acessam o corpo da resposta de maneiras diferentes.
+
+### `response.content`
+
+Retorna o conteúdo como bytes.
+
+```
+conteudo = response.content
+
+print(type(conteudo))
+```
+
+A função `type()` permite verificar o tipo do objeto. Nesse caso, o resultado será `bytes`.
+
+Bytes são adequados para dados que precisam ser preservados em sua forma binária, como imagens, PDFs e arquivos compactados.
+
+### `response.text`
+
+Retorna o conteúdo como uma string Python.
+
+```
+texto = response.text
+
+print(type(texto))
+```
+
+O resultado será `str`.
+
+Para transformar bytes em texto, é necessário utilizar uma codificação de caracteres. O Requests tenta selecionar uma codificação a partir das informações disponíveis na resposta, incluindo seus cabeçalhos.
+
+### Comparação
+
+|Propriedade|Tipo retornado|Uso comum|
+|---|---|---|
+|`response.content`|`bytes`|Arquivos binários e conteúdo bruto|
+|`response.text`|`str`|HTML, texto e outros conteúdos textuais|
+|`response.json()`|Objeto Python|Corpos JSON válidos|
+
+A propriedade `response.json()` interpreta o corpo como JSON. Ela não garante que o servidor retornou um status de sucesso; para isso, verifique também `response.status_code` ou utilize `response.raise_for_status()`.
+
+## 3. O que é codificação de caracteres?
+
+Codificação de caracteres é a forma como caracteres textuais são representados em bytes.
+
+O UTF-8 é uma codificação amplamente utilizada na web.
+
+Considere este exemplo:
+
+```
+texto = "Olá, mundo!"
+
+conteudo = texto.encode("utf-8")
+
+print(conteudo)
+```
+
+### Explicação
+
+- `texto` contém uma string Python.
+    
+- `.encode("utf-8")` transforma a string em bytes usando UTF-8.
+    
+- `conteudo` passa a armazenar um objeto `bytes`.
+    
+
+A operação inversa é realizada com `.decode()`:
+
+```
+texto_recuperado = conteudo.decode("utf-8")
+
+print(texto_recuperado)
+```
+
+O método `.decode("utf-8")` interpreta os bytes como texto codificado em UTF-8.
+
+Se os bytes não forem válidos nessa codificação, a operação poderá gerar `UnicodeDecodeError`.
+
+## 4. Consultando a codificação utilizada pelo Requests
+
+O atributo `response.encoding` informa a codificação que o Requests utiliza para transformar o corpo em texto por meio de `response.text`.
+
+```
+import requests
+
+response = requests.get(
+    "https://example.com",
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.encoding)
+```
+
+O valor pode ser uma string, como `"utf-8"`, ou `None`, dependendo das informações disponíveis.
+
+### Definindo uma codificação manualmente
+
+Quando você conhece a codificação correta do conteúdo, pode defini-la explicitamente:
+
+```
+response.encoding = "utf-8"
+
+texto = response.text
+```
+
+A atribuição informa ao Requests qual codificação deve utilizar ao produzir `response.text`.
+
+**Atenção:** não defina uma codificação aleatoriamente para tentar corrigir caracteres incorretos. A codificação escolhida precisa corresponder aos bytes recebidos. Caso contrário, o texto poderá continuar incorreto.
+
+Se precisar examinar os bytes originais, utilize `response.content`.
+
+## 5. O que é compressão HTTP?
+
+Servidores podem comprimir o corpo de uma resposta para reduzir a quantidade de dados transferidos pela rede.
+
+Algoritmos comuns incluem:
+
+- `gzip`
+    
+- `deflate`
+    
+- `br`, quando há suporte apropriado no cliente
+    
+
+A negociação de compressão normalmente utiliza o cabeçalho `Accept-Encoding`.
+
+Um cliente pode indicar os formatos que aceita:
+
+```
+Accept-Encoding: gzip, deflate
+```
+
+O servidor pode responder com um cabeçalho como:
+
+```
+Content-Encoding: gzip
+```
+
+O primeiro cabeçalho informa os formatos aceitos pelo cliente. O segundo indica a codificação de conteúdo aplicada à resposta.
+
+A compressão HTTP é diferente da codificação de caracteres: a primeira reduz ou transforma a representação do conteúdo durante a transferência; a segunda define como interpretar bytes como texto.
+
+## 6. Como o Requests trata a compressão?
+
+Em condições normais, o Requests negocia formatos de compressão suportados e descomprime automaticamente o conteúdo quando necessário.
+
+Por isso, normalmente você pode acessar o corpo da resposta diretamente:
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/gzip",
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.json())
+```
+
+O endpoint de demonstração retorna uma resposta relacionada a gzip. O Requests cuida da descompressão HTTP necessária para que o corpo possa ser interpretado como JSON.
+
+Na maioria dos casos, você não precisa executar manualmente uma função de descompressão para ler o corpo da resposta.
+
+### Atenção à diferença entre tamanho transferido e tamanho descomprimido
+
+O tamanho do conteúdo após a descompressão pode ser diferente do tamanho transferido pela rede.
+
+Consequentemente:
+
+- `Content-Length`, quando presente, refere-se ao tamanho do corpo da mensagem conforme transmitido na representação HTTP correspondente, que pode estar comprimida.
+    
+- `len(response.content)` mede os bytes disponibilizados após o processamento normal feito pelo Requests, incluindo a descompressão aplicável.
+    
+- Os dois valores não precisam coincidir quando há compressão.
+    
+
+Não utilize essa comparação isoladamente para determinar se uma transferência está completa ou se um arquivo é íntegro.
+
+## 7. Inspecionando os cabeçalhos de compressão
+
+Podemos consultar os cabeçalhos da resposta para entender como o conteúdo foi enviado.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/gzip",
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.headers.get("Content-Encoding"))
+print(response.headers.get("Content-Length"))
+```
+
+### Explicação
+
+- `response.headers`: coleção de cabeçalhos da resposta.
+    
+- `.get("Content-Encoding")`: consulta o algoritmo de codificação do conteúdo, se informado.
+    
+- `.get("Content-Length")`: consulta o tamanho informado para o corpo, se disponível.
+    
+
+A ausência de `Content-Encoding` não significa que ocorreu um erro. O servidor pode ter enviado o conteúdo sem compressão ou utilizado outra forma de transferência.
+
+Da mesma maneira, `Content-Length` pode não estar presente em todas as respostas.
+
+## 8. Quando é necessário acessar os bytes originais da transferência?
+
+Em aplicações comuns, `response.content` é suficiente para obter o conteúdo processado pelo Requests.
+
+Porém, existem situações específicas em que é necessário inspecionar os dados antes da descompressão HTTP, por exemplo, ao investigar detalhes de uma transferência ou implementar um processamento de baixo nível.
+
+Nesses casos, é necessário compreender a diferença entre:
+
+- O corpo da resposta disponibilizado pela interface de alto nível do Requests.
+    
+- Os bytes transmitidos pela camada HTTP.
+    
+- Os dados descomprimidos.
+    
+- O texto interpretado por uma codificação de caracteres.
+    
+
+O streaming com `response.iter_content()` normalmente fornece blocos já descomprimidos quando a descompressão HTTP automática está ativa. Portanto, não presuma que esses blocos representam exatamente os bytes comprimidos transmitidos pela rede.
+
+O acesso de baixo nível pode depender de `response.raw` e das opções de leitura da resposta. Como isso envolve detalhes de transporte, não é recomendável utilizá-lo sem uma necessidade específica.
+
+## 9. Validando conteúdo antes de processá-lo
+
+O cabeçalho `Content-Type` indica o tipo de conteúdo declarado pelo servidor.
+
+Exemplos:
+
+|Cabeçalho|Significado|
 |---|---|
-|`data=`|Enviar campos de formulário|
-|`json=`|Serializar e enviar dados JSON|
-|`files=`|Enviar arquivos em `multipart/form-data`|
-|`"rb"`|Abrir um arquivo para leitura binária|
-|`timeout=30`|Configurar o tempo de espera|
-|`response.raise_for_status()`|Detectar status HTTP de erro|
-|`requests.Session()`|Reutilizar configurações, cookies e conexões|
-|`headers={"Authorization": ...}`|Enviar um cabeçalho de autorização|
-|`os.environ.get()`|Obter uma variável de ambiente|
-|`with open(...)`|Garantir o fechamento do arquivo|
+|`text/html`|Documento HTML|
+|`application/json`|JSON|
+|`application/pdf`|Documento PDF|
+|`image/png`|Imagem PNG|
+|`application/octet-stream`|Dados binários genéricos|
+
+Exemplo de inspeção:
+
+```
+import requests
+
+response = requests.get(
+    "https://example.com",
+    timeout=15,
+)
+
+response.raise_for_status()
+
+content_type = response.headers.get("Content-Type", "")
+
+if "text/html" in content_type.lower():
+    print("A resposta declara conteúdo HTML.")
+else:
+    print(f"Tipo declarado: {content_type or 'não informado'}")
+```
+
+### Explicação
+
+`**response.headers.get("Content-Type", "")**`
+
+Consulta o cabeçalho e retorna uma string vazia se ele estiver ausente.
+
+`**.lower()**`
+
+Converte a string para letras minúsculas, permitindo fazer a comparação sem diferenciar maiúsculas e minúsculas.
+
+`**if "text/html" in ...**`
+
+Verifica se a indicação `text/html` aparece no valor do cabeçalho.
+
+Essa verificação é apenas uma inspeção inicial. O cabeçalho não prova que o conteúdo realmente seja HTML, pois a resposta pode estar malformada ou ter sido declarada incorretamente.
+
+## 10. Erros comuns
+
+### Caracteres acentuados aparecem incorretamente
+
+**Possível causa:** a codificação utilizada para interpretar o corpo não corresponde à codificação real dos bytes.
+
+**Como investigar:**
+
+```
+print(response.encoding)
+print(response.headers.get("Content-Type"))
+```
+
+Confira a codificação declarada e, quando necessário, consulte a documentação do serviço.
+
+### A resposta não pode ser interpretada como JSON
+
+**Possível causa:** o servidor retornou HTML, texto simples, conteúdo vazio ou JSON inválido.
+
+**Como investigar:**
+
+```
+print(response.status_code)
+print(response.headers.get("Content-Type"))
+print(response.text[:500])
+```
+
+O recorte dos primeiros 500 caracteres ajuda a inspecionar uma resposta textual. Evite imprimir conteúdo sensível, tokens, dados pessoais ou respostas de autenticação nos logs.
+
+### `Content-Length` não coincide com o tamanho do conteúdo
+
+**Possível causa:** a resposta passou por descompressão automática ou o cabeçalho não está disponível ou não representa o tamanho esperado para a comparação realizada.
+
+**Como investigar:** entenda em qual etapa o tamanho está sendo medido e não utilize apenas essa diferença para concluir que houve corrupção.
+
+### O arquivo baixado não abre
+
+**Possíveis causas:**
+
+- A URL retornou uma página de erro.
+    
+- O corpo não é do tipo de arquivo esperado.
+    
+- A transferência foi interrompida.
+    
+- O arquivo já estava inválido no servidor.
+    
+
+**Como investigar:** verifique o status HTTP, os cabeçalhos, o tamanho e, se possível, a integridade por hash ou por um validador específico do formato.
+
+## 11. Boas práticas
+
+- Utilize `response.content` para trabalhar com bytes e `response.text` para trabalhar com texto.
+    
+- Utilize `response.json()` quando o corpo tiver JSON válido.
+    
+- Verifique o status HTTP antes de processar uma resposta como se fosse válida.
+    
+- Consulte `Content-Type` e `Content-Encoding` quando precisar entender o conteúdo recebido.
+    
+- Não confunda compressão HTTP com codificação de caracteres.
+    
+- Não suponha que `Content-Length` sempre esteja presente.
+    
+- Não confie exclusivamente nos cabeçalhos para validar o tipo real de um arquivo.
+    
+- Prefira streaming para arquivos grandes, conforme explicado na anotação sobre downloads.
+    
+- Evite registrar corpos de resposta completos quando puderem conter informações sensíveis.
+    
+
+## 12. Referência rápida
+
+| Elemento                      | Finalidade                                                      |
+| ----------------------------- | --------------------------------------------------------------- |
+| `response.content`            | Acessar o corpo como bytes                                      |
+| `response.text`               | Acessar o corpo como texto                                      |
+| `response.json()`             | Interpretar JSON e retornar objetos Python                      |
+| `response.encoding`           | Consultar ou definir a codificação utilizada em `response.text` |
+| `.encode("utf-8")`            | Converter texto em bytes                                        |
+| `.decode("utf-8")`            | Interpretar bytes como texto                                    |
+| `Content-Type`                | Declarar o tipo de mídia da resposta                            |
+| `Content-Encoding`            | Indicar a codificação aplicada ao conteúdo, como gzip           |
+| `Content-Length`              | Informar o tamanho do corpo, quando disponível                  |
+| `response.raise_for_status()` | Gerar exceção para status HTTP de erro                          |

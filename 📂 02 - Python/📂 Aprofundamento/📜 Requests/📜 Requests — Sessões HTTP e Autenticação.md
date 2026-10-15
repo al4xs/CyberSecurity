@@ -7866,3 +7866,632 @@ Não presuma que mudar de IP, criar novas sessões ou repetir requisições rapi
 |`response.raise_for_status()`|Gerar exceção para status HTTP de erro|
 
 ---
+# 📜 Requests — Testes HTTP e Simulação de Respostas
+
+## 1. Por que testar código que utiliza Requests?
+
+Quando uma função utiliza `requests` para consultar uma API, seu comportamento depende de vários fatores:
+
+- A API responder corretamente.
+    
+- O servidor retornar o status HTTP esperado.
+    
+- A resposta conter os dados no formato previsto.
+    
+- A conexão não sofrer timeout.
+    
+- A autenticação e os parâmetros serem enviados corretamente.
+    
+
+Se você testar sua função apenas fazendo requisições reais, os testes poderão falhar porque a API está indisponível, a internet caiu ou o serviço atingiu um limite de requisições.
+
+Para evitar essa dependência, podemos **simular as respostas HTTP**.
+
+A simulação permite controlar o que a requisição retorna sem precisar estabelecer uma conexão real com o servidor.
+
+### Tipos de teste
+
+|Tipo|Objetivo|
+|---|---|
+|Teste unitário|Verificar uma função isoladamente, simulando suas dependências.|
+|Teste de integração|Verificar se componentes reais funcionam juntos, podendo utilizar uma API ou servidor de teste.|
+|Teste de regressão|Garantir que uma alteração não quebre comportamentos que já funcionavam.|
+
+Nesta anotação, o foco será o teste unitário de funções que utilizam Requests.
+
+## 2. Preparando o ambiente
+
+Vamos utilizar `pytest` para executar os testes e `unittest.mock`, que faz parte da biblioteca padrão do Python, para simular as requisições.
+
+Instale o pytest no ambiente Python utilizado pelo projeto:
+
+```
+python3 -m pip install pytest
+```
+
+O comando é composto por:
+
+- `python3`: executa o interpretador Python 3.
+    
+- `-m pip`: executa o módulo `pip`, responsável por instalar pacotes Python.
+    
+- `install`: indica que queremos instalar um pacote.
+    
+- `pytest`: nome do pacote de testes.
+    
+
+O módulo `unittest.mock` não precisa ser instalado separadamente, pois acompanha o Python.
+
+Confira a instalação:
+
+```
+python3 -m pytest --version
+```
+
+## 3. Criando a função que será testada
+
+Crie um arquivo chamado `api_client.py`:
+
+```
+import requests
+
+
+def get_user(user_id):
+    url = f"https://api.example.com/users/{user_id}"
+
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+
+    user = response.json()
+
+    if not isinstance(user, dict):
+        raise ValueError("A resposta da API deve ser um objeto JSON.")
+
+    return user
+```
+
+Este exemplo utiliza `api.example.com` como endereço ilustrativo. Ele não representa uma API real que você possa consultar; nos testes, a conexão será simulada.
+
+### Explicação do código
+
+**1. Importação**
+
+```
+import requests
+```
+
+Importa a biblioteca Requests. A função utilizará `requests.get()` para realizar uma requisição HTTP GET.
+
+**2. Definição da função**
+
+```
+def get_user(user_id):
+```
+
+Cria uma função chamada `get_user`.
+
+O parâmetro `user_id` representa o identificador do usuário que queremos consultar. Poderia ser, por exemplo, um número inteiro como `42`.
+
+**3. Construção da URL**
+
+```
+url = f"https://api.example.com/users/{user_id}"
+```
+
+A expressão `f"..."` cria uma _f-string_, permitindo inserir o valor de `user_id` na URL.
+
+Se `user_id` for `42`, o resultado será:
+
+```
+https://api.example.com/users/42
+```
+
+**4. Requisição HTTP**
+
+```
+response = requests.get(url, timeout=5)
+```
+
+Executa uma requisição GET e armazena o objeto `Response` em `response`.
+
+O argumento `timeout=5` estabelece um limite de espera de cinco segundos para as fases de conexão e leitura, conforme o comportamento de timeout do Requests. Não significa necessariamente que toda a operação terá um limite total rígido de cinco segundos.
+
+**5. Verificação do status HTTP**
+
+```
+response.raise_for_status()
+```
+
+Gera `requests.exceptions.HTTPError` quando a resposta contém um status HTTP de erro, como 404 ou 500.
+
+Sem essa chamada, o código poderia continuar tentando processar o corpo de uma resposta de erro.
+
+**6. Conversão do JSON**
+
+```
+user = response.json()
+```
+
+Interpreta o corpo da resposta como JSON e converte o conteúdo para um objeto Python.
+
+Um objeto JSON normalmente se torna um dicionário (`dict`), enquanto uma lista JSON se torna uma lista (`list`).
+
+Se o corpo não contiver JSON válido, a conversão poderá gerar uma exceção.
+
+**7. Validação do tipo**
+
+```
+if not isinstance(user, dict):
+```
+
+Verifica se `user` é um dicionário.
+
+- `isinstance(user, dict)` retorna `True` quando `user` é um dicionário.
+    
+- `not` inverte o resultado.
+    
+- Se a resposta for uma lista ou outro tipo, a condição será verdadeira.
+    
+
+**8. Erro de validação**
+
+```
+raise ValueError("A resposta da API deve ser um objeto JSON.")
+```
+
+Interrompe a execução da função e informa que a resposta não possui o tipo esperado.
+
+**9. Retorno**
+
+```
+return user
+```
+
+Entrega o dicionário à parte do programa que chamou a função.
+
+## 4. O que é um mock?
+
+Um _mock_ é um objeto utilizado para simular o comportamento de uma dependência real.
+
+Em vez de enviar uma requisição para um servidor, podemos configurar um mock para fingir que `requests.get()` recebeu determinada resposta.
+
+Por exemplo, imagine que queremos simular esta resposta JSON:
+
+```
+{
+    "id": 42,
+    "name": "Maria",
+    "email": "maria@example.com"
+}
+```
+
+O teste poderá fornecer esses dados diretamente ao código, sem acessar a internet.
+
+Isso torna os testes mais rápidos, previsíveis e independentes da disponibilidade de serviços externos.
+
+## 5. Criando o primeiro teste
+
+Crie o arquivo `test_api_client.py` no mesmo diretório de `api_client.py`:
+
+```
+from unittest.mock import patch, Mock
+
+from api_client import get_user
+
+
+@patch("api_client.requests.get")
+def test_get_user_success(mock_get):
+    mock_response = Mock()
+
+    mock_response.json.return_value = {
+        "id": 42,
+        "name": "Maria",
+        "email": "maria@example.com",
+    }
+
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    user = get_user(42)
+
+    assert user["id"] == 42
+    assert user["name"] == "Maria"
+
+    mock_get.assert_called_once_with(
+        "https://api.example.com/users/42",
+        timeout=5,
+    )
+```
+
+### Entendendo cada parte
+
+**1. Importação dos recursos de simulação**
+
+```
+from unittest.mock import patch, Mock
+```
+
+- `Mock`: cria um objeto cujo comportamento podemos configurar.
+    
+- `patch`: substitui temporariamente um objeto real por outro durante o teste.
+    
+
+**2. Importação da função**
+
+```
+from api_client import get_user
+```
+
+Importa a função que será testada a partir de `api_client.py`.
+
+**3. Decorador** `**@patch**`
+
+```
+@patch("api_client.requests.get")
+```
+
+Substitui temporariamente `requests.get` no módulo `api_client`.
+
+O caminho é importante: devemos simular a dependência **no local em que ela é utilizada**. Como `get_user()` chama `requests.get` dentro de `api_client.py`, usamos `api_client.requests.get`.
+
+**4. Função de teste**
+
+```
+def test_get_user_success(mock_get):
+```
+
+O pytest identifica funções cujo nome começa com `test_`.
+
+O decorador fornece o mock como argumento `mock_get`, permitindo controlar a resposta da requisição.
+
+**5. Criação da resposta simulada**
+
+```
+mock_response = Mock()
+```
+
+Cria um objeto que se comportará como uma resposta HTTP simulada.
+
+Ele não é um `requests.Response` real, mas permite reproduzir os comportamentos necessários ao teste.
+
+**6. Configuração do JSON**
+
+```
+mock_response.json.return_value = {
+    "id": 42,
+    "name": "Maria",
+    "email": "maria@example.com",
+}
+```
+
+Configura o método simulado `.json()` para retornar o dicionário especificado quando for chamado.
+
+O atributo `return_value` define o valor retornado pela operação simulada.
+
+**7. Simulação do status HTTP**
+
+```
+mock_response.raise_for_status.return_value = None
+```
+
+Configura `raise_for_status()` para não gerar erro. Isso simula o comportamento de uma resposta HTTP sem status de erro.
+
+**8. Retorno da requisição simulada**
+
+```
+mock_get.return_value = mock_response
+```
+
+Quando `get_user()` executar `requests.get()`, o mock devolverá `mock_response` em vez de acessar a rede.
+
+**9. Execução da função**
+
+```
+user = get_user(42)
+```
+
+Executa a função real com o identificador `42`. A função continua sendo executada normalmente; somente a chamada HTTP foi substituída.
+
+**10. Asserções**
+
+```
+assert user["id"] == 42
+assert user["name"] == "Maria"
+```
+
+`assert` verifica se uma condição é verdadeira. Se uma condição for falsa, o teste falha.
+
+**11. Verificação da chamada**
+
+```
+mock_get.assert_called_once_with(
+    "https://api.example.com/users/42",
+    timeout=5,
+)
+```
+
+Verifica se o mock foi chamado exatamente uma vez, com a URL e o timeout esperados.
+
+Isso ajuda a identificar erros na construção da URL ou na configuração da requisição.
+
+## 6. Testando erros HTTP
+
+Um cliente HTTP não deve ser testado apenas no cenário de sucesso. Também precisamos verificar se os erros são propagados corretamente.
+
+Acrescente o teste abaixo em `test_api_client.py`:
+
+```
+import requests
+import pytest
+from unittest.mock import patch, Mock
+
+from api_client import get_user
+
+
+@patch("api_client.requests.get")
+def test_get_user_http_error(mock_get):
+    mock_response = Mock()
+
+    mock_response.raise_for_status.side_effect = (
+        requests.exceptions.HTTPError("404 Not Found")
+    )
+
+    mock_get.return_value = mock_response
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        get_user(42)
+```
+
+Neste teste, `side_effect` configura um comportamento que gera uma exceção quando o método simulado é chamado.
+
+Assim, quando a função executar `response.raise_for_status()`, o erro será lançado e propagado para quem chamou `get_user()`.
+
+A instrução:
+
+```
+with pytest.raises(requests.exceptions.HTTPError):
+```
+
+informa ao pytest que esperamos essa exceção dentro do bloco. Se ela não acontecer, o teste falhará.
+
+O teste não precisa criar uma resposta 404 completa: para verificar a propagação da exceção, basta simular o comportamento relevante.
+
+**Importante:** mantenha apenas um conjunto de imports no início do arquivo. O segundo exemplo repete alguns imports para ficar compreensível isoladamente; no arquivo final, reúna-os no topo.
+
+## 7. Testando timeout
+
+Timeouts são comuns em clientes HTTP. Podemos verificar se a função propaga corretamente essa falha:
+
+```
+@patch("api_client.requests.get")
+def test_get_user_timeout(mock_get):
+    mock_get.side_effect = requests.exceptions.Timeout(
+        "A requisição excedeu o tempo de espera."
+    )
+
+    with pytest.raises(requests.exceptions.Timeout):
+        get_user(42)
+```
+
+Aqui, `mock_get.side_effect` faz com que a própria chamada simulada a `requests.get()` gere uma exceção `Timeout`.
+
+O teste confirma que `get_user()` não esconde esse erro.
+
+A função poderia tratar a exceção internamente, mas isso exigiria definir explicitamente o comportamento desejado, como registrar o erro, tentar novamente ou retornar uma mensagem específica.
+
+## 8. Testando respostas com formato incorreto
+
+Nossa função exige que o JSON convertido seja um dicionário. Podemos verificar essa regra simulando uma lista JSON:
+
+```
+@patch("api_client.requests.get")
+def test_get_user_invalid_json_structure(mock_get):
+    mock_response = Mock()
+
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = [
+        {"id": 42, "name": "Maria"}
+    ]
+
+    mock_get.return_value = mock_response
+
+    with pytest.raises(ValueError):
+        get_user(42)
+```
+
+O teste fornece uma lista, embora a função espere um dicionário. Por isso, a validação `isinstance(user, dict)` gera `ValueError`.
+
+Observe a diferença:
+
+- **JSON inválido:** o conteúdo não pode ser interpretado como JSON.
+    
+- **Estrutura inesperada:** o JSON é válido, mas possui um tipo ou formato diferente do esperado.
+    
+
+Esse teste cobre o segundo caso.
+
+## 9. Código completo dos testes
+
+O arquivo `test_api_client.py` pode ficar assim:
+
+```
+import pytest
+import requests
+
+from unittest.mock import Mock, patch
+
+from api_client import get_user
+
+
+@patch("api_client.requests.get")
+def test_get_user_success(mock_get):
+    mock_response = Mock()
+
+    mock_response.json.return_value = {
+        "id": 42,
+        "name": "Maria",
+        "email": "maria@example.com",
+    }
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    user = get_user(42)
+
+    assert user["id"] == 42
+    assert user["name"] == "Maria"
+
+    mock_get.assert_called_once_with(
+        "https://api.example.com/users/42",
+        timeout=5,
+    )
+
+
+@patch("api_client.requests.get")
+def test_get_user_http_error(mock_get):
+    mock_response = Mock()
+    mock_response.raise_for_status.side_effect = (
+        requests.exceptions.HTTPError("404 Not Found")
+    )
+    mock_get.return_value = mock_response
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        get_user(42)
+
+
+@patch("api_client.requests.get")
+def test_get_user_timeout(mock_get):
+    mock_get.side_effect = requests.exceptions.Timeout(
+        "Tempo de espera excedido."
+    )
+
+    with pytest.raises(requests.exceptions.Timeout):
+        get_user(42)
+
+
+@patch("api_client.requests.get")
+def test_get_user_invalid_json_structure(mock_get):
+    mock_response = Mock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = [
+        {"id": 42, "name": "Maria"}
+    ]
+    mock_get.return_value = mock_response
+
+    with pytest.raises(ValueError):
+        get_user(42)
+```
+
+O arquivo contém quatro cenários independentes:
+
+1. A API retorna dados no formato esperado.
+    
+2. A resposta representa um erro HTTP.
+    
+3. A requisição gera timeout.
+    
+4. O JSON é válido, mas tem uma estrutura inesperada.
+    
+
+## 10. Executando os testes
+
+Organize os arquivos assim:
+
+```
+projeto/
+├── api_client.py
+└── test_api_client.py
+```
+
+No terminal, entre no diretório do projeto e execute:
+
+```
+python3 -m pytest -v
+```
+
+O parâmetro `-v` ativa a saída detalhada, mostrando o resultado de cada teste.
+
+Se tudo estiver funcionando, o resultado indicará quatro testes aprovados, geralmente com a indicação `4 passed`.
+
+Para executar apenas um teste:
+
+```
+python3 -m pytest -v test_api_client.py::test_get_user_success
+```
+
+Nesse comando:
+
+- `test_api_client.py` identifica o arquivo.
+    
+- `::` separa o arquivo do nome do teste.
+    
+- `test_get_user_success` identifica a função que será executada.
+    
+
+Como todos os testes usam mocks, nenhum deles precisa acessar `api.example.com`.
+
+## 11. Quando usar `Mock`, `patch` e `side_effect`
+
+|Recurso|Finalidade|
+|---|---|
+|`Mock()`|Cria um objeto simulado e configurável.|
+|`patch()`|Substitui temporariamente uma dependência durante o teste.|
+|`return_value`|Define o valor retornado por uma chamada simulada.|
+|`side_effect`|Permite gerar exceções ou definir comportamentos específicos de chamadas.|
+|`assert_called_once_with()`|Confere se uma dependência foi chamada uma vez com os argumentos esperados.|
+|`pytest.raises()`|Verifica se determinado trecho gera a exceção esperada.|
+|`assert`|Verifica se uma condição é verdadeira.|
+
+Esses recursos não são exclusivos do Requests. Eles também podem testar funções que utilizam arquivos, bancos de dados, APIs de outros serviços e outras dependências externas.
+
+## 12. Limites dos testes simulados
+
+Mocks verificam a lógica do seu programa, mas não comprovam que um serviço externo está funcionando corretamente.
+
+Um teste com mock não confirma:
+
+- Se o domínio existe ou resolve por DNS.
+    
+- Se o servidor está acessível.
+    
+- Se a API real aceita os parâmetros enviados.
+    
+- Se o certificado TLS é válido.
+    
+- Se o servidor realmente devolve o formato simulado.
+    
+
+Para isso, você pode complementar os testes unitários com testes de integração controlados, usando um serviço de teste ou um servidor local.
+
+Evite depender de uma API pública em todos os testes automatizados. Além de tornar os resultados instáveis, isso pode consumir limites de requisição e fazer os testes falharem por motivos alheios ao seu código.
+
+### Alternativa: biblioteca `responses`
+
+Para projetos maiores, a biblioteca `responses` foi criada especificamente para simular chamadas feitas por Requests. Ela permite registrar URLs, status HTTP e corpos de resposta sem precisar configurar manualmente cada método do objeto `Mock`.
+
+Instalação opcional:
+
+```
+python3 -m pip install responses
+```
+
+Ela é uma dependência adicional, não uma funcionalidade integrada ao Requests. Para os exemplos desta anotação, `unittest.mock` já é suficiente.
+
+## 13. Boas práticas
+
+- Teste cenários de sucesso e falha.
+    
+- Simule timeout, erro HTTP e respostas malformadas.
+    
+- Verifique os argumentos enviados à requisição, incluindo URL, parâmetros e timeout.
+    
+- Não use credenciais reais nos testes.
+    
+- Não dependa da internet em testes unitários.
+    
+- Faça cada teste verificar um comportamento específico.
+    
+- Mantenha os mocks alinhados ao comportamento que o código realmente utiliza.
+    
+- Use testes de integração separados quando precisar validar o comportamento de uma API real.
+
+---

@@ -4728,3 +4728,1150 @@ Se a página depender realmente de renderização no navegador, ferramentas de a
 | Resolver URLs relativas              | `urljoin(base_url, href)`             |
 
 ---
+# 📜 Requests — Download e Streaming de Arquivos
+
+## 1. O que é o download de arquivos com Requests?
+
+A biblioteca `requests` permite baixar arquivos de servidores HTTP e HTTPS, como imagens, documentos, arquivos de texto, arquivos compactados e outros conteúdos disponibilizados por uma URL.
+
+O processo básico consiste em:
+
+1. Enviar uma requisição HTTP para a URL.
+    
+2. Receber a resposta do servidor.
+    
+3. Verificar se a resposta indica sucesso.
+    
+4. Obter o conteúdo recebido.
+    
+5. Gravar esse conteúdo em um arquivo local.
+    
+
+Exemplo de fluxo:
+
+```
+Programa Python
+      |
+      | GET https://exemplo.com/arquivo.zip
+      v
+Servidor HTTP
+      |
+      | Resposta contendo os bytes do arquivo
+      v
+Programa Python
+      |
+      | Grava os dados no disco
+      v
+arquivo.zip
+```
+
+Uma diferença importante é que **receber o conteúdo de um arquivo e salvá-lo no disco são operações distintas**. O Requests cuida da comunicação HTTP; o Python pode usar `open()` ou `pathlib` para gravar os dados localmente.
+
+## 2. Download básico com `requests.get()`
+
+Para arquivos pequenos, podemos acessar o conteúdo recebido pela propriedade `response.content`.
+
+```
+import requests
+
+url = "https://example.com/arquivo.txt"
+
+response = requests.get(url, timeout=15)
+response.raise_for_status()
+
+with open("arquivo.txt", "wb") as arquivo:
+    arquivo.write(response.content)
+```
+
+### Explicação linha por linha
+
+**Linha 1 — importar a biblioteca**
+
+```
+import requests
+```
+
+Importa o Requests, permitindo realizar requisições HTTP.
+
+**Linha 2 — definir a URL**
+
+```
+url = "https://example.com/arquivo.txt"
+```
+
+Armazena o endereço do recurso que queremos solicitar. `example.com` é um domínio reservado para exemplos; essa URL não garante que exista um arquivo para baixar.
+
+**Linha 3 — enviar a requisição**
+
+```
+response = requests.get(url, timeout=15)
+```
+
+- `requests.get()` envia uma requisição HTTP GET.
+    
+- `url` indica o recurso solicitado.
+    
+- `timeout=15` limita a espera pela conexão e pelos dados recebidos, conforme os limites de timeout do Requests.
+    
+- `response` recebe o objeto `Response`, que contém o status HTTP, os cabeçalhos e o conteúdo da resposta.
+    
+
+O timeout não representa necessariamente um limite total de 15 segundos para toda a transferência. Para definir limites separados de conexão e leitura, podemos usar uma tupla, como `timeout=(5, 15)`.
+
+**Linha 4 — verificar o status HTTP**
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção para respostas HTTP de erro, normalmente status `4xx` ou `5xx`.
+
+Isso evita gravar silenciosamente uma página de erro no lugar do arquivo esperado. Não garante, por si só, que o conteúdo seja realmente o arquivo pretendido.
+
+**Linha 5 — abrir o arquivo**
+
+```
+with open("arquivo.txt", "wb") as arquivo:
+```
+
+- `open()` abre ou cria um arquivo local.
+    
+- `"arquivo.txt"` é o caminho de destino.
+    
+- `"wb"` significa _write binary_: gravação em modo binário.
+    
+- `with` garante que o arquivo seja fechado ao sair do bloco, inclusive se ocorrer uma exceção.
+    
+- `as arquivo` atribui o objeto aberto à variável `arquivo`.
+    
+
+O modo binário é adequado para arquivos de texto e arquivos não textuais, pois grava os bytes sem tentar convertê-los automaticamente para caracteres.
+
+**Linha 6 — gravar o conteúdo**
+
+```
+arquivo.write(response.content)
+```
+
+A propriedade `response.content` fornece o corpo da resposta em bytes. O método `write()` grava esses bytes no arquivo.
+
+### Limitação desse método
+
+`response.content` mantém o corpo inteiro da resposta disponível em memória. Para arquivos grandes, isso pode consumir muita RAM.
+
+É nesse cenário que o streaming se torna útil.
+
+## 3. O que é streaming?
+
+Streaming é uma forma de processar os dados gradualmente, em vez de exigir que o conteúdo inteiro seja carregado em memória antes de começar o processamento.
+
+No Requests, usamos o parâmetro `stream=True` para solicitar que o corpo da resposta seja consumido sob demanda.
+
+```
+response = requests.get(
+    url,
+    stream=True,
+    timeout=(5, 30),
+)
+```
+
+Nesse exemplo:
+
+- `url`: endereço do recurso.
+    
+- `stream=True`: permite consumir o corpo da resposta gradualmente.
+    
+- `timeout=(5, 30)`: define um timeout de conexão de 5 segundos e um timeout de leitura de 30 segundos.
+    
+
+O streaming não significa que o Requests não armazene nenhum dado internamente. Significa que o programa pode consumir a resposta em partes, evitando carregar todo o arquivo de uma vez.
+
+## 4. O método `iter_content()`
+
+O método `iter_content()` permite percorrer o corpo da resposta em blocos de bytes.
+
+Sintaxe:
+
+```
+response.iter_content(chunk_size=8192)
+```
+
+### Parâmetros
+
+|Parâmetro|Significado|
+|---|---|
+|`chunk_size`|Tamanho solicitado para cada bloco, em bytes|
+|Retorno|Um iterador que fornece blocos do conteúdo|
+
+O valor `8192` corresponde a 8 KiB. Esse tamanho é uma escolha comum, mas não é obrigatório. Podemos escolher blocos menores ou maiores conforme a aplicação.
+
+O tamanho efetivo dos blocos pode variar; o último bloco também pode ser menor. Blocos vazios devem ser ignorados durante a gravação.
+
+Exemplo:
+
+```
+for bloco in response.iter_content(chunk_size=8192):
+    if bloco:
+        arquivo.write(bloco)
+```
+
+### Explicação
+
+`**for bloco in ...**`
+
+Percorre os blocos de dados disponibilizados pelo iterador. A variável `bloco` recebe os bytes de cada parte.
+
+`**if bloco:**`
+
+Verifica se o bloco contém dados. Blocos vazios são ignorados.
+
+`**arquivo.write(bloco)**`
+
+Grava cada parte no arquivo antes de avançar para o próximo bloco.
+
+Dessa forma, não precisamos manter o arquivo inteiro na memória para salvá-lo.
+
+## 5. Download completo usando streaming
+
+O exemplo abaixo reúne streaming, timeout, validação do status HTTP e gravação binária.
+
+```
+import requests
+
+url = "https://example.com/arquivo.zip"
+destino = "arquivo.zip"
+
+with requests.get(
+    url,
+    stream=True,
+    timeout=(5, 30),
+) as response:
+    response.raise_for_status()
+
+    with open(destino, "wb") as arquivo:
+        for bloco in response.iter_content(chunk_size=8192):
+            if bloco:
+                arquivo.write(bloco)
+```
+
+### Entendendo a estrutura
+
+`**with requests.get(...) as response:**`
+
+Usa o objeto `Response` como gerenciador de contexto. Ao sair do bloco, a resposta é fechada, liberando os recursos associados.
+
+`**response.raise_for_status()**`
+
+Valida o status HTTP antes de começar a gravar o conteúdo.
+
+`**with open(destino, "wb") as arquivo:**`
+
+Abre o destino para gravação binária. Se o arquivo já existir, o modo `"wb"` trunca seu conteúdo anterior.
+
+`**for bloco in response.iter_content(...)**`
+
+Consome o conteúdo progressivamente.
+
+`**if bloco:**`
+
+Evita tentar gravar um bloco vazio.
+
+`**arquivo.write(bloco)**`
+
+Grava os bytes recebidos.
+
+### Por que usar dois blocos `with`?
+
+Cada bloco administra um recurso diferente:
+
+- O primeiro cuida da resposta HTTP.
+    
+- O segundo cuida do arquivo local.
+    
+
+Os dois recursos são fechados quando seus respectivos blocos terminam, inclusive quando ocorre uma exceção.
+
+**Importante:** se a transferência falhar no meio, o arquivo de destino poderá conter apenas parte dos dados. O uso de `with` fecha os recursos, mas não torna o download automaticamente completo nem remove arquivos parciais.
+
+## 6. Usando `pathlib` para definir o destino
+
+A biblioteca padrão `pathlib` oferece uma maneira organizada de trabalhar com caminhos.
+
+```
+from pathlib import Path
+
+destino = Path("downloads") / "arquivo.zip"
+destino.parent.mkdir(parents=True, exist_ok=True)
+```
+
+### Explicação
+
+`**from pathlib import Path**`
+
+Importa a classe `Path`, utilizada para representar e manipular caminhos de arquivos e diretórios.
+
+`**Path("downloads") / "arquivo.zip"**`
+
+Monta o caminho `downloads/arquivo.zip`. O operador `/` combina partes do caminho de maneira compatível com o sistema operacional.
+
+`**destino.parent**`
+
+Retorna o diretório pai do caminho, neste caso `downloads`.
+
+`**mkdir(parents=True, exist_ok=True)**`
+
+- `parents=True`: cria os diretórios intermediários que ainda não existirem.
+    
+- `exist_ok=True`: não gera erro apenas porque o diretório já existe.
+    
+
+Podemos utilizar esse caminho diretamente no exemplo de streaming:
+
+```
+with open(destino, "wb") as arquivo:
+    ...
+```
+
+A função `open()` aceita objetos `Path`, portanto não é necessário converter o caminho para string.
+
+## 7. Verificando o tamanho informado pelo servidor
+
+O cabeçalho HTTP `Content-Length`, quando presente, pode informar o tamanho do corpo da resposta em bytes.
+
+```
+content_length = response.headers.get("Content-Length")
+```
+
+O método `.get()` tenta obter o valor do cabeçalho. Se ele não existir, retorna `None`.
+
+Os cabeçalhos HTTP são acessados por meio de `response.headers`.
+
+### Convertendo o valor
+
+```
+if content_length is not None:
+    tamanho_esperado = int(content_length)
+```
+
+O valor de um cabeçalho é representado como texto. `int()` converte a string numérica em um inteiro.
+
+É necessário validar o valor antes de confiar nele: um servidor pode omitir o cabeçalho ou enviar um valor inválido. Também não se deve presumir que ele sempre estará disponível.
+
+### Contando os bytes gravados
+
+```
+total_bytes = 0
+
+for bloco in response.iter_content(chunk_size=8192):
+    if bloco:
+        arquivo.write(bloco)
+        total_bytes += len(bloco)
+```
+
+- `total_bytes = 0`: inicializa o contador.
+    
+- `len(bloco)`: retorna o número de bytes do bloco.
+    
+- `total_bytes += len(bloco)`: soma o tamanho do bloco ao total acumulado.
+    
+
+Ao final, `total_bytes` representa a quantidade de bytes que o código gravou.
+
+Comparar esse total com um `Content-Length` válido pode ajudar a detectar uma transferência incompleta, mas não comprova a integridade do arquivo. O cabeçalho pode estar ausente ou não representar o tamanho de uma forma que permita essa comparação direta, como em respostas com conteúdo comprimido ou transferido em partes.
+
+Para verificar integridade com mais confiança, utilize também um hash de referência confiável, quando disponível.
+
+## 8. Exemplo completo com diretório, streaming e tratamento de erros
+
+O exemplo a seguir grava o download em um arquivo temporário dentro do diretório de destino. Somente depois de terminar a transferência ele renomeia o arquivo para o nome final.
+
+```
+from pathlib import Path
+
+import requests
+
+url = "https://example.com/arquivo.zip"
+
+destino = Path("downloads") / "arquivo.zip"
+temporario = destino.with_name(destino.name + ".part")
+
+destino.parent.mkdir(parents=True, exist_ok=True)
+
+try:
+    with requests.get(
+        url,
+        stream=True,
+        timeout=(5, 30),
+    ) as response:
+        response.raise_for_status()
+
+        with temporario.open("wb") as arquivo:
+            for bloco in response.iter_content(chunk_size=8192):
+                if bloco:
+                    arquivo.write(bloco)
+
+    temporario.replace(destino)
+    print(f"Download concluído: {destino}")
+
+except requests.exceptions.Timeout:
+    print("O download excedeu o tempo de espera.")
+
+except requests.exceptions.HTTPError as erro:
+    print(f"Erro HTTP: {erro}")
+
+except requests.exceptions.RequestException as erro:
+    print(f"Erro na requisição: {erro}")
+
+except OSError as erro:
+    print(f"Erro ao gravar ou renomear o arquivo: {erro}")
+```
+
+### Análise das partes importantes
+
+**Arquivo temporário**
+
+```
+temporario = destino.with_name(destino.name + ".part")
+```
+
+Cria um caminho com o mesmo diretório e o nome acrescido de `.part`. Por exemplo, `arquivo.zip.part`.
+
+Isso ajuda a distinguir um download em andamento de um arquivo que já recebeu o nome final.
+
+**Criação do diretório**
+
+```
+destino.parent.mkdir(parents=True, exist_ok=True)
+```
+
+Garante que o diretório de destino exista antes da gravação.
+
+**Gravação em streaming**
+
+O conteúdo é escrito progressivamente em `temporario`, sem precisar ser carregado por inteiro na memória.
+
+**Renomeação final**
+
+```
+temporario.replace(destino)
+```
+
+Substitui o destino final pelo arquivo temporário quando a transferência terminou sem lançar uma exceção.
+
+Essa renomeação no mesmo sistema de arquivos costuma ser uma forma prática de evitar que o nome final apareça antes de o download terminar. Ainda assim, ela não garante a integridade do conteúdo e não equivale, por si só, a uma operação de gravação durável.
+
+**Tratamento de erros**
+
+- `Timeout`: a operação excedeu o limite de espera.
+    
+- `HTTPError`: o servidor retornou um status HTTP de erro, detectado por `raise_for_status()`.
+    
+- `RequestException`: cobre outros erros do Requests, como problemas de conexão.
+    
+- `OSError`: cobre falhas locais de arquivos e diretórios, como falta de permissão ou espaço em disco.
+    
+
+Esse exemplo não implementa retomada automática. Se a transferência falhar, um arquivo `.part` poderá permanecer no disco. Em uma aplicação real, decida se deseja removê-lo, mantê-lo para diagnóstico ou implementar retomada com validação apropriada.
+
+## 9. `response.content` versus `response.iter_content()`
+
+|Característica|`response.content`|`response.iter_content()`|
+|---|---|---|
+|Forma de consumo|Corpo completo em bytes|Blocos de bytes|
+|Uso de memória|Pode crescer com o tamanho do arquivo|Pode manter o consumo mais controlado|
+|Ideal para|Arquivos pequenos e respostas simples|Arquivos grandes ou transferências longas|
+|Requer `stream=True`|Não|Recomendado para controlar o consumo da resposta desde o início|
+|Gravação incremental|Não é necessária para obter o conteúdo|Sim, normalmente feita em um laço|
+
+A escolha depende do tamanho do recurso e da forma como o programa precisa processar os dados. Streaming não torna a rede necessariamente mais rápida; sua principal vantagem é permitir consumir e gravar o conteúdo progressivamente.
+
+## 10. Erros e limitações comuns
+
+### Baixar uma página de erro como se fosse um arquivo
+
+**Causa:** o programa grava o corpo da resposta sem validar o status HTTP.
+
+**Prevenção:**
+
+```
+response.raise_for_status()
+```
+
+Isso evita prosseguir silenciosamente diante de um status HTTP de erro, mas ainda é necessário validar se a resposta corresponde ao arquivo esperado.
+
+### Falta de espaço em disco
+
+**Causa:** o sistema não tem espaço suficiente para gravar o conteúdo.
+
+**Prevenção:** tratar `OSError` e, quando necessário, verificar o espaço disponível antes de iniciar a transferência.
+
+### Arquivo parcial
+
+**Causa:** queda de conexão, timeout ou erro durante a gravação.
+
+**Prevenção:** usar um arquivo temporário e só promover o arquivo ao nome final após concluir a transferência. Para confirmar integridade, compare tamanho e hash com referências confiáveis, quando disponíveis.
+
+### Arquivo inesperado
+
+**Causa:** a URL retorna HTML, JSON ou outro conteúdo, embora o programa espere um arquivo binário.
+
+**Prevenção:** inspecionar o status HTTP, o cabeçalho `Content-Type`, o tamanho e, quando necessário, a estrutura ou o hash do conteúdo. O `Content-Type` é uma indicação, não uma garantia de que o arquivo seja válido.
+
+### Download muito demorado
+
+**Causa:** servidor lento, rede instável ou grande volume de dados.
+
+**Prevenção:** configurar timeouts adequados, tratar erros e implementar tentativas controladas quando isso fizer sentido. A retomada de um download exige suporte apropriado do servidor, por exemplo, requisições com cabeçalho `Range`, e validação dos dados já recebidos.
+
+### Consumo excessivo de memória
+
+**Causa:** usar `response.content` para carregar um arquivo muito grande.
+
+**Prevenção:** usar `stream=True` e `iter_content()` para gravar os dados em blocos.
+
+## 11. Boas práticas
+
+- Defina timeouts para não deixar requisições esperando indefinidamente.
+    
+- Verifique o status HTTP antes de gravar o conteúdo.
+    
+- Use modo binário (`"wb"`) para salvar arquivos.
+    
+- Prefira streaming para arquivos grandes.
+    
+- Feche as respostas e os arquivos com `with`.
+    
+- Crie o diretório de destino antes de iniciar a gravação.
+    
+- Trate erros de rede e erros locais separadamente quando isso ajudar no diagnóstico.
+    
+- Não confie cegamente em nomes de arquivos fornecidos por servidores. Valide-os e impeça que caminhos externos escapem do diretório de destino.
+    
+- Considere limites de tamanho para evitar downloads inesperadamente grandes.
+    
+- Use hashes de fontes confiáveis quando precisar verificar a integridade do arquivo.
+    
+- Baixe apenas recursos que você tem autorização para acessar e respeite as regras do serviço.
+    
+
+## 12. Referência rápida
+
+| Elemento                                  | Finalidade                                  |
+| ----------------------------------------- | ------------------------------------------- |
+| `response.content`                        | Acessar o corpo completo como bytes         |
+| `stream=True`                             | Consumir o corpo da resposta sob demanda    |
+| `response.iter_content(chunk_size=8192)`  | Iterar pelos dados em blocos                |
+| `response.raise_for_status()`             | Gerar exceção para status HTTP de erro      |
+| `response.headers.get("Content-Length")`  | Consultar o tamanho informado pelo servidor |
+| `Path("downloads")`                       | Representar um caminho de diretório         |
+| `Path.mkdir(parents=True, exist_ok=True)` | Criar o diretório, incluindo pais           |
+| `Path.replace()`                          | Renomear ou substituir o caminho de destino |
+| `timeout=(5, 30)`                         | Definir timeouts de conexão e leitura       |
+| `with`                                    | Gerenciar o fechamento de recursos          |
+
+---
+# 📜 Requests — Upload de Arquivos e Envio de Dados Multipart
+
+## 1. O que é um upload HTTP?
+
+Um upload é o envio de dados do cliente para um servidor. Com a biblioteca `requests`, podemos enviar arquivos, formulários, JSON e outros tipos de conteúdo em requisições HTTP.
+
+Exemplos de situações em que uploads são utilizados:
+
+- Enviar uma imagem para um site.
+    
+- Fazer upload de um documento para uma API.
+    
+- Enviar um arquivo de log para um sistema autorizado de monitoramento.
+    
+- Submeter dados de um formulário web.
+    
+- Enviar um arquivo para um endpoint de armazenamento.
+    
+
+O método HTTP utilizado depende da API. `POST` é comum para criar recursos ou submeter dados, enquanto `PUT` também pode ser utilizado para criar ou substituir um recurso em uma URL específica.
+
+## 2. Enviando dados de formulário com `data=`
+
+O parâmetro `data=` permite enviar dados de formulário, normalmente codificados como `application/x-www-form-urlencoded`, quando seu valor é um dicionário.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+dados = {
+    "nome": "Ana",
+    "curso": "Python",
+}
+
+response = requests.post(
+    url,
+    data=dados,
+    timeout=15,
+)
+
+response.raise_for_status()
+
+print(response.status_code)
+print(response.json())
+```
+
+### Explicação linha por linha
+
+**Importar a biblioteca**
+
+```
+import requests
+```
+
+Importa o Requests para realizar requisições HTTP.
+
+**Definir a URL**
+
+```
+url = "https://httpbin.org/post"
+```
+
+Define o endpoint que receberá os dados. O `httpbin.org` é um serviço de teste de requisições; não é necessário utilizar esse serviço em aplicações reais.
+
+**Criar o dicionário**
+
+```
+dados = {
+    "nome": "Ana",
+    "curso": "Python",
+}
+```
+
+Cria um dicionário Python com os campos que serão enviados.
+
+- `"nome"` e `"curso"` são as chaves.
+    
+- `"Ana"` e `"Python"` são os valores.
+    
+
+**Enviar os dados**
+
+```
+response = requests.post(url, data=dados, timeout=15)
+```
+
+- `requests.post()` envia uma requisição HTTP POST.
+    
+- `url` indica o destino.
+    
+- `data=dados` envia os campos do formulário.
+    
+- `timeout=15` define os limites de espera da requisição.
+    
+- `response` recebe a resposta do servidor.
+    
+
+**Validar a resposta**
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção se a resposta possuir um status HTTP de erro, evitando continuar silenciosamente diante de uma resposta `4xx` ou `5xx`.
+
+**Ler o resultado**
+
+```
+print(response.status_code)
+print(response.json())
+```
+
+- `response.status_code` contém o código de status HTTP.
+    
+- `response.json()` tenta interpretar o corpo da resposta como JSON e devolve objetos Python, como dicionários e listas.
+    
+
+O uso de `.json()` pressupõe que a resposta contenha JSON válido. Caso contrário, a interpretação poderá falhar.
+
+## 3. Diferença entre `data=` e `json=`
+
+Os dois parâmetros enviam dados no corpo de uma requisição, mas possuem finalidades diferentes.
+
+|Parâmetro|Uso comum|Formato enviado|
+|---|---|---|
+|`data=`|Formulários e dados codificados|Formulário URL-encoded quando recebe um dicionário|
+|`json=`|APIs que recebem JSON|JSON serializado automaticamente|
+
+### Exemplo com `data=`
+
+```
+requests.post(
+    url,
+    data={"usuario": "ana"},
+    timeout=15,
+)
+```
+
+Esse formato é adequado quando o endpoint espera um formulário tradicional.
+
+### Exemplo com `json=`
+
+```
+requests.post(
+    url,
+    json={"usuario": "ana"},
+    timeout=15,
+)
+```
+
+Nesse caso, o Requests serializa o dicionário para JSON e define o cabeçalho `Content-Type` apropriado.
+
+O formato correto depende da documentação do servidor. Enviar JSON para um endpoint que espera um formulário pode causar erro, mesmo que os campos tenham os nomes corretos.
+
+## 4. Enviando um arquivo com `files=`
+
+Para enviar arquivos usando o formato `multipart/form-data`, o Requests oferece o parâmetro `files=`.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with open("relatorio.txt", "rb") as arquivo:
+    response = requests.post(
+        url,
+        files={"arquivo": arquivo},
+        timeout=30,
+    )
+
+response.raise_for_status()
+
+print(response.status_code)
+```
+
+### Explicação
+
+**Abrir o arquivo**
+
+```
+with open("relatorio.txt", "rb") as arquivo:
+```
+
+- `open()` abre o arquivo local.
+    
+- `"relatorio.txt"` é o caminho do arquivo.
+    
+- `"rb"` significa leitura binária.
+    
+- `with` fecha o arquivo automaticamente ao sair do bloco.
+    
+- `arquivo` é o objeto usado para ler o conteúdo.
+    
+
+O modo binário é apropriado para arquivos que podem conter bytes que não representam texto, como imagens e PDFs.
+
+**Enviar o arquivo**
+
+```
+files={"arquivo": arquivo}
+```
+
+O dicionário associa o nome do campo esperado pelo servidor ao objeto de arquivo.
+
+Aqui, `"arquivo"` é o nome do campo multipart. Ele não precisa ser igual ao nome do arquivo local.
+
+**Realizar a requisição**
+
+```
+response = requests.post(
+    url,
+    files={"arquivo": arquivo},
+    timeout=30,
+)
+```
+
+O Requests constrói o corpo `multipart/form-data`, incluindo o delimitador (_boundary_) e os cabeçalhos necessários para separar as partes. Não defina manualmente o cabeçalho `Content-Type: multipart/form-data` nesse caso, pois o Requests precisa incluir o `boundary` correto.
+
+O endpoint de destino deve aceitar uploads multipart. Caso contrário, o servidor poderá rejeitar a requisição.
+
+## 5. Enviando um arquivo com nome e tipo de conteúdo definidos
+
+Em algumas APIs, é necessário controlar o nome enviado ou declarar o tipo MIME do arquivo.
+
+O parâmetro `files=` aceita tuplas com informações adicionais.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with open("relatorio.txt", "rb") as arquivo:
+    response = requests.post(
+        url,
+        files={
+            "documento": (
+                "relatorio-enviado.txt",
+                arquivo,
+                "text/plain",
+            )
+        },
+        timeout=30,
+    )
+
+response.raise_for_status()
+```
+
+A tupla possui os seguintes elementos:
+
+```
+("relatorio-enviado.txt", arquivo, "text/plain")
+```
+
+1. `"relatorio-enviado.txt"`: nome do arquivo apresentado ao servidor.
+    
+2. `arquivo`: objeto que fornece o conteúdo.
+    
+3. `"text/plain"`: tipo MIME declarado para o arquivo.
+    
+
+O nome transmitido não precisa ser igual ao nome local. O tipo MIME é uma declaração, não uma verificação automática do conteúdo real.
+
+Outros tipos MIME comuns incluem:
+
+|Tipo de conteúdo|MIME type|
+|---|---|
+|Texto simples|`text/plain`|
+|JSON|`application/json`|
+|PDF|`application/pdf`|
+|PNG|`image/png`|
+|JPEG|`image/jpeg`|
+|ZIP|`application/zip`|
+
+A API pode exigir um tipo MIME específico ou realizar sua própria validação.
+
+## 6. Enviando campos de formulário e arquivos juntos
+
+Um formulário pode conter campos de texto e arquivos na mesma requisição multipart.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with open("relatorio.txt", "rb") as arquivo:
+    response = requests.post(
+        url,
+        data={
+            "titulo": "Relatório",
+            "categoria": "estudo",
+        },
+        files={
+            "arquivo": arquivo,
+        },
+        timeout=30,
+    )
+
+response.raise_for_status()
+
+print(response.json())
+```
+
+### O que acontece nessa requisição?
+
+- `data=` fornece campos de formulário.
+    
+- `files=` fornece o arquivo.
+    
+- O Requests combina as partes no corpo multipart.
+    
+- O servidor recebe os campos e o arquivo na mesma requisição.
+    
+
+A API determina os nomes dos campos e os valores esperados. Utilizar `titulo`, `categoria` e `arquivo` só funciona se o endpoint reconhecer esses campos.
+
+## 7. Enviando múltiplos arquivos
+
+Se a API aceitar vários arquivos, podemos utilizar uma lista de partes multipart.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with (
+    open("imagem1.png", "rb") as arquivo1,
+    open("imagem2.png", "rb") as arquivo2,
+):
+    response = requests.post(
+        url,
+        files=[
+            ("arquivos", ("imagem1.png", arquivo1, "image/png")),
+            ("arquivos", ("imagem2.png", arquivo2, "image/png")),
+        ],
+        timeout=30,
+    )
+
+response.raise_for_status()
+```
+
+### Por que utilizar uma lista?
+
+Uma lista permite repetir o mesmo nome de campo, como `"arquivos"`, para enviar várias partes com esse nome.
+
+Cada tupla contém:
+
+1. O nome do campo esperado pela API.
+    
+2. O nome do arquivo enviado.
+    
+3. O objeto de arquivo.
+    
+4. O tipo MIME declarado.
+    
+
+No exemplo, cada tupla possui três elementos agrupados depois do nome do campo: nome do arquivo, objeto de arquivo e tipo MIME. O Requests aceita essa estrutura.
+
+O servidor precisa estar preparado para interpretar múltiplas partes com o mesmo nome de campo.
+
+## 8. Enviando arquivos com `requests.Session()`
+
+Uma sessão pode ser útil quando várias requisições precisam reutilizar configurações, cookies ou autenticação.
+
+```
+import requests
+
+url = "https://httpbin.org/post"
+
+with requests.Session() as session:
+    session.headers.update({
+        "User-Agent": "MeuClientePython/1.0",
+    })
+
+    with open("relatorio.txt", "rb") as arquivo:
+        response = session.post(
+            url,
+            files={"arquivo": arquivo},
+            timeout=30,
+        )
+
+    response.raise_for_status()
+```
+
+### Entendendo a sessão
+
+**Criar a sessão**
+
+```
+with requests.Session() as session:
+```
+
+Cria uma sessão HTTP. O objeto pode reutilizar conexões e manter cookies entre requisições.
+
+**Configurar cabeçalhos**
+
+```
+session.headers.update({
+    "User-Agent": "MeuClientePython/1.0",
+})
+```
+
+Define um cabeçalho padrão para as requisições feitas pela sessão.
+
+**Enviar o arquivo**
+
+```
+response = session.post(
+    url,
+    files={"arquivo": arquivo},
+    timeout=30,
+)
+```
+
+Envia o arquivo utilizando as configurações da sessão.
+
+A sessão não elimina a necessidade de abrir e fechar corretamente o arquivo, configurar timeouts e validar a resposta HTTP.
+
+## 9. Enviando um arquivo para uma API autenticada
+
+Algumas APIs exigem um token de acesso. O token pode ser enviado em um cabeçalho de autorização, de acordo com a documentação do serviço.
+
+```
+import os
+import requests
+
+url = "https://api.example.com/uploads"
+token = os.environ.get("API_TOKEN")
+
+if not token:
+    raise RuntimeError("A variável API_TOKEN não foi configurada.")
+
+with open("relatorio.pdf", "rb") as arquivo:
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+        files={
+            "arquivo": (
+                "relatorio.pdf",
+                arquivo,
+                "application/pdf",
+            )
+        },
+        timeout=30,
+    )
+
+response.raise_for_status()
+print(response.status_code)
+```
+
+### Elementos importantes
+
+**Obter o token**
+
+```
+token = os.environ.get("API_TOKEN")
+```
+
+Lê o valor da variável de ambiente `API_TOKEN`. Se ela não existir, o resultado será `None`.
+
+**Validar a configuração**
+
+```
+if not token:
+    raise RuntimeError("A variável API_TOKEN não foi configurada.")
+```
+
+Interrompe o programa com uma mensagem clara quando o token não está disponível.
+
+**Montar o cabeçalho**
+
+```
+"Authorization": f"Bearer {token}"
+```
+
+A f-string insere o valor do token no cabeçalho de autorização.
+
+O endereço `api.example.com` é ilustrativo. Para utilizar o código, substitua-o pelo endpoint real e siga o mecanismo de autenticação documentado pela API.
+
+Não grave tokens diretamente no código nem os imprima em logs. Utilize HTTPS e proteja as variáveis de ambiente e os arquivos que contenham credenciais.
+
+## 10. Tratamento de erros durante o upload
+
+Uploads podem falhar por problemas de rede, autenticação, validação do arquivo, tamanho máximo permitido ou indisponibilidade do servidor.
+
+```
+import requests
+
+try:
+    with open("relatorio.pdf", "rb") as arquivo:
+        response = requests.post(
+            "https://httpbin.org/post",
+            files={"arquivo": arquivo},
+            timeout=(5, 30),
+        )
+
+    response.raise_for_status()
+
+except FileNotFoundError:
+    print("O arquivo local não foi encontrado.")
+
+except PermissionError:
+    print("Sem permissão para abrir o arquivo.")
+
+except requests.exceptions.Timeout:
+    print("A requisição excedeu o tempo de espera.")
+
+except requests.exceptions.HTTPError as erro:
+    print(f"O servidor retornou um erro HTTP: {erro}")
+
+except requests.exceptions.RequestException as erro:
+    print(f"Falha na requisição: {erro}")
+
+except OSError as erro:
+    print(f"Erro local de arquivo: {erro}")
+```
+
+### Por que separar os erros?
+
+- `FileNotFoundError`: o caminho não aponta para um arquivo encontrado.
+    
+- `PermissionError`: o programa não possui permissão para acessar o arquivo.
+    
+- `Timeout`: a requisição excedeu um limite de espera.
+    
+- `HTTPError`: `raise_for_status()` identificou um status HTTP de erro.
+    
+- `RequestException`: outros erros de requisição, incluindo falhas de conexão.
+    
+- `OSError`: outros erros de entrada e saída, incluindo falhas locais de arquivo.
+    
+
+O bloco `except OSError` pode capturar erros de arquivo que não foram capturados pelos blocos anteriores. A ordem das exceções importa porque algumas classes são subclasses de outras.
+
+## 11. Uploads não são automaticamente idempotentes
+
+Um detalhe importante: se uma requisição falhar após o servidor processar o arquivo, o cliente pode não saber se a operação foi concluída.
+
+Por exemplo:
+
+1. O cliente envia um arquivo.
+    
+2. O servidor recebe e salva o arquivo.
+    
+3. A conexão cai antes de o cliente receber a resposta.
+    
+4. O cliente observa um erro e tenta novamente.
+    
+5. O servidor pode processar o mesmo arquivo outra vez.
+    
+
+Isso pode gerar duplicação, dependendo do comportamento da API.
+
+Antes de implementar tentativas automáticas, verifique:
+
+- Se o endpoint permite repetir a operação com segurança.
+    
+- Se a API oferece uma chave de idempotência.
+    
+- Se existe um identificador único para o recurso.
+    
+- Se o servidor retorna informações que permitem verificar o resultado da primeira tentativa.
+    
+
+Não presuma que todo `POST` pode ser repetido sem efeitos colaterais.
+
+## 12. Boas práticas de segurança
+
+- Envie arquivos somente para endpoints confiáveis e autorizados.
+    
+- Utilize HTTPS para proteger a comunicação em trânsito.
+    
+- Não inclua credenciais ou tokens em logs.
+    
+- Valide o caminho do arquivo local antes de abri-lo.
+    
+- Considere o tamanho do arquivo e os limites aceitos pelo servidor.
+    
+- Não confie apenas na extensão ou no MIME type declarado para determinar o tipo real do arquivo.
+    
+- Evite enviar arquivos sensíveis para serviços de teste públicos.
+    
+- Valide o status HTTP e, quando necessário, o corpo da resposta para confirmar o resultado da operação.
+    
+- Não repita uploads automaticamente sem avaliar o risco de duplicação.
+    
+- Consulte a documentação da API para conhecer os nomes dos campos, formatos aceitos, autenticação e limites.
+    
+
+## 13. Referência rápida
+
+|Elemento|Finalidade|
+|---|---|
+|`data=`|Enviar campos de formulário|
+|`json=`|Serializar e enviar dados JSON|
+|`files=`|Enviar arquivos em `multipart/form-data`|
+|`"rb"`|Abrir um arquivo para leitura binária|
+|`timeout=30`|Configurar o tempo de espera|
+|`response.raise_for_status()`|Detectar status HTTP de erro|
+|`requests.Session()`|Reutilizar configurações, cookies e conexões|
+|`headers={"Authorization": ...}`|Enviar um cabeçalho de autorização|
+|`os.environ.get()`|Obter uma variável de ambiente|
+|`with open(...)`|Garantir o fechamento do arquivo|

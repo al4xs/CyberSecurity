@@ -2119,3 +2119,262 @@ Não presuma que a configuração do ambiente seja sempre desejável. Em aplica�
 |`requests.exceptions.RequestException`|Classe-base das exceções de requisição do `requests`.|
 
 ---
+# 📜 Requests — Download e Streaming
+
+## 1. O que é o download de arquivos com Requests?
+
+A biblioteca `requests` permite baixar arquivos de servidores HTTP e HTTPS, como imagens, documentos, arquivos compactados, relatórios e outros recursos disponibilizados por uma URL.
+
+Uma forma simples de fazer isso é utilizar `requests.get()` e acessar o conteúdo da resposta por meio de `response.content`.
+
+```
+import requests
+
+url = "https://example.com/arquivo.txt"
+
+response = requests.get(url, timeout=15)
+response.raise_for_status()
+
+with open("arquivo.txt", "wb") as arquivo:
+    arquivo.write(response.content)
+```
+
+Nesse exemplo, o programa:
+
+1. Importa a biblioteca `requests`.
+    
+2. Define a URL do arquivo.
+    
+3. Faz uma requisição HTTP GET.
+    
+4. Verifica se a resposta indica um erro HTTP.
+    
+5. Abre um arquivo local em modo de escrita binária.
+    
+6. Grava o conteúdo recebido no disco.
+    
+
+O endereço `example.com` é ilustrativo. Para testar um download real, substitua-o por uma URL que disponibilize um arquivo acessível.
+
+### Limitação do método tradicional
+
+O atributo `response.content` disponibiliza o corpo da resposta como bytes. Em um download grande, isso pode exigir bastante memória, pois o conteúdo completo precisa estar disponível antes de ser gravado pelo código.
+
+Para arquivos pequenos, essa abordagem costuma ser suficiente. Para arquivos grandes, é preferível utilizar **streaming**.
+
+---
+
+## 2. O que é streaming?
+
+Streaming é uma forma de processar os dados de uma resposta progressivamente, em vez de carregar todo o conteúdo de uma só vez na memória.
+
+No Requests, isso é habilitado com o argumento `stream=True`.
+
+Sem streaming:
+
+```
+response = requests.get(url)
+```
+
+Com streaming:
+
+```
+response = requests.get(url, stream=True)
+```
+
+A diferença principal é que, com `stream=True`, o Requests permite que o programa consuma o corpo da resposta aos poucos.
+
+### Fluxo de um download com streaming
+
+```
+Servidor HTTP
+     |
+     | Envia os dados do arquivo
+     v
+Resposta HTTP
+     |
+     v
+iter_content()
+     |
+     | Divide o conteúdo em blocos
+     v
+Blocos de bytes
+     |
+     v
+Arquivo local no disco
+```
+
+O programa recebe cada bloco e o grava no arquivo antes de processar o próximo. Assim, evita manter o arquivo inteiro na memória.
+
+**Importante:** `stream=True` não significa que o download ocorrerá necessariamente mais rápido. O principal benefício é controlar o consumo de memória.
+
+---
+
+## 3. O método `iter_content()`
+
+O método `iter_content()` permite iterar sobre o conteúdo da resposta em blocos.
+
+Sintaxe:
+
+```
+response.iter_content(chunk_size=8192)
+```
+
+|Parâmetro|Descrição|
+|---|---|
+|`chunk_size`|Quantidade máxima aproximada de bytes solicitada por bloco|
+|Tipo|Inteiro|
+|Unidade|Bytes|
+|Exemplo|`8192` corresponde a 8 KiB|
+
+O valor `8192` é uma escolha comum, não uma regra obrigatória. É possível utilizar outros tamanhos conforme a necessidade.
+
+### Exemplo básico
+
+```
+import requests
+
+url = "https://example.com/arquivo.bin"
+
+with requests.get(url, stream=True, timeout=30) as response:
+    response.raise_for_status()
+
+    for bloco in response.iter_content(chunk_size=8192):
+        if bloco:
+            print(f"Bloco recebido: {len(bloco)} bytes")
+```
+
+Explicação:
+
+- `import requests`: importa a biblioteca.
+    
+- `with requests.get(...) as response`: realiza a requisição e utiliza um gerenciador de contexto para garantir o fechamento da resposta ao sair do bloco.
+    
+- `stream=True`: habilita a leitura progressiva do corpo.
+    
+- `timeout=30`: configura o limite de espera da requisição conforme as regras de timeout do Requests.
+    
+- `response.raise_for_status()`: gera uma exceção para respostas HTTP de erro, como 404 ou 500.
+    
+- `response.iter_content(chunk_size=8192)`: produz os blocos de conteúdo.
+    
+- `for bloco in ...`: percorre cada bloco recebido.
+    
+- `if bloco`: ignora blocos vazios.
+    
+- `len(bloco)`: informa o tamanho do bloco atual em bytes.
+    
+- `print(...)`: exibe o tamanho recebido, sem gravar o conteúdo em disco.
+    
+
+O exemplo apenas demonstra a leitura. Para salvar o arquivo, precisamos escrever cada bloco em um arquivo local.
+
+---
+
+## 4. Baixando e gravando um arquivo em blocos
+
+O exemplo seguinte mostra o padrão básico para baixar um arquivo e gravá-lo progressivamente.
+
+```
+import requests
+
+url = "https://example.com/arquivo.bin"
+destino = "arquivo.bin"
+
+with requests.get(url, stream=True, timeout=30) as response:
+    response.raise_for_status()
+
+    with open(destino, "wb") as arquivo:
+        for bloco in response.iter_content(chunk_size=8192):
+            if bloco:
+                arquivo.write(bloco)
+
+print("Download concluído.")
+```
+
+### Entendendo `open()` e o modo `wb`
+
+A função `open()` abre um arquivo local.
+
+```
+open(destino, "wb")
+```
+
+O segundo argumento define o modo de abertura:
+
+- `w`: abre para escrita, criando o arquivo se ele não existir e substituindo seu conteúdo caso já exista.
+    
+- `b`: trabalha com dados binários, representados por objetos `bytes`.
+    
+
+A combinação `"wb"` é apropriada para arquivos como imagens, PDFs, arquivos ZIP e executáveis. Ela também pode ser usada para arquivos de texto, embora seja necessário considerar a codificação caso se deseje escrever texto diretamente.
+
+### Por que não usar `arquivo.write(response.text)`?
+
+`response.text` é destinado à interpretação do corpo como texto, utilizando uma codificação. Isso pode alterar a representação dos dados binários.
+
+Para preservar os bytes recebidos, use `response.content` ou, no streaming, escreva diretamente os blocos produzidos por `iter_content()`.
+
+### Por que há dois `with`?
+
+O primeiro gerencia a resposta HTTP; o segundo gerencia o arquivo local.
+
+```
+with requests.get(url, stream=True, timeout=30) as response:
+    with open(destino, "wb") as arquivo:
+        ...
+```
+
+Ao sair de cada bloco, o recurso correspondente é fechado, inclusive quando ocorre uma exceção. Isso ajuda a evitar conexões abertas desnecessariamente e arquivos mantidos abertos.
+
+---
+
+## 5. Organizando o download com `pathlib`
+
+A biblioteca padrão `pathlib` oferece uma maneira orientada a objetos de representar caminhos de arquivos.
+
+```
+from pathlib import Path
+
+destino = Path("downloads") / "arquivo.bin"
+destino.parent.mkdir(parents=True, exist_ok=True)
+```
+
+Entendendo cada parte:
+
+- `Path("downloads")`: representa o diretório `downloads`.
+    
+- `/ "arquivo.bin"`: combina o diretório com o nome do arquivo.
+    
+- `destino.parent`: retorna o diretório pai do caminho.
+    
+- `mkdir(...)`: cria o diretório caso necessário.
+    
+- `parents=True`: permite criar diretórios intermediários.
+    
+- `exist_ok=True`: evita uma exceção caso o diretório já exista.
+    
+
+Agora podemos usar esse caminho no download:
+
+```
+import requests
+from pathlib import Path
+
+url = "https://example.com/arquivo.bin"
+
+destino = Path("downloads") / "arquivo.bin"
+destino.parent.mkdir(parents=True, exist_ok=True)
+
+with requests.get(url, stream=True, timeout=30) as response:
+    response.raise_for_status()
+
+    with destino.open("wb") as arquivo:
+        for bloco in response.iter_content(chunk_size=8192):
+            if bloco:
+                arquivo.write(bloco)
+
+print(f"Arq
+```
+
+---

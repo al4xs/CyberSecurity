@@ -8495,3 +8495,772 @@ Ela é uma dependência adicional, não uma funcionalidade integrada ao Requests
 - Use testes de integração separados quando precisar validar o comportamento de uma API real.
 
 ---
+# 📜 Requests — Projeto Prático: Cliente de API HTTP
+
+## 1. Objetivo do projeto
+
+O objetivo é desenvolver um cliente HTTP de linha de comando capaz de consultar uma API REST e apresentar os dados recebidos.
+
+O projeto utilizará:
+
+- `requests.Session` para reutilizar configurações e conexões HTTP.
+    
+- `argparse` para receber argumentos pelo terminal.
+    
+- `timeout` para limitar o tempo de espera das requisições.
+    
+- `HTTPAdapter` e `Retry` para configurar tentativas automáticas em determinadas falhas.
+    
+- `raise_for_status()` para identificar erros HTTP.
+    
+- `response.json()` e validação de tipos para processar os dados.
+    
+- Exceções para lidar com falhas de rede e respostas inválidas.
+    
+- `pytest` e mocks para testar o código sem depender da internet.
+    
+
+Usaremos a API pública de demonstração JSONPlaceholder, que disponibiliza dados fictícios para aprendizado.
+
+Endpoint utilizado:
+
+```
+https://jsonplaceholder.typicode.com/posts
+```
+
+Essa API é apenas um serviço de demonstração. Em projetos reais, substitua o endereço pelo endpoint autorizado que você precisa consultar.
+
+## 2. Estrutura dos arquivos
+
+Crie uma pasta para o projeto:
+
+```
+requests-api-client/
+├── api_client.py
+├── main.py
+├── requirements.txt
+└── tests/
+    └── test_api_client.py
+```
+
+Responsabilidade de cada arquivo:
+
+|Arquivo|Responsabilidade|
+|---|---|
+|`api_client.py`|Configurar a sessão HTTP e consultar a API.|
+|`main.py`|Interpretar argumentos e executar o programa.|
+|`requirements.txt`|Registrar as dependências externas.|
+|`tests/test_api_client.py`|Testar a lógica do cliente sem acessar a internet.|
+
+Essa separação evita misturar a lógica HTTP com a interface de linha de comando.
+
+## 3. Preparando o ambiente
+
+Entre na pasta do projeto e crie um ambiente virtual:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+O primeiro comando cria um ambiente Python isolado em `.venv`. O segundo ativa esse ambiente no shell.
+
+Crie o arquivo `requirements.txt`:
+
+```
+requests
+pytest
+```
+
+Instale as dependências:
+
+```
+python -m pip install -r requirements.txt
+```
+
+O Requests é necessário para as requisições HTTP; o pytest executará os testes automatizados. `argparse`, `unittest.mock` e `json` fazem parte da biblioteca padrão do Python.
+
+## 4. Implementando o cliente HTTP
+
+Crie `api_client.py`:
+
+```
+import requests
+
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+class APIClient:
+    def __init__(self, base_url, timeout=5):
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.session = requests.Session()
+
+        retry_policy = Retry(
+            total=3,
+            connect=3,
+            read=0,
+            status=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["GET"]),
+            respect_retry_after_header=True,
+        )
+
+        adapter = HTTPAdapter(max_retries=retry_policy)
+
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+        self.session.headers.update({
+            "Accept": "application/json",
+            "User-Agent": "Python-Requests-APIClient/1.0",
+        })
+
+    def get_posts(self, user_id=None):
+        url = f"{self.base_url}/posts"
+        params = {}
+
+        if user_id is not None:
+            params["userId"] = user_id
+
+        response = self.session.get(
+            url,
+            params=params,
+            timeout=self.timeout,
+        )
+
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as exc:
+            raise ValueError(
+                "A API retornou uma resposta que não é JSON válido."
+            ) from exc
+
+        if not isinstance(data, list):
+            raise ValueError(
+                "A resposta da API deveria ser uma lista."
+            )
+
+        for post in data:
+            if not isinstance(post, dict):
+                raise ValueError(
+                    "A API retornou um item que não é um objeto."
+                )
+
+            required_fields = ("userId", "id", "title", "body")
+
+            if not all(field in post for field in required_fields):
+                raise ValueError(
+                    "Um item da resposta não possui os campos esperados."
+                )
+
+        return data
+
+    def close(self):
+        self.session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+```
+
+### 4.1. Imports
+
+```
+import requests
+```
+
+Importa a biblioteca Requests.
+
+```
+from requests.adapters import HTTPAdapter
+```
+
+Importa `HTTPAdapter`, que conecta a sessão HTTP ao mecanismo de transporte e permite configurar uma política de tentativas automáticas.
+
+```
+from urllib3.util.retry import Retry
+```
+
+Importa `Retry`, que define quando e como determinadas requisições podem ser repetidas. O Requests utiliza o urllib3 internamente.
+
+### 4.2. Criando a classe
+
+```
+class APIClient:
+```
+
+Define uma classe que representa o cliente da API. A classe concentra a configuração HTTP e os métodos responsáveis pelas consultas.
+
+```
+def __init__(self, base_url, timeout=5):
+```
+
+O método construtor recebe:
+
+- `base_url`: endereço-base da API.
+    
+- `timeout=5`: timeout padrão de cinco segundos para as requisições.
+    
+
+O valor é padrão, mas pode ser substituído ao criar o objeto.
+
+```
+self.base_url = base_url.rstrip("/")
+```
+
+`rstrip("/")` remove as barras `/` que aparecem no final da URL.
+
+Por exemplo, `https://api.example.com/` passa a ser `https://api.example.com`. Isso evita produzir URLs com barras duplicadas ao acrescentar `/posts`.
+
+```
+self.timeout = timeout
+```
+
+Armazena o timeout para que os métodos da classe possam reutilizá-lo.
+
+```
+self.session = requests.Session()
+```
+
+Cria uma sessão persistente. Ela permite compartilhar cabeçalhos, cookies e outras configurações entre requisições, além de reutilizar conexões quando possível.
+
+### 4.3. Política de tentativas automáticas
+
+```
+retry_policy = Retry(
+    total=3,
+    connect=3,
+    read=0,
+    status=3,
+    backoff_factor=0.5,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=frozenset(["GET"]),
+    respect_retry_after_header=True,
+)
+```
+
+Os argumentos definem o comportamento das tentativas:
+
+|Argumento|Significado|
+|---|---|
+|`total=3`|Limite geral de três tentativas adicionais, conforme os limites mais específicos e as condições da política.|
+|`connect=3`|Permite até três tentativas adicionais para determinados erros de conexão.|
+|`read=0`|Não repete falhas de leitura por essa categoria.|
+|`status=3`|Permite até três tentativas adicionais para status HTTP configurados como repetíveis.|
+|`backoff_factor=0.5`|Introduz espera progressiva entre tentativas, em vez de repetir imediatamente.|
+|`status_forcelist`|Lista de status HTTP que podem provocar nova tentativa.|
+|`allowed_methods`|Limita a repetição automática a requisições GET.|
+|`respect_retry_after_header=True`|Respeita o cabeçalho `Retry-After` quando aplicável.|
+
+O número de tentativas efetivas depende da categoria de falha, da política e do comportamento do servidor. Não interprete `total=3` como garantia de exatamente quatro chamadas em qualquer cenário.
+
+O `backoff_factor` também não é um timeout total. A operação completa pode demorar mais do que cinco segundos devido às esperas e às tentativas individuais.
+
+**Por que repetir apenas GET?**
+
+GET é normalmente utilizado para recuperar dados sem solicitar alterações no estado do servidor. Repetir automaticamente uma operação que cria ou altera recursos pode duplicar efeitos quando não há garantia de idempotência.
+
+### 4.4. Associando a política à sessão
+
+```
+adapter = HTTPAdapter(max_retries=retry_policy)
+```
+
+Cria um adaptador HTTP que utiliza a política de repetição definida anteriormente.
+
+```
+self.session.mount("https://", adapter)
+self.session.mount("http://", adapter)
+```
+
+Associa o adaptador às URLs que começam com `https://` e `http://`. Assim, as requisições da sessão utilizam essa configuração.
+
+### 4.5. Configurando cabeçalhos
+
+```
+self.session.headers.update({
+    "Accept": "application/json",
+    "User-Agent": "Python-Requests-APIClient/1.0",
+})
+```
+
+Define cabeçalhos padrão para as requisições da sessão.
+
+- `Accept` informa que o cliente espera receber JSON.
+    
+- `User-Agent` identifica o cliente HTTP.
+    
+
+Esses cabeçalhos não garantem que o servidor devolverá JSON; por isso, o código ainda precisa validar a resposta.
+
+### 4.6. Consultando os posts
+
+```
+def get_posts(self, user_id=None):
+```
+
+Define um método que consulta os posts da API.
+
+O parâmetro opcional `user_id` permite filtrar os resultados por usuário.
+
+```
+url = f"{self.base_url}/posts"
+params = {}
+```
+
+Constrói a URL do endpoint e cria um dicionário vazio para os parâmetros de consulta.
+
+```
+if user_id is not None:
+    params["userId"] = user_id
+```
+
+Se um identificador for informado, adiciona o parâmetro `userId`.
+
+O Requests transforma esse dicionário em uma query string. Por exemplo, o identificador `3` gera um endereço equivalente a:
+
+```
+/posts?userId=3
+```
+
+Não precisamos montar a query string manualmente.
+
+```
+response = self.session.get(
+    url,
+    params=params,
+    timeout=self.timeout,
+)
+```
+
+Envia a requisição GET utilizando a sessão configurada.
+
+- `url`: endpoint consultado.
+    
+- `params`: parâmetros de consulta.
+    
+- `timeout`: limite de espera por conexão e leitura, conforme o comportamento do Requests.
+    
+
+```
+response.raise_for_status()
+```
+
+Gera uma exceção `HTTPError` se a resposta tiver um status HTTP de erro. Essa verificação ocorre antes da tentativa de interpretar o corpo como JSON.
+
+### 4.7. Interpretando e validando o JSON
+
+```
+try:
+    data = response.json()
+except requests.exceptions.JSONDecodeError as exc:
+    raise ValueError(
+        "A API retornou uma resposta que não é JSON válido."
+    ) from exc
+```
+
+O bloco `try` tenta interpretar o corpo da resposta como JSON.
+
+Se ocorrer um erro de decodificação, o bloco `except` converte a falha em `ValueError`, apresentando uma mensagem mais específica para a aplicação.
+
+O trecho `from exc` preserva a exceção original como causa do novo erro, facilitando o diagnóstico.
+
+```
+if not isinstance(data, list):
+    raise ValueError(
+        "A resposta da API deveria ser uma lista."
+    )
+```
+
+Confere se o JSON foi convertido em uma lista Python. Uma resposta JSON pode ser um dicionário, uma lista, uma string, um número ou outro tipo compatível; o código precisa verificar o formato esperado.
+
+```
+for post in data:
+```
+
+Percorre cada elemento da lista.
+
+```
+if not isinstance(post, dict):
+```
+
+Verifica se cada elemento é um dicionário.
+
+```
+required_fields = ("userId", "id", "title", "body")
+```
+
+Define os nomes dos campos que cada post deve conter.
+
+```
+if not all(field in post for field in required_fields):
+```
+
+A expressão `field in post` verifica se uma chave está presente no dicionário. `all()` retorna `True` somente se todas as verificações forem verdadeiras.
+
+Essa validação verifica a presença das chaves, não os tipos nem a validade semântica de cada valor. Validações mais rigorosas podem ser adicionadas conforme os requisitos da aplicação.
+
+```
+return data
+```
+
+Devolve a lista de posts validada à parte do programa que chamou o método.
+
+### 4.8. Encerrando a sessão
+
+```
+def close(self):
+    self.session.close()
+```
+
+Fecha a sessão e libera os recursos associados.
+
+O método de contexto:
+
+```
+def __enter__(self):
+    return self
+
+def __exit__(self, exc_type, exc_value, traceback):
+    self.close()
+```
+
+Permite utilizar a classe com `with`. Ao sair do bloco, a sessão será fechada, inclusive quando ocorrer uma exceção.
+
+## 5. Criando a interface de linha de comando
+
+Crie `main.py`:
+
+```
+import argparse
+import json
+
+import requests
+
+from api_client import APIClient
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Consulta posts de uma API REST."
+    )
+
+    parser.add_argument(
+        "--base-url",
+        default="https://jsonplaceholder.typicode.com",
+        help="URL-base da API.",
+    )
+
+    parser.add_argument(
+        "--user-id",
+        type=int,
+        help="Filtra os posts pelo identificador do usuário.",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5,
+        help="Timeout de conexão e leitura em segundos.",
+    )
+
+    args = parser.parse_args()
+
+    try:
+        with APIClient(
+            base_url=args.base_url,
+            timeout=args.timeout,
+        ) as client:
+            posts = client.get_posts(user_id=args.user_id)
+
+        print(json.dumps(posts, indent=2, ensure_ascii=False))
+
+    except (
+        requests.exceptions.RequestException,
+        ValueError,
+    ) as exc:
+        parser.exit(
+            status=1,
+            message=f"Erro: {exc}\n",
+        )
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 5.1. Argumentos do programa
+
+```
+parser = argparse.ArgumentParser(
+    description="Consulta posts de uma API REST."
+)
+```
+
+Cria o analisador de argumentos. O texto `description` aparece na ajuda do programa.
+
+O argumento `--base-url` permite substituir a URL-base. O `default` define o valor utilizado quando o usuário não fornece esse argumento.
+
+O argumento `--user-id` recebe um identificador e converte o valor para inteiro por meio de `type=int`.
+
+O argumento `--timeout` recebe um número decimal por meio de `type=float`. Isso permite usar valores como `2.5`.
+
+```
+args = parser.parse_args()
+```
+
+Lê os argumentos fornecidos no terminal e disponibiliza os valores em `args`.
+
+Por exemplo, `--user-id 3` fica acessível como `args.user_id`.
+
+### 5.2. Executando o cliente
+
+```
+with APIClient(
+    base_url=args.base_url,
+    timeout=args.timeout,
+) as client:
+```
+
+Cria o cliente utilizando os valores informados pelo usuário. O bloco `with` garante que a sessão seja fechada ao final da utilização.
+
+```
+posts = client.get_posts(user_id=args.user_id)
+```
+
+Executa a consulta e armazena a lista de posts retornada.
+
+```
+print(json.dumps(posts, indent=2, ensure_ascii=False))
+```
+
+Transforma os dados Python em uma string JSON formatada.
+
+- `indent=2`: utiliza indentação de dois espaços.
+    
+- `ensure_ascii=False`: preserva caracteres Unicode, evitando que caracteres acentuados sejam representados desnecessariamente por sequências de escape.
+    
+
+### 5.3. Tratamento de erros
+
+```
+except (
+    requests.exceptions.RequestException,
+    ValueError,
+) as exc:
+```
+
+Captura erros de requisição Requests, incluindo falhas de conexão, timeout e erros HTTP, além dos erros de validação lançados pelo próprio cliente.
+
+```
+parser.exit(
+    status=1,
+    message=f"Erro: {exc}\n",
+)
+```
+
+Encerra o programa com código de saída `1`, indicando falha. A mensagem inclui a descrição da exceção.
+
+O bloco final:
+
+```
+if __name__ == "__main__":
+    main()
+```
+
+Executa `main()` quando `main.py` é iniciado diretamente. Se o arquivo for importado por outro módulo, a função não será executada automaticamente.
+
+## 6. Executando o programa
+
+Com o ambiente virtual ativo, execute:
+
+```
+python main.py
+```
+
+Esse comando consulta os posts e imprime a lista em JSON.
+
+Para filtrar por usuário:
+
+```
+python main.py --user-id 3
+```
+
+Para definir um timeout de dois segundos e meio:
+
+```
+python main.py --timeout 2.5
+```
+
+Para consultar outro endpoint compatível com a estrutura esperada:
+
+```
+python main.py --base-url "https://api.exemplo.com" --user-id 3
+```
+
+O último exemplo usa um endereço ilustrativo. Para funcionar, ele precisa apontar para uma API real e compatível com o endpoint `/posts` e com os campos que o programa valida.
+
+Para ver a ajuda:
+
+```
+python main.py --help
+```
+
+## 7. Criando testes automatizados
+
+Crie `tests/test_api_client.py`:
+
+```
+import requests
+import pytest
+
+from unittest.mock import Mock, patch
+
+from api_client import APIClient
+
+
+@patch("api_client.requests.Session.get")
+def test_get_posts_success(mock_get):
+    mock_response = Mock()
+
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = [
+        {
+            "userId": 3,
+            "id": 1,
+            "title": "Post de teste",
+            "body": "Conteúdo de teste",
+        }
+    ]
+
+    mock_get.return_value = mock_response
+
+    with APIClient("https://api.example.com") as client:
+        posts = client.get_posts(user_id=3)
+
+    assert len(posts) == 1
+    assert posts[0]["userId"] == 3
+    assert posts[0]["title"] == "Post de teste"
+
+    mock_get.assert_called_once_with(
+        "https://api.example.com/posts",
+        params={"userId": 3},
+        timeout=5,
+    )
+
+
+@patch("api_client.requests.Session.get")
+def test_get_posts_http_error(mock_get):
+    mock_response = Mock()
+
+    mock_response.raise_for_status.side_effect = (
+        requests.exceptions.HTTPError("500 Server Error")
+    )
+
+    mock_get.return_value = mock_response
+
+    with APIClient("https://api.example.com") as client:
+        with pytest.raises(requests.exceptions.HTTPError):
+            client.get_posts()
+
+
+@patch("api_client.requests.Session.get")
+def test_get_posts_invalid_structure(mock_get):
+    mock_response = Mock()
+
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "id": 1,
+        "title": "Formato incorreto",
+    }
+
+    mock_get.return_value = mock_response
+
+    with APIClient("https://api.example.com") as client:
+        with pytest.raises(ValueError):
+            client.get_posts()
+```
+
+### O que esses testes verificam?
+
+**Teste de sucesso:** confirma que os dados são devolvidos e que a URL, os parâmetros e o timeout foram enviados corretamente.
+
+**Teste de erro HTTP:** simula uma resposta cuja verificação de status gera `HTTPError`.
+
+**Teste de estrutura inválida:** simula um JSON que é um dicionário, embora o método espere uma lista, e verifica se a validação rejeita a resposta.
+
+Observe que o mock é aplicado em `api_client.requests.Session.get`, pois é nesse módulo que o cliente utiliza a sessão. Como os testes substituem essa chamada, eles não precisam acessar um servidor real.
+
+## 8. Executando os testes
+
+Execute a partir da raiz do projeto:
+
+```
+python -m pytest -v
+```
+
+Para executar somente os testes desse arquivo:
+
+```
+python -m pytest -v tests/test_api_client.py
+```
+
+Os testes devem ser independentes da disponibilidade da API pública.
+
+Se um teste falhar, leia o traceback para identificar se o problema está na implementação, na configuração do mock ou na expectativa definida pelo teste.
+
+## 9. Considerações de confiabilidade e segurança
+
+### Timeout não é limite total
+
+Um timeout de cinco segundos não garante que a operação inteira termine em cinco segundos. Repetições e esperas progressivas podem aumentar a duração total.
+
+### Tentativas automáticas precisam de critério
+
+Não repita indiscriminadamente qualquer requisição. Métodos que modificam dados podem produzir efeitos duplicados, e uma resposta 429 deve ser tratada respeitando os limites do serviço.
+
+### Validar o formato não basta para confiar nos dados
+
+A presença dos campos `id`, `title` e `body` não garante que os valores tenham tipos ou conteúdo adequados. Se os dados forem usados para decisões importantes, defina validações específicas.
+
+### A URL-base deve ser confiável
+
+Se o cliente for integrado a um sistema que recebe URLs de usuários, valide os destinos permitidos. Um cliente HTTP exposto sem restrições pode ser abusado para acessar serviços internos ou endereços locais, caracterizando riscos de SSRF.
+
+### Não registre segredos
+
+Evite imprimir tokens, cookies de sessão, senhas ou cabeçalhos de autenticação em mensagens de erro e logs.
+
+### Verificação TLS
+
+Mantenha a verificação TLS habilitada, como ocorre por padrão no Requests. Não use `verify=False` como solução geral para erros de certificado.
+
+## 10. Possíveis evoluções do projeto
+
+Depois que o cliente básico estiver funcionando, ele poderá ser ampliado com:
+
+- Paginação de resultados.
+    
+- Autenticação por token obtido de variável de ambiente.
+    
+- Exportação para JSON ou CSV.
+    
+- Logs com níveis de severidade.
+    
+- Validação mais rigorosa dos campos retornados.
+    
+- Testes de integração com um servidor local.
+    
+- Configuração de cabeçalhos por linha de comando.
+    
+- Métricas de duração das requisições.
+    
+
+Essas extensões devem ser adicionadas conforme a necessidade do projeto, preservando a separação entre interface de linha de comando, lógica HTTP e testes.

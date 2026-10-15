@@ -3168,3 +3168,543 @@ Não interprete automaticamente um status `200` como prova de que todos os requi
 |Interpretar JSON|`response.json()`|
 
 ---
+# 📜 Requests — Inspeção de Respostas e Validação de Conteúdo
+
+## 1. Por que inspecionar uma resposta HTTP?
+
+Uma requisição HTTP bem-sucedida do ponto de vista da comunicação não garante que o conteúdo recebido seja o esperado.
+
+Uma resposta pode ter status `200 OK`, mas conter:
+
+- Uma página HTML de erro da aplicação.
+    
+- Um JSON com uma mensagem de erro de negócio.
+    
+- Um documento vazio.
+    
+- Um formato diferente do esperado.
+    
+- Dados incompletos ou inválidos.
+    
+
+Por isso, depois de realizar uma requisição com `requests`, é importante verificar o status HTTP, o tipo de conteúdo e a estrutura dos dados antes de utilizá-los.
+
+O fluxo geral é:
+
+```
+Requisição HTTP
+      |
+      v
+Verificar status
+      |
+      v
+Inspecionar cabeçalhos
+      |
+      v
+Interpretar o conteúdo
+      |
+      v
+Validar os dados
+      |
+      v
+Utilizar o resultado
+```
+
+Cada etapa tem uma finalidade diferente. O status HTTP informa como o servidor classificou a operação; os cabeçalhos descrevem a resposta; a validação verifica se o conteúdo atende às necessidades do programa.
+
+---
+
+## 2. Consultando o status HTTP
+
+O atributo `response.status_code` contém o código de status retornado pelo servidor.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/get",
+    timeout=10,
+)
+
+print(response.status_code)
+```
+
+O resultado esperado para esse endpoint de teste é normalmente `200`.
+
+### Utilizando `raise_for_status()`
+
+```
+response.raise_for_status()
+```
+
+Esse método gera uma exceção `requests.exceptions.HTTPError` quando o status indica um erro HTTP, geralmente códigos entre `400` e `599`.
+
+Exemplo:
+
+```
+import requests
+
+try:
+    response = requests.get(
+        "https://httpbin.org/status/404",
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+except requests.exceptions.HTTPError as erro:
+    print(f"Erro HTTP: {erro}")
+```
+
+O endpoint de teste retorna o status `404`, fazendo com que `raise_for_status()` gere uma exceção.
+
+**Importante:** o método não considera automaticamente todos os status fora da faixa `200` como erros. Respostas como `3xx` podem representar redirecionamentos e, por padrão, o Requests costuma segui-los automaticamente em requisições GET.
+
+---
+
+## 3. Inspecionando os cabeçalhos da resposta
+
+Os cabeçalhos podem ajudar a identificar o formato do conteúdo e outras características da resposta.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/get",
+    timeout=10,
+)
+
+response.raise_for_status()
+
+print(response.headers)
+```
+
+O atributo `response.headers` disponibiliza os cabeçalhos da resposta em uma estrutura semelhante a um dicionário.
+
+Para consultar um cabeçalho específico:
+
+```
+tipo_conteudo = response.headers.get("Content-Type")
+print(tipo_conteudo)
+```
+
+### Entendendo o código
+
+- `response.headers`: coleção dos cabeçalhos recebidos.
+    
+- `.get("Content-Type")`: procura o cabeçalho `Content-Type`.
+    
+- `tipo_conteudo`: armazena o valor encontrado, ou `None` se o cabeçalho estiver ausente.
+    
+- `print(...)`: apresenta o valor.
+    
+
+Um resultado pode ser semelhante a:
+
+```
+application/json
+```
+
+ou:
+
+```
+text/html; charset=utf-8
+```
+
+O valor exato depende do endpoint.
+
+O `Content-Type` é uma indicação fornecida pelo servidor. Não é uma prova definitiva de que o corpo corresponde realmente ao formato declarado.
+
+---
+
+## 4. Verificando o tipo de conteúdo
+
+Se o programa espera JSON, é útil verificar o cabeçalho antes de tentar interpretar o corpo.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/get",
+    timeout=10,
+)
+
+response.raise_for_status()
+
+content_type = response.headers.get("Content-Type", "")
+content_type = content_type.lower()
+
+if "application/json" in content_type:
+    dados = response.json()
+    print(dados)
+else:
+    print("A resposta não declarou JSON.")
+```
+
+### Entendendo as operações
+
+- `.get("Content-Type", "")`: retorna o cabeçalho ou uma string vazia se ele não existir.
+    
+- `.lower()`: converte as letras para minúsculas, permitindo comparar o valor sem diferenciar maiúsculas de minúsculas.
+    
+- `"application/json" in content_type`: verifica se essa sequência aparece no cabeçalho.
+    
+- `response.json()`: tenta interpretar o corpo como JSON.
+    
+
+Algumas APIs utilizam tipos como `application/problem+json` ou outros tipos terminados em `+json`. Se o programa precisar aceitar diferentes tipos de mídia JSON, a validação deverá considerar essas possibilidades.
+
+Mesmo quando o cabeçalho indica JSON, o corpo pode estar malformado. Por isso, também é necessário tratar erros de decodificação.
+
+---
+
+## 5. Interpretando JSON com segurança
+
+O método `response.json()` converte um corpo JSON em objetos Python.
+
+Por exemplo, o JSON:
+
+```
+{
+    "usuario": "aluno",
+    "ativo": true,
+    "tentativas": 3
+}
+```
+
+é convertido aproximadamente para:
+
+```
+{
+    "usuario": "aluno",
+    "ativo": True,
+    "tentativas": 3,
+}
+```
+
+Observe as diferenças:
+
+|JSON|Python|
+|---|---|
+|`object`|`dict`|
+|`array`|`list`|
+|`string`|`str`|
+|`number`|`int` ou `float`|
+|`true` / `false`|`True` / `False`|
+|`null`|`None`|
+
+### Tratando JSON inválido
+
+```
+import requests
+
+try:
+    response = requests.get(
+        "https://httpbin.org/html",
+        timeout=10,
+    )
+
+    response.raise_for_status()
+    dados = response.json()
+
+except requests.exceptions.JSONDecodeError:
+    print("A resposta não contém JSON válido.")
+
+except requests.exceptions.RequestException as erro:
+    print(f"Falha na requisição: {erro}")
+```
+
+O endpoint `/html` fornece HTML, não JSON. Por isso, a tentativa de interpretar o corpo com `response.json()` normalmente gera uma exceção de decodificação.
+
+O Requests disponibiliza `requests.exceptions.JSONDecodeError` para esse tipo de situação. O tratamento de exceções de JSON pode variar conforme a versão e as dependências instaladas; consulte a documentação da versão utilizada.
+
+---
+
+## 6. Validando a estrutura dos dados
+
+Conseguir interpretar JSON não significa que o resultado contém os campos esperados.
+
+Considere uma API que deveria retornar:
+
+```
+{
+    "nome": "Ana",
+    "idade": 20
+}
+```
+
+O programa pode validar a estrutura antes de utilizar os dados:
+
+```
+dados = {
+    "nome": "Ana",
+    "idade": 20,
+}
+
+if not isinstance(dados, dict):
+    raise ValueError("A resposta precisa ser um objeto JSON.")
+
+if not isinstance(dados.get("nome"), str):
+    raise ValueError("O campo 'nome' precisa ser uma string.")
+
+if not isinstance(dados.get("idade"), int):
+    raise ValueError("O campo 'idade' precisa ser um inteiro.")
+
+print(dados["nome"])
+```
+
+### Entendendo `isinstance()`
+
+A função `isinstance(objeto, tipo)` verifica se um objeto é uma instância do tipo informado.
+
+Exemplos:
+
+```
+isinstance("Ana", str)       # True
+isinstance(20, int)          # True
+isinstance([], list)         # True
+isinstance({}, dict)         # True
+```
+
+### Por que usar `.get()`?
+
+```
+dados.get("nome")
+```
+
+O método `.get()` permite consultar uma chave sem gerar `KeyError` quando ela não existe. Nesse caso, o resultado será `None`, a menos que outro valor padrão seja informado.
+
+Em comparação:
+
+```
+dados["nome"]
+```
+
+O acesso direto gera `KeyError` se a chave estiver ausente.
+
+**Detalhe importante:** em Python, `bool` é uma subclasse de `int`. Portanto, `isinstance(True, int)` retorna `True`. Se o programa precisar aceitar apenas inteiros que não sejam booleanos, pode utilizar:
+
+```
+if not isinstance(dados.get("idade"), int) or isinstance(dados.get("idade"), bool):
+    raise ValueError("O campo 'idade' precisa ser um inteiro.")
+```
+
+Essa distinção pode ser importante quando os dados recebidos precisam seguir um contrato estrito.
+
+---
+
+## 7. Diferença entre status HTTP e erros de negócio
+
+Uma API pode retornar `200 OK` mesmo quando uma operação não foi concluída conforme a expectativa do cliente.
+
+Por exemplo:
+
+```
+{
+    "sucesso": false,
+    "mensagem": "Operação não permitida."
+}
+```
+
+Esse JSON pode ser uma resposta válida do ponto de vista da sintaxe e, ainda assim, indicar que a operação falhou.
+
+O programa deve verificar os campos definidos no contrato da API:
+
+```
+dados = response.json()
+
+if dados.get("sucesso") is True:
+    print("Operação concluída.")
+else:
+    print("A aplicação informou uma falha.")
+```
+
+Nesse exemplo, `is True` exige que o valor seja exatamente o booleano `True`. Isso evita tratar valores como `1` como se fossem necessariamente o booleano esperado.
+
+Não invente campos como `sucesso`, `status` ou `mensagem` sem consultar a documentação da API. Os nomes e os valores válidos dependem do serviço.
+
+---
+
+## 8. Consultando o tamanho e o conteúdo da resposta
+
+O Requests disponibiliza diferentes atributos para acessar o corpo da resposta.
+
+### `response.text`
+
+Retorna o corpo interpretado como texto, utilizando a codificação determinada pelo Requests.
+
+```
+print(response.text)
+```
+
+É útil para HTML, XML, JSON em formato textual e outros conteúdos textuais.
+
+### `response.content`
+
+Retorna o corpo como bytes.
+
+```
+print(response.content)
+```
+
+É apropriado quando precisamos dos dados binários originais, como no download de arquivos.
+
+### `response.encoding`
+
+Informa a codificação utilizada para interpretar `response.text`.
+
+```
+print(response.encoding)
+```
+
+### `len(response.content)`
+
+Informa o número de bytes do corpo que foi carregado:
+
+```
+print(len(response.content))
+```
+
+Para respostas não transmitidas em streaming, esse valor representa o tamanho do conteúdo armazenado em `response.content`. Com `stream=True`, evite acessar `response.content` indiscriminadamente, pois isso pode consumir a resposta inteira e aumentar o uso de memória.
+
+---
+
+## 9. Verificando redirecionamentos
+
+O Requests segue redirecionamentos automaticamente em métodos como GET, por padrão. É possível inspecionar o histórico e a URL final.
+
+```
+import requests
+
+response = requests.get(
+    "https://httpbin.org/redirect/2",
+    timeout=10,
+)
+
+response.raise_for_status()
+
+print("URL final:", response.url)
+print("Redirecionamentos:", len(response.history))
+```
+
+### Atributos importantes
+
+- `response.url`: URL associada à resposta final.
+    
+- `response.history`: lista das respostas intermediárias de redirecionamento.
+    
+- `len(response.history)`: quantidade de respostas intermediárias registradas.
+    
+
+Se for necessário inspecionar a primeira resposta sem seguir o redirecionamento, utilize:
+
+```
+response = requests.get(
+    "https://httpbin.org/redirect/2",
+    allow_redirects=False,
+    timeout=10,
+)
+
+print(response.status_code)
+print(response.headers.get("Location"))
+```
+
+`allow_redirects=False` desabilita o seguimento automático. O cabeçalho `Location` pode indicar o destino do redirecionamento, quando presente.
+
+Redirecionamentos merecem atenção em aplicações que enviam credenciais ou dados sensíveis, especialmente quando o destino muda de domínio.
+
+---
+
+## 10. Exemplo completo: consulta e validação de JSON
+
+O exemplo abaixo reúne status HTTP, tratamento de erros, validação do tipo de conteúdo e verificação básica da estrutura.
+
+```
+import requests
+
+
+def consultar_usuario(url: str) -> dict:
+    try:
+        response = requests.get(
+            url,
+            headers={"Accept": "application/json"},
+            timeout=(3, 10),
+        )
+
+        response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type", "").lower()
+
+        if "json" not in content_type:
+            raise ValueError("A resposta não declarou um tipo de conteúdo JSON.")
+
+        dados = response.json()
+
+        if not isinstance(dados, dict):
+            raise ValueError("A resposta JSON precisa ser um objeto.")
+
+        if "id" not in dados:
+            raise ValueError("O campo obrigatório 'id' está ausente.")
+
+        return dados
+
+    except requests.exceptions.Timeout as erro:
+        raise RuntimeError("A consulta excedeu o tempo limite.") from erro
+
+    except requests.exceptions.RequestException as erro:
+        raise RuntimeError("Não foi possível consultar o serviço.") from erro
+
+
+usuario = consultar_usuario("https://jsonplaceholder.typicode.com/users/1")
+print(usuario["id"])
+print(usuario["name"])
+```
+
+### Conceitos utilizados
+
+- `def consultar_usuario(...)`: define uma função para encapsular a consulta.
+    
+- `url: str`: anota o argumento como string.
+    
+- `-> dict`: indica que a função pretende retornar um dicionário.
+    
+- `headers={"Accept": "application/json"}`: declara a preferência por uma resposta JSON.
+    
+- `timeout=(3, 10)`: configura timeout de conexão e leitura.
+    
+- `raise_for_status()`: detecta respostas HTTP de erro.
+    
+- `"json" not in content_type`: realiza uma verificação simples do cabeçalho.
+    
+- `isinstance(dados, dict)`: verifica se o JSON foi convertido para um dicionário.
+    
+- `"id" not in dados`: verifica a presença de uma chave obrigatória.
+    
+- `raise ValueError(...)`: indica que a resposta não atende ao formato esperado.
+    
+- `raise RuntimeError(...) from erro`: cria uma exceção de nível superior preservando a causa original.
+    
+
+O exemplo utiliza uma API pública de testes. A validação apresentada é intencionalmente básica: uma aplicação real também pode precisar verificar tipos, intervalos, campos opcionais e regras específicas do contrato da API.
+
+## 11. Referência rápida
+
+|Objetivo|Recurso|
+|---|---|
+|Consultar o status HTTP|`response.status_code`|
+|Detectar erro HTTP|`response.raise_for_status()`|
+|Ler cabeçalhos|`response.headers`|
+|Consultar um cabeçalho opcional|`response.headers.get("Content-Type")`|
+|Interpretar JSON|`response.json()`|
+|Capturar erro de decodificação|`requests.exceptions.JSONDecodeError`|
+|Ler conteúdo textual|`response.text`|
+|Ler conteúdo binário|`response.content`|
+|Consultar codificação|`response.encoding`|
+|Consultar URL final|`response.url`|
+|Inspecionar redirecionamentos|`response.history`|
+|Desativar redirecionamentos automáticos|`allow_redirects=False`|
+|Validar o tipo de um objeto|`isinstance(objeto, tipo)`|
+|Consultar chave opcional|`dicionario.get("chave")`|
+|Preservar causa de uma exceção|`raise NovaExcecao(...) from erro`|
+
+---

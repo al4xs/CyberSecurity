@@ -2803,15 +2803,368 @@ Ao desenvolver uma aplicação que envia arquivos:
 
 ## 10. Referência rápida
 
+| Objetivo                         | Recurso                                    |
+| -------------------------------- | ------------------------------------------ |
+| Enviar um arquivo                | `files={"arquivo": objeto_arquivo}`        |
+| Enviar campos de formulário      | `data={"campo": "valor"}`                  |
+| Enviar JSON                      | `json={"campo": "valor"}`                  |
+| Enviar arquivo binário           | `open(caminho, "rb")`                      |
+| Informar nome e MIME             | `("nome.pdf", arquivo, "application/pdf")` |
+| Enviar vários arquivos           | Lista de tuplas em `files`                 |
+| Verificar erro HTTP              | `response.raise_for_status()`              |
+| Definir timeout                  | `timeout=(5, 30)`                          |
+| Fechar o arquivo automaticamente | `with open(...) as arquivo`                |
+| Tratar falhas de rede            | `requests.exceptions.RequestException`     |
+
+---
+# 📜 Requests — Autenticação, Tokens e Cabeçalhos HTTP
+
+## 1. O papel dos cabeçalhos HTTP
+
+Os cabeçalhos HTTP transportam metadados sobre uma requisição ou resposta. Eles podem indicar o formato dos dados, as preferências do cliente, informações de autenticação e outras características da comunicação.
+
+Com `requests`, os cabeçalhos de uma requisição são definidos principalmente pelo argumento `headers`.
+
+```
+import requests
+
+url = "https://httpbin.org/headers"
+
+response = requests.get(
+    url,
+    headers={
+        "User-Agent": "MeuPrograma/1.0",
+        "Accept": "application/json",
+    },
+    timeout=15,
+)
+
+response.raise_for_status()
+print(response.json())
+```
+
+### Entendendo cada parte
+
+- `requests.get(...)`: realiza uma requisição HTTP GET.
+    
+- `headers={...}`: recebe um dicionário com os cabeçalhos que serão enviados.
+    
+- `"User-Agent"`: identifica o cliente HTTP. O valor pode identificar uma aplicação, mas não comprova a identidade de quem a executa.
+    
+- `"Accept"`: informa quais tipos de conteúdo o cliente prefere receber.
+    
+- `timeout=15`: configura o limite de espera da requisição.
+    
+- `response.raise_for_status()`: gera uma exceção para respostas HTTP de erro.
+    
+- `response.json()`: tenta interpretar o corpo da resposta como JSON.
+    
+
+O endereço utilizado é um endpoint de teste. O conteúdo retornado depende do serviço e não deve ser confundido com dados de uma API de produção.
+
+## 2. Cabeçalhos comuns
+
+|Cabeçalho|Finalidade|
+|---|---|
+|`User-Agent`|Identifica o cliente HTTP declarado|
+|`Accept`|Indica os tipos de conteúdo aceitos|
+|`Content-Type`|Descreve o formato do corpo enviado|
+|`Authorization`|Transporta credenciais ou informações de autorização|
+|`Accept-Language`|Indica preferências de idioma|
+|`Cache-Control`|Expressa diretivas relacionadas ao cache|
+|`Referer`|Pode informar a página de origem de uma navegação|
+
+A presença de um cabeçalho não garante que o servidor o aceite ou o utilize. O comportamento depende da aplicação e de sua configuração.
+
+### `Accept` versus `Content-Type`
+
+Esses cabeçalhos possuem funções diferentes:
+
+- `Accept`: informa o tipo de resposta que o cliente prefere receber.
+    
+- `Content-Type`: descreve o formato do corpo da requisição ou resposta.
+    
+
+Por exemplo:
+
+```
+headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
+```
+
+Esse dicionário declara preferência por uma resposta JSON e indica que o corpo enviado é JSON. Para enviar dados serializados automaticamente, normalmente é mais simples utilizar o argumento `json=`:
+
+```
+response = requests.post(
+    "https://httpbin.org/post",
+    json={"usuario": "teste"},
+    timeout=15,
+)
+```
+
+Nesse caso, o Requests serializa o dicionário e configura o cabeçalho de conteúdo apropriado.
+
+## 3. Autenticação HTTP Basic
+
+A autenticação Basic transmite um nome de usuário e uma senha codificados em Base64 no cabeçalho `Authorization`.
+
+**Base64 não é criptografia.** Ele apenas representa os dados em outro formato. Por isso, Basic Auth deve ser utilizado sobre HTTPS com validação TLS ativa.
+
+O Requests oferece o argumento `auth`:
+
+```
+import requests
+
+url = "https://httpbin.org/basic-auth/aluno/senha-demo"
+
+response = requests.get(
+    url,
+    auth=("aluno", "senha-demo"),
+    timeout=15,
+)
+
+response.raise_for_status()
+print(response.status_code)
+```
+
+### Como funciona `auth`
+
+```
+auth=("aluno", "senha-demo")
+```
+
+O argumento recebe uma tupla com:
+
+1. O nome de usuário.
+    
+2. A senha.
+    
+
+O Requests monta o cabeçalho de autenticação Basic. O exemplo usa credenciais fictícias em um endpoint de teste; em uma aplicação real, utilize as credenciais fornecidas pelo serviço autorizado.
+
+Não coloque senhas reais diretamente no código-fonte, especialmente em repositórios compartilhados.
+
+## 4. Bearer Token
+
+Um Bearer Token é uma credencial que permite ao portador realizar operações autorizadas conforme as regras do servidor. Ele costuma ser utilizado em APIs REST.
+
+O formato habitual do cabeçalho é:
+
+```
+Authorization: Bearer TOKEN_DE_EXEMPLO
+```
+
+Com Requests:
+
+```
+import os
+import requests
+
+token = os.environ.get("API_TOKEN")
+
+if not token:
+    raise RuntimeError("A variável API_TOKEN não foi configurada.")
+
+response = requests.get(
+    "https://httpbin.org/bearer",
+    headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    },
+    timeout=15,
+)
+
+response.raise_for_status()
+print(response.json())
+```
+
+### Entendendo o código
+
+- `import os`: importa funcionalidades de interação com o ambiente do sistema.
+    
+- `os.environ.get("API_TOKEN")`: lê a variável de ambiente `API_TOKEN`; retorna `None` se ela não existir.
+    
+- `if not token`: verifica se não foi fornecido um valor utilizável.
+    
+- `raise RuntimeError(...)`: interrompe a execução com uma mensagem explicativa.
+    
+- `f"Bearer {token}"`: constrói o valor do cabeçalho incluindo o token.
+    
+- `response.json()`: interpreta a resposta como JSON.
+    
+
+A variável de ambiente precisa ser configurada antes da execução. Em um shell compatível com Bash ou Zsh, por exemplo:
+
+```
+export API_TOKEN='TOKEN_DE_TESTE'
+python programa.py
+```
+
+Substitua o valor pelo token apropriado para o serviço que você está autorizado a utilizar. Não compartilhe tokens em mensagens, capturas de tela ou registros de depuração.
+
+## 5. Reutilizando cabeçalhos com `Session`
+
+Quando várias requisições precisam utilizar os mesmos cabeçalhos, uma sessão permite configurar esses valores uma única vez.
+
+```
+import requests
+
+with requests.Session() as session:
+    session.headers.update({
+        "User-Agent": "MeuPrograma/1.0",
+        "Accept": "application/json",
+    })
+
+    primeira = session.get(
+        "https://httpbin.org/headers",
+        timeout=15,
+    )
+    primeira.raise_for_status()
+
+    segunda = session.get(
+        "https://httpbin.org/headers",
+        timeout=15,
+    )
+    segunda.raise_for_status()
+```
+
+### O que acontece nesse exemplo?
+
+- `requests.Session()`: cria uma sessão que pode reutilizar conexões e manter configurações entre requisições.
+    
+- `session.headers`: coleção de cabeçalhos padrão da sessão.
+    
+- `.update({...})`: adiciona os cabeçalhos indicados ou atualiza os valores existentes.
+    
+- `session.get(...)`: envia uma requisição usando as configurações da sessão.
+    
+- `with`: fecha a sessão ao sair do bloco.
+    
+
+Os cabeçalhos definidos na sessão são aplicados às requisições feitas por ela, salvo quando são substituídos ou modificados para uma requisição específica.
+
+Uma sessão não significa, por si só, que o usuário está autenticado. A autenticação depende das credenciais, cookies, tokens e regras implementadas pelo servidor.
+
+## 6. Diferença entre cookies e tokens
+
+Cookies e tokens podem participar de mecanismos de autenticação, mas não são a mesma coisa.
+
+**Cookies**
+
+- São armazenados e enviados conforme as regras de cookies HTTP.
+    
+- Podem representar uma sessão mantida pelo servidor.
+    
+- Podem ser recebidos em cabeçalhos `Set-Cookie` e enviados posteriormente em `Cookie`.
+    
+- Podem ser gerenciados automaticamente por `requests.Session()`.
+    
+
+**Tokens**
+
+- São valores utilizados como credenciais ou comprovantes de autorização, conforme o sistema.
+    
+- Podem ser enviados no cabeçalho `Authorization`.
+    
+- Podem ter prazo de validade, permissões e regras de renovação.
+    
+- Podem exigir mecanismos próprios de obtenção e atualização.
+    
+
+Exemplo de token:
+
+```
+headers = {
+    "Authorization": "Bearer TOKEN_DE_EXEMPLO",
+}
+```
+
+Exemplo de cookie enviado explicitamente:
+
+```
+headers = {
+    "Cookie": "session_id=VALOR_DE_EXEMPLO",
+}
+```
+
+Em aplicações reais, normalmente é preferível deixar o Requests gerenciar cookies por meio de uma sessão, em vez de montar manualmente o cabeçalho `Cookie`.
+
+Não confunda o cookie de sessão de uma aplicação com uma sessão TCP. São conceitos de camadas e finalidades diferentes.
+
+## 7. Tratamento de respostas de autenticação
+
+Respostas HTTP podem indicar problemas de autenticação ou autorização.
+
+|Status|Significado geral|
+|---|---|
+|`200 OK`|A requisição foi processada com sucesso|
+|`401 Unauthorized`|A requisição não apresentou autenticação válida ou necessária|
+|`403 Forbidden`|O servidor recusou a operação por falta de permissão ou outra política|
+|`404 Not Found`|O recurso não foi encontrado ou não está sendo disponibilizado|
+|`429 Too Many Requests`|O servidor está limitando a frequência de requisições|
+|`500 Internal Server Error`|Ocorreu um erro interno no servidor|
+
+A interpretação exata depende da API. Por exemplo, alguns serviços podem utilizar `404` para não revelar a existência de recursos protegidos.
+
+### Exemplo de tratamento
+
+```
+import requests
+
+try:
+    response = requests.get(
+        "https://httpbin.org/bearer",
+        timeout=15,
+    )
+
+    response.raise_for_status()
+
+except requests.exceptions.HTTPError as erro:
+    print(f"Erro HTTP: {erro}")
+
+except requests.exceptions.RequestException as erro:
+    print(f"Erro de comunicação: {erro}")
+```
+
+O endpoint de teste pode retornar uma resposta de autenticação não autorizada quando não recebe a credencial esperada.
+
+`raise_for_status()` gera `HTTPError` para status HTTP de erro. Já `RequestException` permite tratar outras falhas de comunicação do Requests.
+
+Não interprete automaticamente um status `200` como prova de que todos os requisitos de negócio foram atendidos. Verifique também o conteúdo e o contrato da API.
+
+## 8. Boas práticas de segurança
+
+1. **Utilize HTTPS com verificação TLS habilitada.** Isso ajuda a proteger as credenciais em trânsito.
+    
+2. **Não registre tokens ou senhas nos logs.** O cabeçalho `Authorization` deve ser tratado como dado sensível.
+    
+3. **Evite credenciais fixas no código.** Utilize variáveis de ambiente ou um gerenciador de segredos apropriado.
+    
+4. **Limite as permissões dos tokens.** Prefira credenciais com apenas os acessos necessários.
+    
+5. **Respeite a validade das credenciais.** Tokens expirados podem exigir renovação conforme a documentação da API.
+    
+6. **Não confunda autenticação com autorização.** Identificar ou autenticar um usuário não significa que ele pode acessar qualquer recurso.
+    
+7. **Não compartilhe sessões autenticadas.** Cookies e tokens podem conceder acesso à conta associada.
+    
+8. **Siga os limites do serviço.** Trate respostas `429` conforme a documentação e os cabeçalhos de limitação disponibilizados.
+    
+
+## 9. Referência rápida
+
 |Objetivo|Recurso|
 |---|---|
-|Enviar um arquivo|`files={"arquivo": objeto_arquivo}`|
-|Enviar campos de formulário|`data={"campo": "valor"}`|
-|Enviar JSON|`json={"campo": "valor"}`|
-|Enviar arquivo binário|`open(caminho, "rb")`|
-|Informar nome e MIME|`("nome.pdf", arquivo, "application/pdf")`|
-|Enviar vários arquivos|Lista de tuplas em `files`|
+|Definir cabeçalhos por requisição|`headers={...}`|
+|Configurar cabeçalhos padrão|`session.headers.update({...})`|
+|Usar HTTP Basic|`auth=("usuario", "senha")`|
+|Enviar Bearer Token|`Authorization: Bearer ...`|
+|Ler variável de ambiente|`os.environ.get("API_TOKEN")`|
+|Reutilizar conexões e cookies|`requests.Session()`|
 |Verificar erro HTTP|`response.raise_for_status()`|
-|Definir timeout|`timeout=(5, 30)`|
-|Fechar o arquivo automaticamente|`with open(...) as arquivo`|
-|Tratar falhas de rede|`requests.exceptions.RequestException`|
+|Consultar status|`response.status_code`|
+|Interpretar JSON|`response.json()`|
+
+---

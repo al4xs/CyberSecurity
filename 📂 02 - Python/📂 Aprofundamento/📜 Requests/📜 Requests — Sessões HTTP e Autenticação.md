@@ -4156,3 +4156,575 @@ Também é necessário validar o tipo e o valor de `next_page` antes de atribuí
 |Configurar timeout|`timeout=(3, 10)`|
 
 ---
+# 📜 Requests — Web Scraping com HTML e Beautiful Soup
+
+## 1. O que é Web Scraping?
+
+**Web scraping** é a técnica de obter informações de páginas web por meio de um programa. Com Python, podemos utilizar `requests` para buscar o conteúdo de uma página e `Beautiful Soup` para analisar o HTML recebido.
+
+As duas bibliotecas possuem funções diferentes:
+
+- `requests`: realiza a requisição HTTP e recebe a resposta do servidor.
+    
+- `Beautiful Soup`: interpreta a estrutura HTML e facilita a localização de elementos, textos e atributos.
+    
+
+O Requests não é, por si só, um parser HTML. Ele obtém o conteúdo; a análise da estrutura é realizada por uma ferramenta apropriada.
+
+### Fluxo básico
+
+```
+Programa Python
+      |
+      v
+requests.get()
+      |
+      v
+Servidor Web
+      |
+      v
+Resposta HTTP com HTML
+      |
+      v
+Beautiful Soup
+      |
+      v
+Elementos, textos e links
+```
+
+O scraping pode ser útil para coletar informações públicas, acompanhar páginas, estudar a estrutura de um site ou automatizar tarefas autorizadas. Antes de coletar dados, verifique os termos de uso, as regras de acesso e as restrições aplicáveis ao site.
+
+---
+
+## 2. Instalando Beautiful Soup
+
+O Beautiful Soup é distribuído pelo pacote `beautifulsoup4`.
+
+Em um terminal Linux, você pode instalá-lo no ambiente virtual do projeto:
+
+```
+python -m pip install requests beautifulsoup4
+```
+
+O comando instala:
+
+- `requests`: biblioteca para requisições HTTP.
+    
+- `beautifulsoup4`: biblioteca para análise de HTML e XML.
+    
+
+É recomendável utilizar um ambiente virtual para separar as dependências do projeto das bibliotecas instaladas globalmente.
+
+Para utilizar o parser `html.parser`, não é necessário instalar um pacote adicional: ele faz parte da biblioteca padrão do Python.
+
+---
+
+## 3. Obtendo o HTML com Requests
+
+Antes de analisar uma página, precisamos obter o conteúdo HTML.
+
+```
+import requests
+
+url = "https://example.com"
+
+response = requests.get(
+    url,
+    timeout=(3, 10),
+)
+
+response.raise_for_status()
+
+html = response.text
+
+print(html[:500])
+```
+
+### Entendendo cada parte
+
+- `import requests`: importa a biblioteca.
+    
+- `url`: armazena o endereço da página.
+    
+- `requests.get(...)`: envia uma requisição HTTP GET.
+    
+- `timeout=(3, 10)`: define os limites de espera para conexão e leitura.
+    
+- `response.raise_for_status()`: gera uma exceção se a resposta indicar um erro HTTP.
+    
+- `response.text`: disponibiliza o corpo da resposta como texto.
+    
+- `html[:500]`: utiliza slicing para obter os primeiros 500 caracteres.
+    
+
+O domínio `example.com` é um endereço reservado para exemplos. Substitua-o pelo endereço que deseja analisar e tem autorização para acessar.
+
+### Por que utilizar `response.text`?
+
+O HTML normalmente é texto, portanto `response.text` é conveniente para esse tipo de processamento. A codificação utilizada depende das informações disponíveis na resposta e da forma como o Requests determina a codificação.
+
+Para conteúdo binário, como imagens ou arquivos compactados, utilize `response.content` em vez de tratar os bytes como HTML textual.
+
+---
+
+## 4. Criando um objeto Beautiful Soup
+
+Depois de obter o HTML, podemos passá-lo ao Beautiful Soup.
+
+```
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(html, "html.parser")
+```
+
+### Entendendo os argumentos
+
+- `BeautifulSoup(...)`: cria um objeto que representa o documento analisado.
+    
+- `html`: contém o texto HTML obtido com Requests.
+    
+- `"html.parser"`: seleciona o parser HTML incluído no Python.
+    
+
+A variável `soup` passa a oferecer métodos para localizar elementos, acessar atributos e extrair textos.
+
+Por exemplo, considere este HTML:
+
+```
+<html>
+  <head>
+    <title>Página de exemplo</title>
+  </head>
+  <body>
+    <h1>Bem-vindo</h1>
+    <p>Conteúdo da página.</p>
+  </body>
+</html>
+```
+
+O Beautiful Soup interpreta as tags e permite navegar pela estrutura sem precisar procurar manualmente cada sequência de caracteres.
+
+---
+
+## 5. Encontrando elementos com `find()`
+
+O método `find()` procura o primeiro elemento que corresponde aos critérios informados.
+
+```
+titulo = soup.find("h1")
+
+if titulo:
+    print(titulo.get_text(strip=True))
+```
+
+### Entendendo o código
+
+- `soup.find("h1")`: procura o primeiro elemento `<h1>`.
+    
+- `titulo`: armazena o elemento encontrado ou `None` se não houver correspondência.
+    
+- `if titulo`: verifica se um elemento foi encontrado.
+    
+- `titulo.get_text(strip=True)`: extrai o texto do elemento e remove espaços em branco nas extremidades.
+    
+
+Se o HTML contiver:
+
+```
+<h1>Bem-vindo</h1>
+```
+
+O resultado será:
+
+```
+Bem-vindo
+```
+
+### Por que verificar o resultado?
+
+Se o elemento não existir, `find()` retorna `None`. Tentar executar `titulo.get_text()` nesse caso causaria um `AttributeError`.
+
+A verificação evita esse erro:
+
+```
+elemento = soup.find("h1")
+
+if elemento is not None:
+    texto = elemento.get_text(strip=True)
+```
+
+---
+
+## 6. Encontrando vários elementos com `find_all()`
+
+Enquanto `find()` retorna o primeiro elemento correspondente, `find_all()` retorna uma coleção de elementos encontrados.
+
+Considere este HTML:
+
+```
+<ul>
+  <li>Linux</li>
+  <li>Python</li>
+  <li>Redes</li>
+</ul>
+```
+
+Para obter os itens da lista:
+
+```
+itens = soup.find_all("li")
+
+for item in itens:
+    print(item.get_text(strip=True))
+```
+
+Resultado:
+
+```
+Linux
+Python
+Redes
+```
+
+### Entendendo cada parte
+
+- `soup.find_all("li")`: localiza todos os elementos `<li>` correspondentes.
+    
+- `itens`: recebe uma lista de elementos.
+    
+- `for item in itens`: percorre cada elemento encontrado.
+    
+- `item.get_text(strip=True)`: extrai o texto do elemento atual.
+    
+
+Se não houver correspondências, `find_all()` retorna uma lista vazia. Nesse caso, o laço simplesmente não executa nenhuma iteração.
+
+---
+
+## 7. Localizando elementos por classe CSS
+
+Em HTML, o atributo `class` permite identificar ou agrupar elementos.
+
+Exemplo:
+
+```
+<div class="produto">
+  <h2>Teclado</h2>
+</div>
+
+<div class="produto">
+  <h2>Mouse</h2>
+</div>
+```
+
+Podemos localizar os elementos com a classe `produto`:
+
+```
+produtos = soup.find_all("div", class_="produto")
+
+for produto in produtos:
+    print(produto.get_text(" ", strip=True))
+```
+
+Resultado:
+
+```
+Teclado
+Mouse
+```
+
+### Por que utilizar `class_`?
+
+`class` é uma palavra reservada da linguagem Python. Por isso, o Beautiful Soup disponibiliza o argumento `class_` para pesquisar pelo atributo HTML `class`.
+
+O método `get_text(" ", strip=True)` utiliza um espaço como separador entre textos descendentes e remove espaços em branco nas extremidades. Isso ajuda a evitar que palavras de elementos diferentes sejam concatenadas sem separação.
+
+### Localizando por identificador
+
+O atributo HTML `id` costuma identificar um elemento específico.
+
+```
+elemento = soup.find("div", id="principal")
+```
+
+Nesse exemplo, o Beautiful Soup procura um `<div>` cujo atributo `id` seja `principal`.
+
+IDs devem ser únicos em um documento HTML válido, mas páginas reais podem conter HTML malformado ou identificadores duplicados.
+
+---
+
+## 8. Extraindo atributos de elementos
+
+Além do texto, podemos precisar obter atributos como `href`, `src` ou `alt`.
+
+Considere:
+
+```
+<a href="https://example.com/documentacao">Documentação</a>
+```
+
+Para extrair o endereço do link:
+
+```
+link = soup.find("a")
+
+if link:
+    href = link.get("href")
+    texto = link.get_text(strip=True)
+
+    print("Texto:", texto)
+    print("URL:", href)
+```
+
+Resultado esperado:
+
+```
+Texto: Documentação
+URL: https://example.com/documentacao
+```
+
+### O método `.get()`
+
+Os elementos do Beautiful Soup permitem acessar atributos por meio de `.get()`.
+
+```
+href = link.get("href")
+```
+
+Se o atributo não existir, o método retorna `None` por padrão, em vez de gerar `KeyError`.
+
+Outros exemplos:
+
+```
+imagem = soup.find("img")
+
+if imagem:
+    src = imagem.get("src")
+    alt = imagem.get("alt", "")
+```
+
+- `src`: pode conter o endereço da imagem.
+    
+- `alt`: pode conter o texto alternativo da imagem.
+    
+- `get("alt", "")`: retorna uma string vazia caso o atributo esteja ausente.
+    
+
+O valor de `src` pode ser relativo, como `/imagens/foto.png`, e não necessariamente uma URL completa.
+
+---
+
+## 9. Transformando URLs relativas em URLs completas
+
+Uma página pode conter links relativos:
+
+```
+<a href="/documentacao">Documentação</a>
+```
+
+O valor `/documentacao` não contém o domínio. Para transformá-lo em uma URL absoluta, utilize `urljoin()` do módulo `urllib.parse`.
+
+```
+from urllib.parse import urljoin
+
+base_url = "https://example.com/pagina"
+href = "/documentacao"
+
+url_completa = urljoin(base_url, href)
+
+print(url_completa)
+```
+
+Resultado:
+
+```
+https://example.com/documentacao
+```
+
+### Entendendo `urljoin()`
+
+- `base_url`: URL usada como referência.
+    
+- `href`: endereço encontrado no atributo HTML.
+    
+- `urljoin(...)`: combina a referência com o endereço relativo segundo as regras de resolução de URLs.
+    
+
+O resultado também pode ser uma URL absoluta para outro domínio, caso o atributo contenha um endereço absoluto. Portanto, não presuma que todo link extraído aponta para o mesmo site.
+
+---
+
+## 10. Seletores CSS com `select()`
+
+O Beautiful Soup também permite localizar elementos usando seletores CSS por meio de `select()`.
+
+Exemplo de HTML:
+
+```
+<div class="artigo">
+  <h2 class="titulo">Introdução ao Linux</h2>
+  <p class="resumo">Conceitos básicos.</p>
+</div>
+```
+
+Código:
+
+```
+titulos = soup.select("div.artigo h2.titulo")
+
+for titulo in titulos:
+    print(titulo.get_text(strip=True))
+```
+
+O seletor:
+
+```
+div.artigo h2.titulo
+```
+
+significa:
+
+- `div`: selecionar elementos `<div>`.
+    
+- `.artigo`: exigir a classe `artigo`.
+    
+- espaço: procurar um descendente dentro do elemento correspondente.
+    
+- `h2`: selecionar elementos `<h2>`.
+    
+- `.titulo`: exigir a classe `titulo`.
+    
+
+### Outros seletores comuns
+
+|Seletor|Significado|
+|---|---|
+|`p`|Todos os parágrafos|
+|`.produto`|Elementos com a classe `produto`|
+|`#principal`|Elemento com o ID `principal`|
+|`a.link`|Links com a classe `link`|
+|`div p`|Parágrafos descendentes de `div`|
+|`ul > li`|Elementos `li` filhos diretos de `ul`|
+|`a[href]`|Links que possuem o atributo `href`|
+
+`select()` retorna uma lista de elementos. Para obter somente a primeira correspondência, você pode utilizar `select_one()`.
+
+```
+titulo = soup.select_one("h2.titulo")
+```
+
+Se nenhum elemento corresponder ao seletor, `select_one()` retorna `None`.
+
+---
+
+## 11. Exemplo completo: extraindo títulos e links
+
+O exemplo abaixo reúne Requests e Beautiful Soup para extrair títulos e links de uma página de teste.
+
+```
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+
+url = "https://example.com"
+
+response = requests.get(
+    url,
+    timeout=(3, 10),
+)
+
+response.raise_for_status()
+
+soup = BeautifulSoup(response.text, "html.parser")
+
+for link in soup.find_all("a", href=True):
+    texto = link.get_text(" ", strip=True)
+    href = link.get("href")
+    url_completa = urljoin(response.url, href)
+
+    print(f"Texto: {texto}")
+    print(f"URL: {url_completa}")
+    print("-" * 40)
+```
+
+### Entendendo os detalhes
+
+`**find_all("a", href=True)**`
+
+Procura elementos `<a>` que tenham o atributo `href`.
+
+`**get_text(" ", strip=True)**`
+
+Extrai o texto do link, separando os textos descendentes por espaços e removendo espaços nas extremidades.
+
+`**link.get("href")**`
+
+Obtém o valor do atributo `href`.
+
+`**urljoin(response.url, href)**`
+
+Resolve o endereço relativo utilizando a URL final da resposta como referência. Isso também considera redirecionamentos seguidos pelo Requests.
+
+`**print("-" * 40)**`
+
+Repete o caractere `-` quarenta vezes, criando um separador visual entre os resultados.
+
+O exemplo demonstra a extração estrutural de links. Ele não verifica se os destinos existem, se estão acessíveis ou se são seguros.
+
+---
+
+## 12. Limitação importante: páginas renderizadas com JavaScript
+
+O Requests recebe a resposta HTTP disponibilizada pelo servidor. Ele não executa JavaScript como um navegador.
+
+Isso significa que, se uma página preencher seus elementos somente após executar JavaScript no navegador, o HTML obtido pelo Requests pode não conter os dados esperados.
+
+Antes de trocar de ferramenta, inspecione a resposta recebida e verifique se os dados já estão presentes no HTML. Algumas aplicações carregam dados por endpoints HTTP que podem ser consultados diretamente, desde que seu uso seja autorizado e respeite as regras do serviço.
+
+Se a página depender realmente de renderização no navegador, ferramentas de automação de navegador, como Selenium, podem ser mais adequadas. A anotação principal de Selenium na sua biblioteca pode servir como referência para esse cenário.
+
+---
+
+## 13. Boas práticas para Web Scraping
+
+1. **Verifique as regras de acesso do site.** Respeite os termos de uso, as políticas aplicáveis e as permissões necessárias.
+    
+2. **Configure timeouts.** Não deixe requisições aguardando indefinidamente.
+    
+3. **Verifique erros HTTP.** Utilize `raise_for_status()` antes de processar a resposta.
+    
+4. **Trate HTML ausente ou alterado.** A estrutura de uma página pode mudar sem aviso.
+    
+5. **Valide os elementos encontrados.** `find()` e `select_one()` podem retornar `None`.
+    
+6. **Não confie cegamente em atributos.** Links e nomes de arquivos podem ser relativos ou apontar para outros domínios.
+    
+7. **Controle a frequência das requisições.** Evite sobrecarregar os servidores e respeite os limites de acesso.
+    
+8. **Não colete dados pessoais indiscriminadamente.** Considere privacidade, base legal e finalidade da coleta.
+    
+9. **Não presuma que o HTML contém toda a informação.** Conteúdo dinâmico pode ser carregado separadamente.
+    
+10. **Evite depender de seletores frágeis.** Mudanças de layout podem invalidar seletores muito específicos.
+    
+
+## 14. Referência rápida
+
+| Objetivo                             | Recurso                               |
+| ------------------------------------ | ------------------------------------- |
+| Obter uma página                     | `requests.get(url)`                   |
+| Verificar erro HTTP                  | `response.raise_for_status()`         |
+| Ler o HTML como texto                | `response.text`                       |
+| Criar o parser                       | `BeautifulSoup(html, "html.parser")`  |
+| Encontrar o primeiro elemento        | `soup.find("tag")`                    |
+| Encontrar vários elementos           | `soup.find_all("tag")`                |
+| Buscar por classe                    | `soup.find_all("div", class_="nome")` |
+| Buscar por ID                        | `soup.find("div", id="principal")`    |
+| Extrair texto                        | `elemento.get_text(strip=True)`       |
+| Extrair atributo                     | `elemento.get("href")`                |
+| Utilizar seletores CSS               | `soup.select("div.classe a")`         |
+| Obter a primeira correspondência CSS | `soup.select_one("h2.titulo")`        |
+| Resolver URLs relativas              | `urljoin(base_url, href)`             |
+
+---

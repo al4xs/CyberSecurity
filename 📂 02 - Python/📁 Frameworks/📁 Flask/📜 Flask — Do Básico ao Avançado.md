@@ -3453,3 +3453,5 @@ O Flask-Login facilita o gerenciamento de autenticação, mas não resolve todos
     
 
 A implementação correta depende do tipo de aplicação. Uma API que utiliza tokens, por exemplo, pode exigir um mecanismo de autenticação diferente daquele empregado em um site tradicional baseado em sessões.
+
+---

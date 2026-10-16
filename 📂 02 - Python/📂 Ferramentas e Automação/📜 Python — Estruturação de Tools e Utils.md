@@ -3444,3 +3444,538 @@ Por exemplo, uma ferramenta de inventário de ativos autorizados pode testar a v
 O isolamento de dependências torna os testes mais rápidos, reproduzíveis e seguros. Ainda assim, os resultados precisam ser complementados por testes de integração quando o funcionamento conjunto dos componentes também for importante.
 
 ---
+# 📜 Python — Type Hints, Qualidade de Código e Refatoração
+
+## 1. O que são Type Hints?
+
+**Type hints** são anotações que indicam os tipos esperados para variáveis, parâmetros e valores de retorno de funções.
+
+Python é uma linguagem de tipagem dinâmica: normalmente, os tipos são determinados durante a execução. Type hints permitem documentar as expectativas do código e ajudam ferramentas de análise estática a detectar possíveis problemas antes da execução.
+
+Considere uma função sem anotações:
+
+```
+def calcular_total(preco, quantidade):
+    return preco * quantidade
+```
+
+Não fica explícito quais valores a função espera receber ou qual resultado deve produzir.
+
+Com type hints:
+
+```
+def calcular_total(preco: float, quantidade: int) -> float:
+    return preco * quantidade
+```
+
+Agora, o código indica que `preco` deve ser um número de ponto flutuante, `quantidade` deve ser um inteiro e o resultado esperado é um `float`.
+
+### 1.1. Type hints não são validação automática
+
+É importante compreender uma característica fundamental: **Python não passa a validar automaticamente os tipos apenas porque você escreveu type hints**.
+
+```
+def somar(a: int, b: int) -> int:
+    return a + b
+
+
+print(somar("10", "20"))
+```
+
+O resultado será:
+
+```
+1020
+```
+
+A função recebe strings e as concatena. O interpretador não rejeita a chamada só por causa das anotações.
+
+Para verificar incompatibilidades estaticamente, podem ser utilizadas ferramentas como `mypy` e `pyright`. Para validar dados durante a execução, é necessário escrever verificações explícitas ou utilizar uma biblioteca apropriada.
+
+## 2. Anotando parâmetros e retornos
+
+### 2.1. Tipos básicos
+
+|Tipo|Anotação|Exemplo|
+|---|---|---|
+|Inteiro|`int`|`tentativas: int`|
+|Ponto flutuante|`float`|`timeout: float`|
+|Texto|`str`|`host: str`|
+|Booleano|`bool`|`ativo: bool`|
+|Lista|`list[str]`|`hosts: list[str]`|
+|Dicionário|`dict[str, int]`|`contagens: dict[str, int]`|
+|Tupla|`tuple[str, int]`|`resultado: tuple[str, int]`|
+|Ausência de retorno|`None`|`-> None`|
+
+Exemplo de uma função que registra informações:
+
+```
+def registrar_evento(
+    mensagem: str,
+    nivel: str = "INFO",
+) -> None:
+    print(f"[{nivel}] {mensagem}")
+```
+
+O retorno `None` indica que a função não foi projetada para retornar um valor útil.
+
+```
+registrar_evento("Inicializando ferramenta")
+registrar_evento("Conexão recusada", nivel="ERROR")
+```
+
+Saída:
+
+```
+[INFO] Inicializando ferramenta
+[ERROR] Conexão recusada
+```
+
+### 2.2. Parâmetros opcionais
+
+Um parâmetro que pode receber `None` precisa representar essa possibilidade na anotação.
+
+```
+def localizar_usuario(usuario_id: int | None) -> str:
+    if usuario_id is None:
+        return "Usuário não informado"
+
+    return f"Usuário {usuario_id}"
+```
+
+A expressão `int | None` indica que o valor pode ser um inteiro ou `None`. Essa sintaxe é suportada a partir do Python 3.10.
+
+Não confunda um parâmetro opcional com um parâmetro que possui valor padrão:
+
+```
+def conectar(host: str, porta: int = 443) -> None:
+    print(f"Conectando a {host}:{porta}")
+```
+
+A porta pode ser omitida na chamada porque possui um valor padrão. Isso não significa que seu tipo seja `int | None`.
+
+## 3. Coleções e tipos genéricos
+
+Ferramentas de automação frequentemente trabalham com listas de alvos, dicionários de configurações e resultados estruturados.
+
+### 3.1. Listas
+
+```
+def normalizar_hosts(hosts: list[str]) -> list[str]:
+    return [host.strip().lower() for host in hosts]
+```
+
+A assinatura indica que a função recebe uma lista de strings e retorna outra lista de strings.
+
+```
+hosts = [
+    " example.com ",
+    "LOCALHOST",
+    " api.example.com ",
+]
+
+resultado = normalizar_hosts(hosts)
+print(resultado)
+```
+
+Saída:
+
+```
+['example.com', 'localhost', 'api.example.com']
+```
+
+### 3.2. Dicionários
+
+```
+def contar_status(codigos: list[int]) -> dict[int, int]:
+    contagens: dict[int, int] = {}
+
+    for codigo in codigos:
+        contagens[codigo] = contagens.get(codigo, 0) + 1
+
+    return contagens
+```
+
+A anotação `dict[int, int]` indica um dicionário cujas chaves e valores são inteiros.
+
+```
+codigos = [200, 404, 200, 500, 404, 200]
+
+print(contar_status(codigos))
+```
+
+Saída:
+
+```
+{200: 3, 404: 2, 500: 1}
+```
+
+### 3.3. Quando uma função aceita mais de um tipo
+
+Utilize `|` quando a função realmente precisar aceitar alternativas:
+
+```
+def converter_identificador(valor: int | str) -> str:
+    return str(valor)
+```
+
+Isso documenta a interface da função. Não significa que qualquer tipo de dado deva ser aceito indiscriminadamente.
+
+Se a função precisa de um inteiro para realizar um cálculo, é melhor manter esse requisito explícito do que ampliar a anotação sem necessidade.
+
+## 4. Tipos estruturados com TypedDict e dataclasses
+
+Quando um programa começa a produzir resultados mais complexos, dicionários genéricos podem deixar de ser suficientemente claros.
+
+### 4.1. TypedDict
+
+`TypedDict` permite descrever as chaves esperadas em um dicionário.
+
+```
+from typing import TypedDict
+
+
+class ResultadoVerificacao(TypedDict):
+    host: str
+    porta: int
+    acessivel: bool
+```
+
+Uma função pode utilizar essa estrutura:
+
+```
+def criar_resultado(
+    host: str,
+    porta: int,
+    acessivel: bool,
+) -> ResultadoVerificacao:
+    return {
+        "host": host,
+        "porta": porta,
+        "acessivel": acessivel,
+    }
+```
+
+Uso:
+
+```
+resultado = criar_resultado(
+    host="127.0.0.1",
+    porta=8000,
+    acessivel=True,
+)
+
+print(resultado["host"])
+print(resultado["acessivel"])
+```
+
+As anotações ajudam ferramentas estáticas a identificar erros, como acessar uma chave que não foi declarada. Entretanto, `TypedDict` não valida automaticamente os dados em tempo de execução.
+
+### 4.2. Dataclasses
+
+Quando os dados representam um objeto com campos definidos, uma `dataclass` pode ser mais conveniente.
+
+```
+from dataclasses import dataclass
+
+
+@dataclass
+class ResultadoVerificacao:
+    host: str
+    porta: int
+    acessivel: bool
+```
+
+Criando uma instância:
+
+```
+resultado = ResultadoVerificacao(
+    host="127.0.0.1",
+    porta=8000,
+    acessivel=True,
+)
+
+print(resultado.host)
+print(resultado.porta)
+```
+
+A principal diferença prática é que `TypedDict` descreve um dicionário, enquanto `dataclass` define uma classe que gera automaticamente métodos úteis, como o inicializador e uma representação textual.
+
+Use dicionários simples para dados pequenos e temporários, `TypedDict` quando precisar preservar o formato de dicionário e `dataclass` quando os dados tiverem uma estrutura própria que mereça representação como objeto.
+
+## 5. Docstrings: documentando funções
+
+Type hints explicam os tipos esperados, mas não necessariamente a finalidade da função, suas limitações ou o significado de seus parâmetros.
+
+Para isso, utilize docstrings.
+
+```
+def calcular_tentativas(
+    falhas: int,
+    limite: int,
+) -> int:
+    """Calcula quantas tentativas ainda podem ser realizadas.
+
+    Args:
+        falhas: Quantidade de tentativas já malsucedidas.
+        limite: Número máximo de tentativas permitidas.
+
+    Returns:
+        Quantidade de tentativas restantes, nunca inferior a zero.
+    """
+    return max(0, limite - falhas)
+```
+
+Uma docstring deve explicar o comportamento que não fica evidente apenas pelo nome da função.
+
+Evite comentários redundantes:
+
+```
+# Soma um ao contador
+contador += 1
+```
+
+O comentário apenas repete o código. Comentários e docstrings são mais úteis quando explicam decisões, restrições, efeitos colaterais ou regras de negócio.
+
+## 6. Qualidade de código e refatoração
+
+**Refatoração** é a alteração da estrutura interna do código sem mudar seu comportamento externo pretendido.
+
+O objetivo é tornar o programa mais fácil de compreender, testar, corrigir e ampliar.
+
+### 6.1. Identificando código repetitivo
+
+Considere este exemplo:
+
+```
+def verificar_usuario(usuario):
+    if usuario:
+        print("Usuário informado")
+    else:
+        print("Usuário não informado")
+
+
+def verificar_host(host):
+    if host:
+        print("Host informado")
+    else:
+        print("Host não informado")
+```
+
+Existe uma estrutura repetida. Se a regra for a mesma, podemos extrair uma função reutilizável:
+
+```
+def verificar_valor(nome: str, valor: str) -> None:
+    if valor:
+        print(f"{nome} informado")
+    else:
+        print(f"{nome} não informado")
+```
+
+Uso:
+
+```
+verificar_valor("Usuário", "admin")
+verificar_valor("Host", "")
+```
+
+A refatoração reduz duplicação e concentra o comportamento em um único lugar.
+
+Entretanto, não transforme toda repetição em uma abstração. Se duas partes do código possuem regras diferentes ou devem evoluir de maneira independente, uni-las pode tornar o programa mais difícil de manter.
+
+### 6.2. Funções com responsabilidades demais
+
+Observe uma função que lê um arquivo, interpreta dados, realiza uma requisição HTTP e salva os resultados.
+
+Quando tudo está misturado, testar uma parte isoladamente fica difícil.
+
+Uma estrutura mais clara separa as responsabilidades:
+
+```
+def carregar_alvos(caminho: str) -> list[str]:
+    with open(caminho, encoding="utf-8") as arquivo:
+        return [
+            linha.strip()
+            for linha in arquivo
+            if linha.strip()
+        ]
+
+
+def processar_alvo(alvo: str) -> dict[str, str]:
+    # Aqui ficaria a lógica de processamento.
+    return {
+        "alvo": alvo,
+        "status": "pendente",
+    }
+
+
+def salvar_resultados(
+    resultados: list[dict[str, str]],
+    caminho: str,
+) -> None:
+    # Aqui ficaria a lógica de gravação.
+    print(f"{len(resultados)} resultados para salvar em {caminho}")
+```
+
+O exemplo separa leitura, processamento e saída. A função `salvar_resultados` ainda é apenas ilustrativa: ela não grava os resultados no disco.
+
+Separar responsabilidades também permite testar o processamento sem precisar criar arquivos ou executar requisições de rede.
+
+## 7. Ferramentas de análise e formatação
+
+Além de executar testes, é possível utilizar ferramentas para encontrar problemas de estilo, erros comuns e inconsistências de tipos.
+
+### 7.1. Ruff
+
+O Ruff é um linter e formatador para Python. Ele pode identificar problemas como imports não utilizados, variáveis definidas e não utilizadas em determinados contextos e violações de regras de estilo.
+
+Instalação no ambiente virtual:
+
+```
+python -m pip install ruff
+```
+
+Verificar problemas:
+
+```
+ruff check .
+```
+
+Aplicar correções automáticas disponíveis:
+
+```
+ruff check . --fix
+```
+
+Formatar arquivos:
+
+```
+ruff format .
+```
+
+As correções automáticas devem ser revisadas. Nem todo problema pode ser resolvido com segurança sem compreender o código.
+
+### 7.2. Mypy
+
+O Mypy verifica a consistência de tipos anotados por meio de análise estática.
+
+Instalação:
+
+```
+python -m pip install mypy
+```
+
+Verificação de um arquivo:
+
+```
+mypy src/
+```
+
+Exemplo de incompatibilidade:
+
+```
+def calcular_total(preco: float, quantidade: int) -> float:
+    return preco * quantidade
+
+
+total: str = calcular_total(10.5, 2)
+```
+
+A função retorna um valor numérico, mas a variável foi anotada como string. Um verificador de tipos pode sinalizar essa incompatibilidade.
+
+A quantidade de verificações realizadas depende da configuração e das anotações disponíveis. Mypy não substitui testes nem validação de dados externos.
+
+### 7.3. Black
+
+O Black é um formatador automático de código Python.
+
+Instalação:
+
+```
+python -m pip install black
+```
+
+Formatar um diretório:
+
+```
+black src/ tests/
+```
+
+Enquanto o Ruff pode verificar regras de qualidade e também formatar código, o Black é focado na formatação. Escolha uma configuração coerente para evitar que ferramentas diferentes disputem as mesmas regras.
+
+## 8. Organizando as ferramentas no projeto
+
+Em um projeto com `src/`, testes e configurações, uma organização possível é:
+
+```
+minha_ferramenta/
+├── pyproject.toml
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       ├── cli.py
+│       ├── services.py
+│       └── models.py
+└── tests/
+    ├── test_services.py
+    └── test_models.py
+```
+
+- `cli.py`: interface de linha de comando e interpretação dos argumentos.
+    
+- `services.py`: lógica principal da aplicação.
+    
+- `models.py`: estruturas de dados utilizadas pelo projeto.
+    
+- `tests/`: testes automatizados.
+    
+- `pyproject.toml`: configuração das ferramentas e metadados do projeto.
+    
+
+O nome e a quantidade de módulos devem refletir as responsabilidades reais. Não é necessário criar todos esses arquivos para um script pequeno.
+
+### 8.1. Exemplo de configuração
+
+Um trecho de `pyproject.toml` pode centralizar as configurações:
+
+```
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+```
+
+Nesse exemplo, o Ruff utiliza uma largura de linha de 88 caracteres, considera o Python 3.10 como alvo e ativa grupos de regras para estilo, erros comuns, imports e alguns problemas de lógica.
+
+O Mypy é configurado para considerar o Python 3.10 e alertar sobre configurações não utilizadas. Essas opções são um ponto de partida, não uma configuração universal para todos os projetos.
+
+## 9. Fluxo prático de qualidade
+
+Antes de considerar uma alteração concluída, siga um fluxo simples:
+
+1. Escreva ou altere a funcionalidade.
+    
+2. Execute os testes automatizados.
+    
+3. Verifique problemas de lint com `ruff check .`.
+    
+4. Formate o código com `ruff format .`.
+    
+5. Execute a verificação de tipos com `mypy src/`, se o projeto utilizar essa ferramenta.
+    
+6. Execute novamente os testes após as correções.
+    
+7. Revise as mudanças para confirmar que o comportamento pretendido foi preservado.
+    
+
+Os comandos devem ser executados no ambiente virtual e na raiz do projeto. Ajuste os caminhos se sua estrutura for diferente.
+
+Em ferramentas de segurança, esse processo é especialmente útil para reduzir regressões em funções de processamento de alvos, interpretação de respostas, tratamento de erros e geração de relatórios. Ainda assim, os testes precisam cobrir os comportamentos relevantes; ferramentas de estilo e tipos não demonstram, sozinhas, que uma ferramenta é segura ou correta.
+
+---

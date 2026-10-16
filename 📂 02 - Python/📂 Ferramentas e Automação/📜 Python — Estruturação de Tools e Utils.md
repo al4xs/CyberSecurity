@@ -5080,3 +5080,361 @@ Possíveis melhorias, sempre dentro de um escopo autorizado, incluem:
 Cada melhoria deve ter uma responsabilidade clara e testes próprios. Não é necessário adicionar todos esses recursos de uma só vez.
 
 ---
+# 📜 Python — Checklist Profissional e Preparação de Projetos para Uso Real
+
+## 1. Objetivo
+
+Uma ferramenta Python pode funcionar perfeitamente durante o desenvolvimento e ainda não estar preparada para ser utilizada de maneira confiável.
+
+Antes de considerar um projeto pronto, é necessário verificar se ele pode ser instalado, configurado, executado, testado e mantido sem depender de condições específicas da máquina do desenvolvedor.
+
+Esta anotação reúne os principais pontos de revisão para projetos de automação, utilitários de terminal e ferramentas de segurança.
+
+O objetivo não é tornar todo script complexo. É saber quais cuidados são necessários para cada tipo de projeto.
+
+## 2. Estrutura mínima de um projeto
+
+Uma ferramenta pequena pode começar com poucos arquivos:
+
+```
+minha-ferramenta/
+├── README.md
+├── pyproject.toml
+├── .gitignore
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       └── cli.py
+└── tests/
+    └── test_cli.py
+```
+
+Conforme a aplicação cresce, podem ser adicionados módulos de configuração, serviços, modelos de dados e integrações externas.
+
+Cada arquivo deve ter uma responsabilidade compreensível.
+
+Não é necessário criar dezenas de módulos para um programa de poucas linhas. A estrutura deve resolver problemas reais de organização, testes e manutenção.
+
+## 3. Checklist de organização do código
+
+Antes de finalizar uma funcionalidade, verifique os seguintes pontos.
+
+- As funções possuem nomes que indicam o que fazem.
+    
+- Cada função tem uma responsabilidade clara.
+    
+- A lógica principal está separada da interface de terminal.
+    
+- Código repetido foi avaliado para possível reutilização.
+    
+- Os parâmetros e retornos importantes possuem type hints.
+    
+- Docstrings explicam comportamentos que não são óbvios.
+    
+- Os imports estão organizados.
+    
+- Não existem dependências circulares desnecessárias.
+    
+- As configurações não estão espalhadas pelo código.
+    
+- Erros esperados são tratados de maneira apropriada.
+    
+
+Esses itens são critérios de revisão, não regras absolutas. Uma função curta não precisa de documentação extensa se sua finalidade já for evidente.
+
+## 4. Checklist de dependências e instalação
+
+Um projeto deve declarar aquilo de que realmente depende.
+
+- As dependências externas estão declaradas.
+    
+- A versão mínima de Python está documentada.
+    
+- O projeto pode ser instalado em um ambiente virtual novo.
+    
+- Os comandos de instalação estão documentados.
+    
+- Dependências de desenvolvimento estão separadas quando apropriado.
+    
+- A instalação não depende de pacotes instalados manualmente fora do ambiente esperado.
+    
+- O comando principal funciona depois da instalação.
+    
+- A distribuição foi testada fora do diretório de desenvolvimento, quando aplicável.
+    
+
+Exemplo de criação de um ambiente limpo:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+O comando com `.[dev]` pressupõe que o projeto tenha um `pyproject.toml` válido e declare o grupo opcional `dev`.
+
+Depois da instalação, execute os testes e confira a interface:
+
+```
+pytest -v
+ruff check .
+ruff format --check .
+```
+
+O comando `ruff format --check .` verifica se os arquivos já estão formatados sem modificá-los.
+
+Se o projeto utilizar Mypy:
+
+```
+mypy src/
+```
+
+A verificação de tipos depende da configuração e das anotações disponíveis.
+
+## 5. Checklist de testes
+
+Os testes devem verificar comportamentos importantes, inclusive situações de erro.
+
+- As funções principais possuem testes.
+    
+- Os valores válidos são aceitos.
+    
+- Entradas inválidas são rejeitadas ou tratadas corretamente.
+    
+- Arquivos ausentes e problemas de permissão foram considerados.
+    
+- Falhas de rede foram testadas sem depender de conexões reais, quando possível.
+    
+- APIs externas são simuladas nos testes unitários.
+    
+- Os códigos de saída da CLI são verificados.
+    
+- Os testes não dependem da ordem de execução.
+    
+- Os testes podem ser repetidos sem deixar o ambiente em um estado incorreto.
+    
+
+Execute:
+
+```
+pytest -v
+```
+
+Um teste que passa apenas porque determinado serviço está disponível na rede local pode ser frágil. Sempre que o objetivo for verificar a lógica da aplicação, prefira simular a dependência externa.
+
+Isso não elimina a necessidade de testes de integração. Apenas separa testes rápidos e isolados daqueles que precisam de serviços reais.
+
+## 6. Checklist de tratamento de erros e logging
+
+Uma ferramenta deve ajudar o usuário a entender o que ocorreu sem expor informações desnecessárias.
+
+- Mensagens de erro explicam o problema de forma útil.
+    
+- Exceções são capturadas no nível adequado.
+    
+- Erros inesperados não são silenciosamente ignorados.
+    
+- O logging utiliza níveis coerentes.
+    
+- Informações de diagnóstico podem ser ativadas quando necessário.
+    
+- Credenciais e tokens não são registrados nos logs.
+    
+- Os códigos de saída possuem significado documentado.
+    
+- Recursos como arquivos e sockets são fechados corretamente.
+    
+
+Evite utilizar um bloco genérico para ocultar qualquer falha:
+
+```
+try:
+    executar_tarefa()
+except Exception:
+    pass
+```
+
+Esse código ignora todas as exceções capturadas, dificultando descobrir falhas reais.
+
+Quando uma falha puder ser tratada, trate-a explicitamente. Quando precisar ser propagada, permita que continue até uma camada que saiba como lidar com ela.
+
+## 7. Checklist de segurança
+
+Para ferramentas de automação e segurança, a revisão deve incluir os dados processados e os efeitos produzidos pelo programa.
+
+- Não existem senhas ou tokens fixos no código.
+    
+- Arquivos de ambiente privados não são enviados ao repositório.
+    
+- Entradas externas são validadas de acordo com o contexto.
+    
+- Caminhos de arquivos não permitem acesso indevido a recursos.
+    
+- Dados recebidos de APIs são tratados como dados não confiáveis.
+    
+- Operações destrutivas exigem controles proporcionais ao risco.
+    
+- Requisições de rede possuem timeouts apropriados.
+    
+- A ferramenta informa claramente o escopo das operações.
+    
+- A execução respeita as permissões e autorizações necessárias.
+    
+
+A validação deve considerar o uso real. Por exemplo, validar se uma porta está entre `1` e `65535` é diferente de verificar se o usuário possui autorização para testar determinado host.
+
+São controles distintos e ambos podem ser necessários.
+
+## 8. Documentando o projeto com README
+
+O arquivo `README.md` é o ponto de entrada para quem precisa entender e utilizar a ferramenta.
+
+Uma estrutura inicial:
+
+```
+# Minha Ferramenta
+
+Descrição do problema resolvido pela aplicação.
+
+## Requisitos
+
+- Python 3.10 ou superior
+
+## Instalação
+
+Instruções para criar um ambiente virtual
+e instalar o projeto.
+
+## Uso
+
+Exemplos de comandos e argumentos.
+
+## Configuração
+
+Variáveis de ambiente e arquivos necessários.
+
+## Testes
+
+Como executar os testes automatizados.
+
+## Limitações
+
+Comportamentos não implementados e restrições conhecidas.
+
+## Segurança e autorização
+
+Escopo permitido de utilização.
+
+## Licença
+
+Licença aplicável ao projeto.
+```
+
+Adapte as seções ao projeto. Uma ferramenta pequena não precisa de documentação extensa, mas deve explicar como instalar, executar e identificar suas limitações.
+
+Os exemplos do README devem ser executáveis e coerentes com a versão atual do programa.
+
+## 9. Preparando o repositório
+
+Antes de enviar o código para um repositório remoto, revise os arquivos.
+
+Exemplo de `.gitignore`:
+
+```
+.venv/
+__pycache__/
+*.py[cod]
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+build/
+dist/
+*.egg-info/
+
+.env
+```
+
+Confira o estado do repositório:
+
+```
+git status
+git diff --check
+git diff
+```
+
+- `git status` mostra arquivos modificados e não rastreados.
+    
+- `git diff --check` verifica problemas comuns de espaços em branco no diff.
+    
+- `git diff` permite revisar as alterações.
+    
+
+O `.gitignore` evita que arquivos correspondentes sejam adicionados por engano, mas não remove arquivos que já estão rastreados.
+
+Antes de publicar, procure credenciais, arquivos privados, dados de usuários e configurações locais. Se um segredo tiver sido publicado, removê-lo do arquivo não basta: revogue ou substitua a credencial comprometida.
+
+## 10. Checklist de distribuição
+
+Se o projeto for distribuído como pacote, verifique:
+
+- Nome e versão da distribuição estão definidos.
+    
+- Os metadados correspondem ao projeto real.
+    
+- O comando de entrada está configurado corretamente.
+    
+- A versão mínima de Python é compatível com a sintaxe utilizada.
+    
+- Os arquivos necessários estão incluídos na distribuição.
+    
+- As dependências são instaladas corretamente.
+    
+- A wheel foi testada em um ambiente limpo.
+    
+- A documentação acompanha a versão distribuída.
+    
+- Os artefatos não contêm arquivos privados ou desnecessários.
+    
+
+Construção do pacote:
+
+```
+python -m build
+```
+
+A construção normalmente gera artefatos dentro de `dist/`.
+
+Depois, instale a wheel em outro ambiente virtual e execute a ferramenta. Esse passo ajuda a detectar problemas que podem ficar escondidos quando o programa é executado diretamente da pasta do código-fonte.
+
+## 11. Revisão final antes de considerar o projeto pronto
+
+Utilize este checklist consolidado:
+
+- **Funcionalidade:** os casos de uso previstos funcionam.
+    
+- **Organização:** módulos e funções possuem responsabilidades claras.
+    
+- **Configuração:** valores ajustáveis não estão espalhados pelo código.
+    
+- **Dependências:** o projeto pode ser instalado de forma reproduzível.
+    
+- **Testes:** os comportamentos críticos estão cobertos.
+    
+- **Qualidade:** lint, formatação e análise estática foram executados quando aplicáveis.
+    
+- **Erros:** falhas comuns são tratadas e comunicadas.
+    
+- **Segurança:** segredos e dados privados estão protegidos.
+    
+- **Documentação:** instalação, execução e limitações estão descritas.
+    
+- **Distribuição:** o pacote foi testado fora do ambiente de desenvolvimento, quando necessário.
+    
+
+O nível de exigência deve acompanhar o risco e a finalidade da aplicação. Um script pessoal pode exigir menos infraestrutura que uma ferramenta usada por várias pessoas, mas ambos se beneficiam de tratamento de erros, organização e documentação adequados.
+
+---

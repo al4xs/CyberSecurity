@@ -408,3 +408,471 @@ Neste exemplo, a rota registrada é `/`. Confira se o endereço acessado corresp
 - O servidor iniciado com `flask run` é voltado ao desenvolvimento, não à publicação de aplicações em produção.
 
 ---
+## 2. Rotas e funções de visualização
+
+### 2.1. O que é uma rota?
+
+Uma rota é uma regra que associa um caminho de URL a uma função que será executada quando uma requisição compatível chegar à aplicação.
+
+Imagine que você esteja desenvolvendo um site com três páginas:
+
+- `/` — página inicial.
+    
+- `/sobre` — página sobre o projeto.
+    
+- `/contato` — página de contato.
+    
+
+No Flask, podemos associar cada caminho a uma função Python.
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def inicio():
+    return "Página inicial"
+
+
+@app.route("/sobre")
+def sobre():
+    return "Sobre o projeto"
+
+
+@app.route("/contato")
+def contato():
+    return "Entre em contato"
+```
+
+Vamos entender o que acontece:
+
+1. O Flask cria a aplicação.
+    
+2. Cada `@app.route()` registra uma regra de URL.
+    
+3. Cada função define o comportamento associado à sua rota.
+    
+4. Quando uma requisição chega, o Flask procura uma regra compatível.
+    
+5. A função correspondente é executada e seu retorno é utilizado para construir a resposta HTTP.
+    
+
+**Importante:** a definição de uma função não significa que ela será executada imediatamente. O decorator registra a função para que o Flask possa chamá-la posteriormente, durante o processamento de uma requisição.
+
+### 2.2. O que é o decorator `@app.route()`?
+
+O decorator `@app.route()` é um recurso utilizado para registrar rotas na aplicação Flask.
+
+Exemplo:
+
+```
+@app.route("/perfil")
+def perfil():
+    return "Meu perfil"
+```
+
+Analisando cada parte:
+
+- `@app.route("/perfil")`: registra a rota correspondente ao caminho `/perfil`.
+    
+- `def perfil():`: define a função Python associada à rota.
+    
+- `return "Meu perfil"`: devolve o conteúdo que será utilizado na resposta.
+    
+
+O método `route()` é um método da aplicação Flask. Ele recebe o caminho e permite configurar outras características da rota.
+
+Sua assinatura pública, de forma simplificada, é:
+
+```
+app.route(
+    rule,
+    **options
+)
+```
+
+|Parâmetro|Obrigatório?|Descrição|
+|---|---|---|
+|`rule`|Sim|Caminho da URL a ser registrado.|
+|`**options`|Não|Argumentos nomeados adicionais que configuram a rota, como `methods` e `endpoint`.|
+
+`**options` não é um parâmetro chamado `options` que você precisa passar como um dicionário. É uma notação do Python que permite receber argumentos nomeados adicionais.
+
+Por exemplo:
+
+```
+@app.route("/perfil", methods=["GET"])
+def perfil():
+    return "Meu perfil"
+```
+
+Nesse caso, `methods=["GET"]` é uma opção passada ao decorator.
+
+### 2.3. O que é um endpoint?
+
+No Flask, um endpoint é o nome utilizado internamente para identificar uma rota registrada. Por padrão, esse nome deriva do nome da função de visualização.
+
+Observe:
+
+```
+@app.route("/perfil")
+def perfil():
+    return "Meu perfil"
+```
+
+Nesse exemplo:
+
+- Caminho da URL: `/perfil`.
+    
+- Nome da função: `perfil`.
+    
+- Endpoint padrão: `perfil`.
+    
+
+Esses conceitos são relacionados, mas não são iguais. A URL é o caminho acessado pelo cliente; o endpoint é o identificador utilizado pelo Flask.
+
+Podemos personalizar o endpoint:
+
+```
+@app.route("/perfil", endpoint="pagina_perfil")
+def perfil():
+    return "Meu perfil"
+```
+
+Agora, o endpoint será `pagina_perfil`, embora o caminho continue sendo `/perfil` e a função continue se chamando `perfil`.
+
+O parâmetro `endpoint` é opcional. Quando não é informado, o Flask utiliza o nome da função como padrão.
+
+Os endpoints são especialmente úteis com `url_for()`, que estudaremos em detalhes mais adiante.
+
+### 2.4. O que são funções de visualização (_view functions_)?
+
+Uma função de visualização é a função Python chamada pelo Flask para processar uma requisição correspondente a uma rota.
+
+Exemplo:
+
+```
+@app.route("/saudacao")
+def saudacao():
+    nome = "Maria"
+    return f"Olá, {nome}!"
+```
+
+Linha por linha:
+
+**Linha 1 — Registro da rota**
+
+```
+@app.route("/saudacao")
+```
+
+Registra o caminho `/saudacao`.
+
+**Linha 2 — Definição da função**
+
+```
+def saudacao():
+```
+
+Define a função que será chamada quando a requisição corresponder à rota e ao método HTTP permitido.
+
+**Linha 3 — Criação da variável**
+
+```
+nome = "Maria"
+```
+
+Cria uma variável local chamada `nome`, que armazena uma string.
+
+**Linha 4 — Retorno**
+
+```
+return f"Olá, {nome}!"
+```
+
+A letra `f` antes da string indica uma _f-string_, recurso nativo do Python que permite inserir expressões dentro de `{}`.
+
+O resultado dessa expressão será:
+
+```
+Olá, Maria!
+```
+
+O Flask utiliza essa string como conteúdo da resposta HTTP.
+
+Uma função de visualização não precisa retornar apenas uma string. Dependendo do caso, pode retornar um dicionário que será convertido em JSON, uma resposta HTTP ou uma tupla contendo informações adicionais, como o código de status.
+
+Se uma função de visualização terminar sem retornar um valor válido para o Flask, a aplicação poderá gerar um erro durante o processamento da requisição.
+
+### 2.5. Métodos HTTP nas rotas
+
+Uma URL não determina sozinha o que o Flask deve fazer. O método HTTP utilizado na requisição também pode influenciar a seleção da rota.
+
+Os métodos mais comuns são:
+
+|Método|Uso típico|
+|---|---|
+|`GET`|Consultar ou obter um recurso.|
+|`POST`|Enviar dados para processamento, como um formulário.|
+|`PUT`|Substituir um recurso existente ou criar um recurso em uma URI definida, conforme a API.|
+|`PATCH`|Atualizar parcialmente um recurso.|
+|`DELETE`|Solicitar a exclusão de um recurso.|
+
+O comportamento concreto depende da aplicação. Esses métodos não executam operações automaticamente: o desenvolvedor precisa implementar a lógica correspondente.
+
+Por padrão, uma rota criada com `@app.route()` aceita `GET`. O Flask também adiciona `HEAD` quando `GET` está habilitado e, nas configurações usuais, trata `OPTIONS` automaticamente.
+
+Podemos definir os métodos permitidos utilizando `methods`.
+
+```
+@app.route("/mensagem", methods=["GET", "POST"])
+def mensagem():
+    return "Rota acessada"
+```
+
+Nesse exemplo, a rota aceita requisições `GET` e `POST`.
+
+O parâmetro `methods` é opcional. Quando omitido, o comportamento padrão inclui `GET`.
+
+Se um cliente enviar um método que não está permitido para aquela rota, o Flask normalmente responderá com o status `405 Method Not Allowed`, desde que o caminho corresponda a uma rota existente.
+
+### 2.6. Criando uma rota que aceita GET e POST
+
+Vamos criar um exemplo em que a resposta muda conforme o método utilizado.
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/mensagem", methods=["GET", "POST"])
+def mensagem():
+    if request.method == "POST":
+        return "Você enviou uma requisição POST"
+
+    return "Você acessou a rota com GET"
+```
+
+Agora, analisaremos os elementos novos.
+
+**Importação do objeto** `**request**`
+
+```
+from flask import Flask, request
+```
+
+Além de importar `Flask`, importamos `request`, um objeto disponibilizado pelo Flask para acessar informações da requisição atual.
+
+**Definição dos métodos aceitos**
+
+```
+@app.route("/mensagem", methods=["GET", "POST"])
+```
+
+A opção `methods` recebe uma sequência de métodos HTTP permitidos. Aqui, utilizamos uma lista Python com duas strings.
+
+**Verificação do método**
+
+```
+if request.method == "POST":
+```
+
+A propriedade `request.method` informa o método HTTP da requisição atual.
+
+Se o método for `POST`, a condição será verdadeira e o Flask executará o bloco correspondente.
+
+**Retorno da resposta**
+
+```
+return "Você enviou uma requisição POST"
+```
+
+Quando a condição for verdadeira, essa string será retornada como resposta.
+
+**Retorno alternativo**
+
+```
+return "Você acessou a rota com GET"
+```
+
+Se a condição não for verdadeira, a execução chega ao último `return`.
+
+Como a rota aceita apenas `GET` e `POST` explicitamente, os métodos adicionais `HEAD` e `OPTIONS` podem ser tratados conforme o comportamento automático do Flask. Para essas requisições, não se deve presumir que a função sempre será executada da mesma forma que em um `GET` comum.
+
+### 2.7. Parâmetros de rota
+
+Podemos criar rotas que recebem valores diretamente do caminho da URL.
+
+Por exemplo, imagine que queremos exibir o perfil de um usuário identificado por um número.
+
+```
+@app.route("/usuario/<int:id>")
+def usuario(id):
+    return f"Usuário de ID {id}"
+```
+
+Acessando:
+
+```
+/usuario/10
+```
+
+A resposta será:
+
+```
+Usuário de ID 10
+```
+
+Vamos entender a sintaxe:
+
+- `/usuario/`: parte fixa do caminho.
+    
+- `<int:id>`: segmento variável chamado `id`, que deve ser convertido para um número inteiro.
+    
+- `def usuario(id)`: a função recebe o valor extraído da URL como argumento.
+    
+- `return`: utiliza o valor recebido para construir a resposta.
+    
+
+O nome da variável na rota e o parâmetro da função precisam corresponder.
+
+Por exemplo, se a rota utilizar `<int:user_id>`, a função deverá receber `user_id`:
+
+```
+@app.route("/usuario/<int:user_id>")
+def usuario(user_id):
+    return f"Usuário de ID {user_id}"
+```
+
+Se o nome não corresponder, o Flask poderá gerar um erro ao tentar chamar a função.
+
+Os conversores mais comuns incluem:
+
+|Conversor|Comportamento|
+|---|---|
+|`string`|Aceita um segmento de texto sem barras. É o conversor padrão.|
+|`int`|Aceita valores inteiros positivos ou negativos no formato permitido pelo conversor.|
+|`float`|Aceita valores numéricos de ponto flutuante no formato permitido.|
+|`path`|Aceita texto que pode incluir barras.|
+|`uuid`|Aceita identificadores no formato UUID.|
+
+Por exemplo:
+
+```
+@app.route("/produto/<int:produto_id>")
+def produto(produto_id):
+    return f"Produto: {produto_id}"
+
+
+@app.route("/arquivo/<path:caminho>")
+def arquivo(caminho):
+    return f"Caminho recebido: {caminho}"
+```
+
+O conversor `int` ajuda a restringir o formato do valor aceito pela rota, mas não substitui a validação da existência do registro ou das permissões de acesso.
+
+Se a URL não corresponder ao formato esperado pelo conversor, a rota não será selecionada. Se nenhuma outra regra corresponder, o cliente receberá normalmente um `404 Not Found`.
+
+### 2.8. Parâmetros opcionais e valores padrão
+
+É importante distinguir dois conceitos diferentes:
+
+1. Um parâmetro de rota pode ser opcional porque uma regra define um valor padrão.
+    
+2. Um parâmetro de uma função Python pode ser opcional porque sua definição fornece um valor padrão.
+    
+
+No Flask, podemos utilizar a opção `defaults`:
+
+```
+@app.route("/pagina/", defaults={"secao": "inicio"})
+@app.route("/pagina/<secao>")
+def pagina(secao):
+    return f"Seção: {secao}"
+```
+
+Nesse exemplo:
+
+- `/pagina/` utiliza o valor padrão `"inicio"`.
+    
+- `/pagina/contato` fornece o valor `"contato"` pela URL.
+    
+- A função recebe o argumento `secao` nos dois casos.
+    
+
+O parâmetro `defaults` é opcional e recebe um dicionário de valores padrão para variáveis da rota. Ele é útil quando queremos que caminhos diferentes utilizem a mesma função.
+
+Isso é diferente de definir um valor padrão diretamente na função:
+
+```
+def saudacao(nome="visitante"):
+    return f"Olá, {nome}!"
+```
+
+Nesse caso, `nome` é um parâmetro opcional da função Python, independentemente de qualquer configuração de rota.
+
+### 2.9. Erros comuns ao trabalhar com rotas
+
+**Erro:** `**404 Not Found**`
+
+O Flask não encontrou uma regra compatível com o caminho solicitado.
+
+Verifique:
+
+- Se o caminho acessado corresponde ao registrado.
+    
+- Se há diferenças entre segmentos da URL.
+    
+- Se os conversores de parâmetros aceitam o formato fornecido.
+    
+
+**Erro:** `**405 Method Not Allowed**`
+
+O caminho corresponde a uma rota, mas o método HTTP utilizado não está permitido.
+
+Verifique o argumento `methods` e o método enviado pelo cliente.
+
+**Erro:** `**TypeError**` **ao chamar a função de visualização**
+
+Um caso comum ocorre quando os nomes dos parâmetros de rota não correspondem aos parâmetros esperados pela função.
+
+Por exemplo:
+
+```
+@app.route("/usuario/<int:user_id>")
+def usuario(id):
+    return str(id)
+```
+
+A rota fornece o argumento `user_id`, mas a função espera `id`. Essa divergência pode provocar um erro ao processar a requisição.
+
+A correção é utilizar o mesmo nome:
+
+```
+@app.route("/usuario/<int:user_id>")
+def usuario(user_id):
+    return str(user_id)
+```
+
+**Erro:** `**AssertionError**` **ao registrar rotas**
+
+Isso pode acontecer quando tentamos registrar uma rota com um endpoint já utilizado de forma incompatível com as regras da aplicação.
+
+Confira se os endpoints são únicos e se o registro das rotas está sendo realizado corretamente.
+
+### 2.10. Resumo dos principais parâmetros
+
+|Recurso|Parâmetro|Obrigatório?|Função|
+|---|---|---|---|
+|`app.route()`|`rule`|Sim|Define o caminho da rota.|
+|`app.route()`|`methods`|Não|Define os métodos HTTP permitidos.|
+|`app.route()`|`defaults`|Não|Define valores padrão para variáveis da rota.|
+|`app.route()`|`endpoint`|Não|Define o identificador interno da rota.|
+|Função de visualização|Parâmetros da rota|Conforme a regra|Recebem os valores extraídos do caminho.|
+
+Os parâmetros disponíveis e o comportamento exato dependem da API utilizada. Ao estudar recursos mais avançados, consultaremos as assinaturas e a documentação da versão instalada para evitar assumir que todas as funções aceitam os mesmos argumentos.
+
+---

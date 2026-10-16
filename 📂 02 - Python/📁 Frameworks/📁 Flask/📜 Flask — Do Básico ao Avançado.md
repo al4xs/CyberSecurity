@@ -876,3 +876,484 @@ Confira se os endpoints são únicos e se o registro das rotas está sendo reali
 Os parâmetros disponíveis e o comportamento exato dependem da API utilizada. Ao estudar recursos mais avançados, consultaremos as assinaturas e a documentação da versão instalada para evitar assumir que todas as funções aceitam os mesmos argumentos.
 
 ---
+## 3. Requisições e respostas HTTP
+
+### 3.1. Como funciona uma requisição HTTP?
+
+Quando acessamos um site, o navegador envia uma requisição HTTP ao servidor. O Flask recebe essa requisição, identifica a rota correspondente e executa a lógica necessária para produzir uma resposta.
+
+Uma requisição HTTP pode conter:
+
+- Método HTTP, como `GET` ou `POST`.
+    
+- Caminho solicitado, como `/usuarios`.
+    
+- Parâmetros na URL.
+    
+- Cabeçalhos HTTP.
+    
+- Cookies.
+    
+- Dados enviados no corpo da requisição.
+    
+
+A resposta pode conter:
+
+- Código de status HTTP.
+    
+- Cabeçalhos.
+    
+- Cookies.
+    
+- Conteúdo HTML, texto, JSON ou outros tipos de dados.
+    
+
+O fluxo básico é:
+
+```
+Navegador
+    |
+    | Requisição HTTP
+    v
+Aplicação Flask
+    |
+    | Identifica a rota
+    v
+Função de visualização
+    |
+    | Processa os dados
+    v
+Resposta HTTP
+    |
+    v
+Navegador
+```
+
+Vamos começar entendendo como acessar os dados recebidos.
+
+### 3.2. O objeto `request`
+
+O Flask disponibiliza o objeto `request`, que permite acessar informações sobre a requisição HTTP atual.
+
+Para utilizá-lo, precisamos importá-lo:
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/informacoes")
+def informacoes():
+    return f"Método utilizado: {request.method}"
+```
+
+Analisando as partes novas:
+
+- `request`: objeto disponibilizado pelo Flask para consultar a requisição atual.
+    
+- `request.method`: propriedade que informa o método HTTP utilizado, como `GET` ou `POST`.
+    
+- `f"Método utilizado: {request.method}"`: f-string que insere o valor da propriedade na mensagem retornada.
+    
+
+Ao acessar `/informacoes` normalmente pelo navegador, a requisição será `GET`, e a resposta será:
+
+```
+Método utilizado: GET
+```
+
+O objeto `request` é disponibilizado pelo Flask durante o processamento da requisição. Ele funciona por meio do contexto da requisição, portanto não deve ser tratado como um objeto global que representa todas as requisições da aplicação.
+
+### 3.3. Parâmetros de consulta: `request.args`
+
+Os parâmetros de consulta são os valores enviados na parte da URL que aparece após o caractere `?`.
+
+Por exemplo:
+
+```
+/busca?nome=Maria&idade=25
+```
+
+Nesse endereço, temos dois parâmetros:
+
+- `nome`, com valor `Maria`.
+    
+- `idade`, com valor `25`.
+    
+
+Para acessá-los, utilizamos `request.args`.
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/busca")
+def busca():
+    nome = request.args.get("nome", "visitante")
+    return f"Olá, {nome}!"
+```
+
+**Linha por linha**
+
+`nome = request.args.get("nome", "visitante")`
+
+- `request.args`: coleção dos parâmetros da query string.
+    
+- `.get()`: método que permite consultar um parâmetro pelo nome.
+    
+- `"nome"`: chave que queremos consultar.
+    
+- `"visitante"`: valor retornado caso a chave não esteja presente.
+    
+
+O método `get()` aceita um segundo argumento opcional, utilizado como valor padrão. Se a chave não existir, o método retorna esse valor em vez de lançar `KeyError`.
+
+Exemplos:
+
+|URL|Resultado|
+|---|---|
+|`/busca?nome=Maria`|`Olá, Maria!`|
+|`/busca?nome=João`|`Olá, João!`|
+|`/busca`|`Olá, visitante!`|
+
+**Importante:** os valores da query string são recebidos como texto. Se o parâmetro representar uma idade, um preço ou outra quantidade, será necessário validar e converter o valor conforme a necessidade.
+
+Também é importante diferenciar a ausência de um parâmetro de um parâmetro presente com valor vazio. Por exemplo, `?nome=` fornece uma string vazia; o valor padrão de `get()` não é utilizado nesse caso.
+
+### 3.4. Dados de formulários: `request.form`
+
+Quando um formulário HTML utiliza o método `POST`, os campos enviados no corpo da requisição podem ser acessados por `request.form`, desde que sejam enviados como dados de formulário compatíveis.
+
+Considere este formulário:
+
+```
+<form action="/cadastro" method="POST">
+    <label for="nome">Nome:</label>
+    <input type="text" id="nome" name="nome">
+
+    <button type="submit">Enviar</button>
+</form>
+```
+
+O atributo `name="nome"` identifica o campo enviado ao servidor. O atributo `id` é usado, entre outras coisas, para associar o campo ao `label`; ele não substitui o atributo `name no envio dos dados.
+
+No Flask:
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        nome = request.form.get("nome", "")
+        return f"Nome recebido: {nome}"
+
+    return "Envie o formulário de cadastro."
+```
+
+Analisando os elementos:
+
+- `methods=["GET", "POST"]`: permite que a rota aceite os dois métodos.
+    
+- `request.method == "POST"`: verifica se a requisição atual utiliza `POST`.
+    
+- `request.form`: contém os campos enviados como dados de formulário compatíveis.
+    
+- `request.form.get("nome", "")`: obtém o campo `nome`; se ele não existir, retorna uma string vazia.
+    
+
+O formulário será exibido apenas se a aplicação tiver uma página HTML que o apresente. O exemplo acima retorna uma mensagem textual no `GET`; ele demonstra o processamento no servidor, mas ainda não renderiza o formulário HTML.
+
+**Uma distinção importante:** utilizar `POST` não torna os dados automaticamente seguros ou secretos. A validação continua necessária, e a comunicação deve utilizar HTTPS quando houver dados sensíveis.
+
+### 3.5. Dados JSON: `request.json`
+
+APIs frequentemente recebem dados em JSON, um formato de texto utilizado para representar estruturas como objetos, listas, strings, números e valores booleanos.
+
+Um cliente poderia enviar:
+
+```
+{
+    "nome": "Maria",
+    "idade": 25
+}
+```
+
+No Flask, podemos acessar o conteúdo JSON da requisição.
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/api/usuarios", methods=["POST"])
+def criar_usuario():
+    dados = request.json
+
+    if not isinstance(dados, dict):
+        return {"erro": "Era esperado um objeto JSON"}, 400
+
+    nome = dados.get("nome", "")
+
+    if not nome:
+        return {"erro": "O campo nome é obrigatório"}, 400
+
+    return {
+        "mensagem": "Dados recebidos",
+        "nome": nome
+    }, 201
+```
+
+**Análise do código**
+
+`dados = request.json`
+
+Obtém os dados JSON interpretados pelo Flask a partir da requisição. O cliente deve enviar um corpo JSON válido e utilizar o tipo de conteúdo apropriado, normalmente `Content-Type: application/json`.
+
+`isinstance(dados, dict)`
+
+Verifica se o resultado é um dicionário Python. Isso é importante porque um documento JSON válido pode representar outros tipos, como uma lista ou um número, e não necessariamente um objeto.
+
+`dados.get("nome", "")`
+
+Obtém o campo `nome` ou retorna uma string vazia quando ele não existe.
+
+`return {"erro": "O campo nome é obrigatório"}, 400`
+
+Retorna um dicionário que o Flask serializa como JSON e define o código de status HTTP `400 Bad Request`.
+
+`return {...}, 201`
+
+Retorna um objeto JSON com o status `201 Created`, apropriado quando uma operação cria um recurso.
+
+**Observação sobre erros de JSON:** dependendo da versão do Flask e da forma de acesso, um corpo inválido ou uma requisição com tipo de conteúdo incorreto pode resultar em um erro HTTP, em vez de simplesmente fornecer um dicionário vazio. Para APIs que precisam tratar esses casos de forma específica, utilizaremos os métodos de leitura JSON com tratamento explícito de erros.
+
+### 3.6. Uploads de arquivos: `request.files`
+
+Quando um formulário envia arquivos utilizando `multipart/form-data`, o Flask disponibiliza os arquivos recebidos por meio de `request.files`.
+
+Exemplo de formulário HTML:
+
+```
+<form action="/upload" method="POST" enctype="multipart/form-data">
+    <input type="file" name="arquivo">
+    <button type="submit">Enviar arquivo</button>
+</form>
+```
+
+O atributo `enctype="multipart/form-data"` permite o envio de arquivos no formulário. O campo utiliza `name="arquivo"` para que o servidor consiga identificá-lo.
+
+No Flask:
+
+```
+from flask import Flask, request
+
+app = Flask(__name__)
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    arquivo = request.files.get("arquivo")
+
+    if arquivo is None or arquivo.filename == "":
+        return {"erro": "Nenhum arquivo foi selecionado"}, 400
+
+    return {"mensagem": "Arquivo recebido"}, 200
+```
+
+**O que acontece aqui?**
+
+- `request.files`: coleção dos arquivos recebidos.
+    
+- `.get("arquivo")`: tenta obter o arquivo enviado no campo chamado `arquivo`.
+    
+- `arquivo.filename`: nome informado para o arquivo.
+    
+
+Esse exemplo apenas verifica se um arquivo foi recebido. Ele não salva o arquivo no disco.
+
+Em aplicações reais, um upload precisa de validação de tamanho, tipo e conteúdo, além de uma estratégia segura para armazenamento e nomes de arquivo. O nome fornecido pelo cliente não deve ser considerado confiável.
+
+### 3.7. Construindo respostas com `jsonify()`
+
+O Flask possui a função `jsonify()`, utilizada para criar respostas JSON.
+
+```
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+
+@app.route("/api/status")
+def status():
+    return jsonify({
+        "aplicacao": "Flask",
+        "online": True
+    })
+```
+
+A função `jsonify()` recebe valores que possam ser serializados em JSON e constrói uma resposta HTTP com o tipo de conteúdo apropriado.
+
+No exemplo, o navegador ou cliente HTTP receberá um conteúdo semelhante a:
+
+```
+{
+  "aplicacao": "Flask",
+  "online": true
+}
+```
+
+O valor Python `True` é representado como `true` no JSON.
+
+Em versões atuais do Flask, retornar diretamente um dicionário ou uma lista também permite criar uma resposta JSON em muitos casos. `jsonify()` continua útil quando queremos construir explicitamente uma resposta JSON ou personalizar a resposta com outros recursos.
+
+### 3.8. Construindo respostas com `make_response()`
+
+A função `make_response()` permite criar ou modificar explicitamente um objeto de resposta HTTP.
+
+Ela é útil quando precisamos configurar cabeçalhos, cookies ou outros aspectos da resposta.
+
+```
+from flask import Flask, make_response
+
+app = Flask(__name__)
+
+
+@app.route("/cabecalho")
+def cabecalho():
+    resposta = make_response("Resposta personalizada", 200)
+    resposta.headers["X-Aplicacao"] = "Flask"
+
+    return resposta
+```
+
+**Linha por linha**
+
+`make_response("Resposta personalizada", 200)`
+
+Cria um objeto de resposta com o conteúdo indicado e o status HTTP `200`.
+
+- Primeiro argumento: conteúdo ou resposta a ser utilizada.
+    
+- Segundo argumento: código de status, opcional neste uso.
+    
+
+`resposta.headers["X-Aplicacao"] = "Flask"`
+
+Adiciona um cabeçalho HTTP personalizado. O prefixo `X-` é utilizado aqui apenas como exemplo; cabeçalhos personalizados devem ter nomes e finalidades bem definidos.
+
+`return resposta`
+
+Devolve o objeto de resposta ao Flask, que o envia ao cliente.
+
+### 3.9. Redirecionamentos com `redirect()`
+
+Um redirecionamento instrui o cliente a acessar outro endereço.
+
+```
+from flask import Flask, redirect
+
+app = Flask(__name__)
+
+
+@app.route("/inicio")
+def inicio():
+    return redirect("/painel")
+
+
+@app.route("/painel")
+def painel():
+    return "Você chegou ao painel"
+```
+
+Quando o cliente acessa `/inicio`, o Flask responde com um status de redirecionamento e informa o endereço de destino. O navegador normalmente faz uma nova requisição para `/painel`.
+
+A função `redirect()` aceita como argumento a localização de destino. Ela também permite configurar o código de status HTTP, cujo padrão usual é `302`.
+
+Redirecionar não é a mesma coisa que chamar outra função Python: trata-se de uma resposta HTTP enviada ao cliente, que então realiza outra requisição.
+
+### 3.10. Gerando URLs com `url_for()`
+
+Escrever caminhos manualmente em vários pontos da aplicação pode tornar o código difícil de manter. A função `url_for()` permite gerar uma URL a partir do nome de um endpoint registrado.
+
+```
+from flask import Flask, redirect, url_for
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def inicio():
+    return redirect(url_for("painel"))
+
+
+@app.route("/painel")
+def painel():
+    return "Página do painel"
+```
+
+Analisando:
+
+- `url_for("painel")`: gera a URL correspondente ao endpoint `painel`.
+    
+- `redirect(...)`: cria uma resposta que redireciona o cliente para essa URL.
+    
+
+Por padrão, o endpoint deriva do nome da função de visualização. Se a rota utilizar um `endpoint` personalizado, `url_for()` deverá receber esse identificador.
+
+A função também permite preencher variáveis de rota:
+
+```
+@app.route("/usuario/<int:user_id>")
+def usuario(user_id):
+    return f"Usuário {user_id}"
+
+
+@app.route("/exemplo")
+def exemplo():
+    return redirect(url_for("usuario", user_id=10))
+```
+
+Nesse caso, `url_for()` gera uma URL compatível com a rota do usuário, preenchendo `user_id` com o valor `10`.
+
+### 3.11. Códigos de status HTTP
+
+O código de status informa ao cliente o resultado geral do processamento da requisição.
+
+|Código|Significado comum|
+|---|---|
+|`200 OK`|Requisição processada com sucesso.|
+|`201 Created`|Um recurso foi criado.|
+|`302 Found`|Redirecionamento temporário.|
+|`400 Bad Request`|Requisição inválida.|
+|`401 Unauthorized`|Autenticação necessária ou inválida, conforme o contexto.|
+|`403 Forbidden`|Acesso recusado.|
+|`404 Not Found`|Recurso ou rota não encontrado.|
+|`405 Method Not Allowed`|Método HTTP não permitido para a rota.|
+|`500 Internal Server Error`|Erro interno inesperado no servidor.|
+
+Os códigos não substituem o tratamento correto das condições da aplicação. Por exemplo, um erro de validação pode justificar `400`, enquanto uma criação bem-sucedida pode utilizar `201`.
+
+### 3.12. Diferenças entre os principais recursos
+
+|Recurso|Para que serve|
+|---|---|
+|`request.args`|Ler parâmetros da query string.|
+|`request.form`|Ler campos de formulários.|
+|`request.json`|Acessar dados JSON da requisição.|
+|`request.files`|Acessar arquivos enviados.|
+|`jsonify()`|Construir uma resposta JSON.|
+|`make_response()`|Construir ou personalizar uma resposta HTTP.|
+|`redirect()`|Enviar uma resposta de redirecionamento.|
+|`url_for()`|Gerar uma URL a partir de um endpoint.|
+
+Esses recursos não são intercambiáveis. Cada um resolve uma parte diferente do processamento HTTP, e a escolha depende do tipo de dado recebido ou da resposta que queremos produzir.
+
+---

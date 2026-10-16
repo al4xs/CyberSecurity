@@ -2794,3 +2794,653 @@ Essa arquitetura também permite que operações de análise estática, leitura 
 O objetivo não é criar a maior quantidade possível de módulos, e sim manter cada responsabilidade clara, testável e fácil de modificar.
 
 ---
+# 📜 Python — Testes Automatizados, Mocks e Isolamento de Dependências
+
+## 1. Por que automatizar testes?
+
+Uma ferramenta Python pode conter funções de parsing, manipulação de arquivos, requisições HTTP, validação de dados e geração de relatórios.
+
+Testar manualmente cada cenário fica cada vez mais trabalhoso. Além disso, uma alteração aparentemente pequena pode quebrar uma funcionalidade que já funcionava.
+
+Os testes automatizados permitem verificar o comportamento do código de maneira repetível.
+
+Por exemplo, uma função que valida uma porta de rede pode ser testada com valores válidos e inválidos sem realizar nenhuma conexão.
+
+```
+def porta_valida(porta):
+    return isinstance(porta, int) and 1 <= porta <= 65535
+```
+
+Testes adequados devem verificar, pelo menos:
+
+- Entradas válidas.
+    
+- Entradas inválidas.
+    
+- Casos extremos.
+    
+- Exceções esperadas.
+    
+- Comportamentos que não podem regredir.
+    
+
+O objetivo não é apenas confirmar que o código funciona em um cenário feliz. É estabelecer evidências de que ele se comporta corretamente em diferentes condições.
+
+## 2. O que é o pytest?
+
+O `pytest` é uma biblioteca de testes para Python. Ela permite escrever testes com funções comuns e instruções `assert`.
+
+Instalação:
+
+```
+python -m pip install pytest
+```
+
+Uma estrutura de projeto pode ser:
+
+```
+minha_ferramenta/
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       └── validacao.py
+└── tests/
+    └── test_validacao.py
+```
+
+O diretório `tests/` separa os testes do código principal.
+
+Arquivo `src/minha_ferramenta/validacao.py`:
+
+```
+def porta_valida(porta):
+    return isinstance(porta, int) and 1 <= porta <= 65535
+```
+
+Arquivo `tests/test_validacao.py`:
+
+```
+from minha_ferramenta.validacao import porta_valida
+
+
+def test_porta_valida():
+    assert porta_valida(80) is True
+
+
+def test_porta_invalida_zero():
+    assert porta_valida(0) is False
+
+
+def test_porta_invalida_acima_do_limite():
+    assert porta_valida(65536) is False
+```
+
+Os nomes das funções começam com `test_`, permitindo que o pytest as descubra automaticamente.
+
+Execute:
+
+```
+python -m pytest -v
+```
+
+O `-v` ativa a saída detalhada, mostrando o resultado individual dos testes encontrados.
+
+**Observação:** se o projeto utiliza a estrutura `src/`, instale-o no ambiente virtual em modo editável ou configure corretamente o caminho de importação antes de executar os testes.
+
+## 3. Entendendo o `assert`
+
+A instrução `assert` verifica se uma condição é verdadeira.
+
+```
+assert porta_valida(80) is True
+```
+
+Se a função retornar `True`, o teste passa.
+
+Se retornar `False`, o pytest apresenta uma falha com informações sobre a expressão avaliada.
+
+É possível testar valores diretamente:
+
+```
+def test_limites_da_porta():
+    assert porta_valida(1) is True
+    assert porta_valida(65535) is True
+```
+
+Esses valores representam os limites inferior e superior do intervalo de portas TCP/UDP válido.
+
+Um detalhe importante: a função apresentada aceita apenas objetos `int`, mas em Python `bool` é uma subclasse de `int`. Assim, `porta_valida(True)` retorna `True` com essa implementação. Se booleanos precisarem ser rejeitados explicitamente, a validação deve ser ajustada e um teste deve documentar esse requisito.
+
+Por exemplo:
+
+```
+def porta_valida(porta):
+    return (
+        isinstance(porta, int)
+        and not isinstance(porta, bool)
+        and 1 <= porta <= 65535
+    )
+```
+
+A implementação e os testes devem refletir os requisitos reais do programa, não apenas os casos mais comuns.
+
+## 4. Testando exceções
+
+Uma função também pode ter como comportamento esperado lançar uma exceção quando recebe uma entrada inválida.
+
+Considere:
+
+```
+def converter_porta(valor):
+    try:
+        porta = int(valor)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("A porta deve ser um número inteiro.") from exc
+
+    if not 1 <= porta <= 65535:
+        raise ValueError("A porta deve estar entre 1 e 65535.")
+
+    return porta
+```
+
+Agora podemos testar o erro esperado:
+
+```
+import pytest
+
+from minha_ferramenta.validacao import converter_porta
+
+
+def test_converter_porta_rejeita_texto():
+    with pytest.raises(ValueError):
+        converter_porta("abc")
+```
+
+`pytest.raises(ValueError)` verifica se o bloco lança uma exceção desse tipo.
+
+Se nenhuma exceção ocorrer, o teste falha.
+
+Também podemos verificar parte da mensagem:
+
+```
+def test_converter_porta_mensagem():
+    with pytest.raises(
+        ValueError,
+        match="número inteiro",
+    ):
+        converter_porta("abc")
+```
+
+O parâmetro `match` recebe uma expressão regular utilizada para verificar se a mensagem da exceção corresponde ao padrão informado.
+
+Isso é útil quando a mensagem faz parte do comportamento que precisa ser mantido.
+
+## 5. O que são mocks?
+
+Um _mock_ é um objeto utilizado em testes para simular o comportamento de uma dependência real.
+
+Imagine que uma função consulta uma API externa. Se todos os testes fizerem uma requisição real, eles podem:
+
+- Depender da disponibilidade do serviço.
+    
+- Falhar por problemas de rede.
+    
+- Consumir limites de requisição.
+    
+- Exigir credenciais.
+    
+- Produzir efeitos externos indesejados.
+    
+
+Um mock permite controlar a resposta da dependência e testar a lógica do seu programa sem depender do serviço real.
+
+Python oferece recursos de simulação no módulo `unittest.mock`, que faz parte da biblioteca padrão.
+
+O pytest pode utilizar esses recursos diretamente.
+
+## 6. Simulando uma requisição HTTP
+
+Considere o arquivo `src/minha_ferramenta/api_client.py`:
+
+```
+import requests
+
+
+def obter_usuario(url):
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+
+    return response.json()
+```
+
+A função realiza uma requisição HTTP, verifica o status e retorna o JSON.
+
+Para testá-la sem acessar a rede, podemos simular `requests.get`.
+
+Arquivo `tests/test_api_client.py`:
+
+```
+from unittest.mock import Mock, patch
+
+from minha_ferramenta.api_client import obter_usuario
+
+
+def test_obter_usuario_retorna_json():
+    resposta_falsa = Mock()
+    resposta_falsa.json.return_value = {
+        "id": 1,
+        "nome": "Usuário de teste",
+    }
+    resposta_falsa.raise_for_status.return_value = None
+
+    with patch(
+        "minha_ferramenta.api_client.requests.get",
+        return_value=resposta_falsa,
+    ) as requisicao:
+        resultado = obter_usuario(
+            "https://api.exemplo.com/usuarios/1"
+        )
+
+    assert resultado["id"] == 1
+    assert resultado["nome"] == "Usuário de teste"
+
+    requisicao.assert_called_once_with(
+        "https://api.exemplo.com/usuarios/1",
+        timeout=5,
+    )
+```
+
+### Entendendo a simulação
+
+#### `Mock()`
+
+```
+resposta_falsa = Mock()
+```
+
+Cria um objeto simulado cujos métodos e atributos podem ser configurados para o teste.
+
+Ele não é uma resposta HTTP real. Seu comportamento é definido pelo teste.
+
+#### `return_value`
+
+```
+resposta_falsa.json.return_value = {
+    "id": 1,
+    "nome": "Usuário de teste",
+}
+```
+
+Define o valor retornado quando `resposta_falsa.json()` for chamado.
+
+Assim, a função sob teste recebe um resultado previsível sem precisar interpretar uma resposta real da rede.
+
+#### `patch()`
+
+```
+patch(
+    "minha_ferramenta.api_client.requests.get",
+    return_value=resposta_falsa,
+)
+```
+
+Substitui temporariamente o nome `requests.get` utilizado no módulo `minha_ferramenta.api_client`.
+
+O caminho do patch aponta para o local em que a dependência é utilizada pelo código sob teste. Essa regra evita substituir um nome diferente daquele efetivamente consultado pela função.
+
+#### `assert_called_once_with()`
+
+Verifica se a função simulada foi chamada exatamente uma vez com os argumentos esperados.
+
+Isso permite testar não apenas o resultado, mas também como a função interage com sua dependência.
+
+## 7. Por que simular o local correto?
+
+Considere:
+
+```
+# api_client.py
+import requests
+
+
+def obter_usuario(url):
+    return requests.get(url, timeout=5)
+```
+
+A função consulta `requests.get` por meio do namespace do módulo `api_client`.
+
+Por isso, o patch recomendado é:
+
+```
+patch("minha_ferramenta.api_client.requests.get")
+```
+
+A regra geral é: **simule a dependência no local em que o código sob teste a procura**.
+
+Se o projeto fizer uma importação direta, como:
+
+```
+from requests import get
+```
+
+a função poderá consultar o nome `get` do próprio módulo. Nesse caso, o caminho de patch será diferente.
+
+O caminho correto depende da forma como o código importou e utiliza a dependência.
+
+## 8. Testando falhas HTTP
+
+Além do cenário de sucesso, precisamos verificar como o cliente reage a respostas HTTP de erro.
+
+A função utiliza `raise_for_status()`, que lança uma exceção quando a resposta representa um erro HTTP.
+
+Teste:
+
+```
+from unittest.mock import Mock, patch
+
+import pytest
+import requests
+
+from minha_ferramenta.api_client import obter_usuario
+
+
+def test_obter_usuario_repassa_erro_http():
+    resposta_falsa = Mock()
+
+    resposta_falsa.raise_for_status.side_effect = (
+        requests.exceptions.HTTPError("Erro HTTP simulado")
+    )
+
+    with patch(
+        "minha_ferramenta.api_client.requests.get",
+        return_value=resposta_falsa,
+    ):
+        with pytest.raises(requests.exceptions.HTTPError):
+            obter_usuario("https://api.exemplo.com/usuarios/1")
+```
+
+A propriedade `side_effect` determina o que acontece quando o método simulado é chamado.
+
+Nesse caso, `raise_for_status()` lança um `HTTPError`, simulando uma resposta HTTP problemática.
+
+O teste confirma que a função não ignora a falha.
+
+Esse exemplo não verifica o código de status de uma resposta real. Ele testa o comportamento da função quando a dependência lança a exceção esperada.
+
+## 9. Simulando timeout
+
+Uma requisição também pode falhar porque o tempo limite foi atingido.
+
+Podemos simular essa situação:
+
+```
+from unittest.mock import patch
+
+import pytest
+import requests
+
+from minha_ferramenta.api_client import obter_usuario
+
+
+def test_obter_usuario_timeout():
+    with patch(
+        "minha_ferramenta.api_client.requests.get",
+        side_effect=requests.exceptions.Timeout,
+    ):
+        with pytest.raises(requests.exceptions.Timeout):
+            obter_usuario("https://api.exemplo.com/usuarios/1")
+```
+
+Nesse teste, `requests.get` lança `Timeout` quando é chamado.
+
+Isso permite verificar o comportamento da função sem esperar por um timeout de rede real.
+
+**Importante:** o teste verifica a propagação da exceção. Se a função futuramente passar a capturar o timeout e retornar uma mensagem específica, o teste precisará ser atualizado para refletir o novo comportamento esperado.
+
+## 10. O que são fixtures no pytest?
+
+Uma fixture é um recurso que prepara dados ou dependências para um teste.
+
+Em vez de repetir a criação de um objeto simulado em várias funções, podemos centralizar essa preparação.
+
+Exemplo:
+
+```
+import pytest
+from unittest.mock import Mock
+
+
+@pytest.fixture
+def resposta_falsa():
+    resposta = Mock()
+    resposta.json.return_value = {
+        "id": 1,
+        "nome": "Usuário de teste",
+    }
+    resposta.raise_for_status.return_value = None
+
+    return resposta
+```
+
+A função decorada com `@pytest.fixture` define um recurso que o pytest pode fornecer aos testes.
+
+Um teste pode recebê-lo como argumento:
+
+```
+def test_resposta_json(resposta_falsa):
+    assert resposta_falsa.json()["id"] == 1
+```
+
+O pytest identifica o parâmetro `resposta_falsa` e chama a fixture correspondente.
+
+Fixtures podem ser usadas para preparar arquivos temporários, configurações, objetos simulados e outros recursos necessários aos testes.
+
+## 11. Testando com `monkeypatch`
+
+O pytest oferece a fixture `monkeypatch`, que permite modificar temporariamente atributos, variáveis de ambiente e outros elementos durante um teste.
+
+Exemplo de variável de ambiente:
+
+```
+import os
+
+
+def obter_modo():
+    return os.environ.get("APP_MODE", "desenvolvimento")
+```
+
+Teste:
+
+```
+def test_obter_modo_producao(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "producao")
+
+    assert obter_modo() == "producao"
+```
+
+`monkeypatch.setenv()` define temporariamente a variável de ambiente para o teste.
+
+O pytest restaura a alteração ao final do teste, evitando que ela contamine os testes seguintes.
+
+Para testar a ausência da variável:
+
+```
+def test_obter_modo_padrao(monkeypatch):
+    monkeypatch.delenv("APP_MODE", raising=False)
+
+    assert obter_modo() == "desenvolvimento"
+```
+
+O argumento `raising=False` permite remover a variável mesmo que ela não exista inicialmente.
+
+Esse recurso é útil para testar configurações sem depender do ambiente real da máquina.
+
+## 12. Isolando operações com arquivos
+
+Uma ferramenta que cria relatórios pode precisar de testes para verificar se o conteúdo foi gravado corretamente.
+
+O pytest disponibiliza a fixture `tmp_path`, que fornece um diretório temporário exclusivo para cada teste.
+
+Considere:
+
+```
+def salvar_relatorio(caminho, conteudo):
+    with open(caminho, "w", encoding="utf-8") as arquivo:
+        arquivo.write(conteudo)
+```
+
+Teste:
+
+```
+def test_salvar_relatorio(tmp_path):
+    destino = tmp_path / "relatorio.txt"
+
+    salvar_relatorio(destino, "Execução concluída.")
+
+    assert destino.read_text(encoding="utf-8") == (
+        "Execução concluída."
+    )
+```
+
+A expressão `tmp_path / "relatorio.txt"` utiliza o operador `/` de `pathlib.Path` para construir o caminho do arquivo.
+
+O teste escreve em um diretório temporário, não em um diretório importante do usuário.
+
+Isso reduz efeitos colaterais e facilita a repetição dos testes.
+
+## 13. Testes unitários e testes de integração
+
+Os testes podem ser classificados conforme o escopo daquilo que verificam.
+
+|Tipo|O que verifica|Exemplo|
+|---|---|---|
+|Unitário|Uma unidade de código de maneira isolada.|Validar uma porta.|
+|Integração|A interação entre componentes.|Verificar a comunicação entre o cliente HTTP e uma camada de serviço.|
+|Ponta a ponta|Um fluxo mais completo da aplicação.|Executar uma CLI e verificar o relatório produzido.|
+
+Essas categorias não são absolutamente rígidas, mas ajudam a definir o objetivo de cada teste.
+
+Mocks são particularmente úteis nos testes unitários quando uma dependência externa precisa ser isolada.
+
+Entretanto, se todos os testes simularem tudo, um projeto pode passar nos testes mesmo que a integração real esteja quebrada. Por isso, projetos importantes também precisam de testes de integração controlados.
+
+## 14. Organização recomendada dos testes
+
+Um projeto pode organizar os testes de acordo com os módulos da aplicação:
+
+```
+minha_ferramenta/
+├── pyproject.toml
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       ├── cli.py
+│       ├── api_client.py
+│       ├── validacao.py
+│       └── relatorios.py
+└── tests/
+    ├── test_cli.py
+    ├── test_api_client.py
+    ├── test_validacao.py
+    └── test_relatorios.py
+```
+
+Convenções:
+
+- O prefixo `test_` facilita a descoberta dos arquivos de teste.
+    
+- Cada arquivo pode concentrar os testes relacionados a um módulo.
+    
+- Testes unitários devem ser rápidos e previsíveis.
+    
+- Testes que dependem de rede ou serviços externos devem ser identificados e controlados.
+    
+- Dados sensíveis reais não devem ser colocados nos testes ou nos logs.
+    
+
+## 15. Executando e depurando testes
+
+Executar toda a suíte:
+
+```
+python -m pytest
+```
+
+Exibir os testes individualmente:
+
+```
+python -m pytest -v
+```
+
+Executar um arquivo específico:
+
+```
+python -m pytest tests/test_api_client.py
+```
+
+Executar apenas testes cujo nome corresponda a uma expressão:
+
+```
+python -m pytest -k timeout
+```
+
+O `-k timeout` seleciona testes cujos nomes correspondam à expressão informada.
+
+Interromper a execução na primeira falha:
+
+```
+python -m pytest -x
+```
+
+Essas opções ajudam a investigar falhas sem precisar executar manualmente todas as operações da ferramenta.
+
+## 16. Erros comuns ao trabalhar com mocks
+
+### Simular o caminho errado
+
+Se o patch não substituir o nome que o módulo utiliza, o teste poderá fazer uma chamada real à dependência.
+
+Confira como o módulo importou o objeto e qual nome ele consulta durante a execução.
+
+### Criar mocks excessivamente complexos
+
+Mocks devem representar apenas o comportamento necessário para o teste. Simular toda a implementação interna de uma biblioteca torna os testes frágeis e difíceis de manter.
+
+### Testar apenas o caminho de sucesso
+
+Também teste erros de entrada, exceções esperadas, ausência de configurações e falhas de dependências.
+
+### Acreditar que um mock comprova o funcionamento real
+
+Um mock comprova o comportamento do seu código diante da simulação configurada. Ele não comprova que uma API externa está funcionando ou que uma resposta real terá a estrutura esperada.
+
+### Compartilhar estado entre testes
+
+Objetos mutáveis compartilhados podem fazer um teste depender da ordem de execução. Prefira fixtures que criem recursos novos quando o isolamento for importante.
+
+### Capturar todas as exceções para fazer o teste passar
+
+Não esconda erros de programação apenas para manter a suíte verde. Os testes devem revelar falhas, e não mascará-las.
+
+## 17. Aplicação em ferramentas de automação e segurança
+
+Essas técnicas permitem testar ferramentas que:
+
+- Validam argumentos e configurações.
+    
+- Processam arquivos e relatórios.
+    
+- Consomem APIs.
+    
+- Tratam respostas HTTP e timeouts.
+    
+- Transformam dados antes de exportá-los.
+    
+- Precisam funcionar mesmo quando uma dependência externa está indisponível.
+    
+
+Por exemplo, uma ferramenta de inventário de ativos autorizados pode testar a validação de endereços, a interpretação de arquivos de entrada e a formatação dos relatórios sem precisar consultar os ativos reais em cada execução.
+
+O isolamento de dependências torna os testes mais rápidos, reproduzíveis e seguros. Ainda assim, os resultados precisam ser complementados por testes de integração quando o funcionamento conjunto dos componentes também for importante.
+
+---

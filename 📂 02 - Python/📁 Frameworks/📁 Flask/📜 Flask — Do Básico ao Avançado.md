@@ -4558,3 +4558,5 @@ A ordem exata pode variar conforme a extensão, mas carregar as configurações 
 - Registre o contexto necessário para diagnosticar a falha.
     
 - Não transforme silenciosamente uma operação malsucedida em uma resposta de sucesso.
+
+---

@@ -6869,3 +6869,1003 @@ Antes de considerar o deploy concluído, confirme:
     
 
 Uma implantação confiável envolve mais do que fazer o servidor iniciar. Ela exige que a aplicação seja configurada, monitorada, protegida e mantida de maneira consistente.
+
+---
+# Módulo 14 — Projeto Prático Integrado com Flask
+
+## 1. Objetivo do projeto
+
+Neste módulo, vamos integrar os principais conceitos estudados durante o curso em uma aplicação web funcional: um **gerenciador de tarefas com cadastro, autenticação, banco de dados, formulários, API e testes automatizados**.
+
+O objetivo não é apenas fazer a aplicação funcionar, mas entender como as diferentes partes de um projeto Flask se comunicam.
+
+### Funcionalidades
+
+- Cadastro de usuários.
+    
+- Login e logout.
+    
+- Páginas protegidas por autenticação.
+    
+- Criação, listagem, edição e exclusão de tarefas.
+    
+- Armazenamento de dados com Flask-SQLAlchemy.
+    
+- Formulários protegidos contra CSRF.
+    
+- API que retorna tarefas em JSON.
+    
+- Testes automatizados com pytest.
+    
+- Configuração adequada para desenvolvimento e produção.
+    
+
+## 2. Arquitetura da aplicação
+
+Vamos utilizar o padrão Application Factory, Blueprints e extensões inicializadas separadamente.
+
+Uma estrutura possível é:
+
+```
+gerenciador/
+├── app/
+│   ├── __init__.py
+│   ├── extensions.py
+│   ├── models.py
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── forms.py
+│   ├── tasks/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   └── templates/
+│       ├── base.html
+│       ├── auth/
+│       │   ├── login.html
+│       │   └── register.html
+│       └── tasks/
+│           └── index.html
+├── tests/
+│   ├── conftest.py
+│   ├── test_auth.py
+│   └── test_tasks.py
+├── config.py
+├── requirements.txt
+└── run.py
+```
+
+Essa é uma estrutura de referência. Se o gerador `startproject` que você desenvolveu utiliza nomes ou diretórios diferentes, adapte os arquivos à estrutura dele em vez de criar uma segunda estrutura desnecessária.
+
+### Responsabilidade de cada arquivo
+
+|Arquivo|Responsabilidade|
+|---|---|
+|`__init__.py`|Cria e configura a aplicação Flask.|
+|`extensions.py`|Declara extensões, como banco e login.|
+|`models.py`|Define os modelos e relacionamentos do banco.|
+|`auth/routes.py`|Gerencia cadastro, login e logout.|
+|`auth/forms.py`|Define formulários de autenticação.|
+|`tasks/routes.py`|Gerencia as tarefas pela interface web.|
+|`api/routes.py`|Disponibiliza endpoints JSON.|
+|`templates/`|Contém as páginas HTML.|
+|`tests/`|Contém os testes automatizados.|
+|`config.py`|Centraliza as configurações.|
+|`run.py`|Ponto de entrada para executar a aplicação localmente.|
+
+## 3. Dependências
+
+Crie e ative um ambiente virtual antes de instalar as bibliotecas:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Instale as dependências principais:
+
+```
+pip install Flask Flask-SQLAlchemy Flask-Login Flask-WTF pytest
+```
+
+Registre as dependências do ambiente:
+
+```
+pip freeze > requirements.txt
+```
+
+O arquivo `requirements.txt` permite reproduzir o ambiente de dependências. Para projetos que serão distribuídos ou implantados em produção, é importante controlar as versões utilizadas.
+
+## 4. Inicialização das extensões
+
+No arquivo `app/extensions.py`:
+
+```
+from flask_login import LoginManager
+from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
+
+db = SQLAlchemy()
+login_manager = LoginManager()
+csrf = CSRFProtect()
+```
+
+Aqui, as extensões são declaradas sem estarem vinculadas imediatamente a uma instância específica do Flask.
+
+Isso permite inicializá-las posteriormente dentro da Application Factory.
+
+### Por que fazer dessa maneira?
+
+Se cada módulo criasse sua própria instância de `SQLAlchemy`, por exemplo, o projeto poderia acabar utilizando objetos de banco diferentes. Centralizar as extensões evita essa inconsistência.
+
+Também facilita a criação de aplicações de teste com configurações próprias.
+
+## 5. Configuração da aplicação
+
+No arquivo `config.py`:
+
+```
+import os
+
+class Config:
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL",
+        "sqlite:///gerenciador.db",
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+```
+
+### Entendendo as configurações
+
+- `SECRET_KEY`: chave usada pelo Flask e por componentes como as sessões e a proteção CSRF.
+    
+- `DATABASE_URL`: endereço do banco de dados.
+    
+- `sqlite:///gerenciador.db`: utiliza um banco SQLite local quando nenhuma URL é informada.
+    
+- `SQLALCHEMY_TRACK_MODIFICATIONS`: desativa um recurso de rastreamento de modificações que normalmente não é necessário.
+    
+
+A chave secreta não deve ser escrita diretamente no código nem publicada no repositório.
+
+Para desenvolvimento, configure uma chave no ambiente do terminal:
+
+```
+export SECRET_KEY='uma-chave-local-de-desenvolvimento'
+```
+
+Em produção, utilize uma chave forte, aleatória e armazenada no ambiente de implantação ou em um gerenciador de segredos.
+
+Como a configuração anterior não fornece uma chave padrão, a aplicação deve verificar se `SECRET_KEY` foi configurada antes de iniciar.
+
+## 6. Criando a Application Factory
+
+No arquivo `app/__init__.py`:
+
+```
+from flask import Flask
+
+from config import Config
+from app.extensions import db, login_manager, csrf
+
+
+def create_app(test_config=None):
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    if test_config:
+        app.config.update(test_config)
+
+    if not app.config.get("SECRET_KEY"):
+        raise RuntimeError("Configure a variável SECRET_KEY.")
+
+    db.init_app(app)
+    login_manager.init_app(app)
+    csrf.init_app(app)
+
+    login_manager.login_view = "auth.login"
+
+    from app.auth.routes import auth_bp
+    from app.tasks.routes import tasks_bp
+    from app.api.routes import api_bp
+
+    app.register_blueprint(auth_bp, url_prefix="/auth")
+    app.register_blueprint(tasks_bp, url_prefix="/tasks")
+    app.register_blueprint(api_bp, url_prefix="/api")
+
+    return app
+```
+
+### Como o código funciona
+
+1. `Flask(__name__)` cria a aplicação.
+    
+2. `app.config.from_object(Config)` carrega as configurações.
+    
+3. `app.config.update(test_config)` permite substituir configurações em testes.
+    
+4. `db.init_app(app)` inicializa a extensão de banco.
+    
+5. `login_manager.init_app(app)` configura o gerenciamento de autenticação.
+    
+6. `csrf.init_app(app)` ativa a proteção CSRF.
+    
+7. `register_blueprint()` registra as rotas dos módulos.
+    
+8. `return app` entrega a aplicação pronta.
+    
+
+Os imports dos Blueprints são feitos dentro da função para ajudar a evitar ciclos de importação.
+
+**Importante:** `create_app()` não cria automaticamente as tabelas do banco. A criação inicial do esquema deve ser controlada separadamente; em projetos que evoluem, utilize migrações.
+
+## 7. Criando os modelos do banco
+
+No arquivo `app/models.py`:
+
+```
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash
+
+from app.extensions import db
+
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(
+        db.String(80),
+        unique=True,
+        nullable=False,
+    )
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    tasks = db.relationship(
+        "Task",
+        backref="owner",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        from werkzeug.security import check_password_hash
+
+        return check_password_hash(self.password_hash, password)
+
+
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    completed = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+    )
+```
+
+### Entendendo o relacionamento
+
+Um usuário pode possuir várias tarefas, mas cada tarefa pertence a um único usuário.
+
+```
+User
+ ├── Task 1
+ ├── Task 2
+ └── Task 3
+```
+
+A chave estrangeira `user_id` identifica o proprietário de cada tarefa.
+
+O relacionamento `tasks` permite acessar as tarefas de um usuário. Já `owner`, criado por `backref`, permite acessar o usuário responsável por uma tarefa.
+
+`UserMixin` fornece propriedades e métodos esperados pelo Flask-Login, como a identificação do usuário e o estado de autenticação.
+
+### Por que não guardar a senha diretamente?
+
+O método `set_password()` armazena um hash de senha, não a senha original. O método `check_password()` verifica se uma senha informada corresponde ao hash armazenado.
+
+Nunca armazene senhas em texto puro.
+
+**Atenção ao** `**cascade**`**:** a configuração apresentada pode excluir as tarefas quando um usuário é excluído. Em aplicações reais, essa política deve ser escolhida conscientemente, considerando retenção de dados, auditoria e regras de negócio.
+
+## 8. Integrando o Flask-Login
+
+Ainda em `app/models.py`, registre a função que recupera um usuário pelo identificador da sessão:
+
+```
+from app.extensions import login_manager
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+```
+
+O Flask-Login armazena a identificação do usuário na sessão e utiliza essa função para recuperar o objeto correspondente em requisições posteriores.
+
+O valor recebido é convertido para inteiro porque o identificador definido no modelo é do tipo `Integer`.
+
+Em uma aplicação com identificadores de outro tipo, a conversão precisaria acompanhar o modelo utilizado.
+
+## 9. Criando os formulários
+
+No arquivo `app/auth/forms.py`:
+
+```
+from flask_wtf import FlaskForm
+from wtforms import PasswordField, StringField, SubmitField
+from wtforms.validators import (
+    DataRequired,
+    Length,
+    EqualTo,
+)
+
+
+class RegisterForm(FlaskForm):
+    username = StringField(
+        "Usuário",
+        validators=[
+            DataRequired(),
+            Length(min=3, max=80),
+        ],
+    )
+
+    password = PasswordField(
+        "Senha",
+        validators=[
+            DataRequired(),
+            Length(min=8),
+        ],
+    )
+
+    confirm_password = PasswordField(
+        "Confirmar senha",
+        validators=[
+            DataRequired(),
+            EqualTo("password", message="As senhas não coincidem."),
+        ],
+    )
+
+    submit = SubmitField("Cadastrar")
+
+
+class LoginForm(FlaskForm):
+    username = StringField(
+        "Usuário",
+        validators=[DataRequired()],
+    )
+
+    password = PasswordField(
+        "Senha",
+        validators=[DataRequired()],
+    )
+
+    submit = SubmitField("Entrar")
+```
+
+### O que os validadores fazem?
+
+- `DataRequired()`: exige um valor.
+    
+- `Length(min=3, max=80)`: limita o comprimento do nome de usuário.
+    
+- `Length(min=8)`: exige uma senha com pelo menos oito caracteres.
+    
+- `EqualTo("password")`: exige que a confirmação seja igual ao campo `password`.
+    
+
+Essas validações melhoram a experiência do usuário, mas não substituem todas as regras de segurança. Uma aplicação real também precisa considerar senhas comprometidas, limitação de tentativas de login e outras medidas de proteção.
+
+## 10. Cadastro, login e logout
+
+No arquivo `app/auth/__init__.py`, deixe o pacote pronto para receber os módulos. Em `app/auth/routes.py`:
+
+```
+from flask import Blueprint, flash, redirect, render_template, url_for
+from flask_login import login_user, logout_user, current_user
+from sqlalchemy import select
+
+from app.extensions import db
+from app.models import User
+from app.auth.forms import LoginForm, RegisterForm
+
+auth_bp = Blueprint("auth", __name__)
+
+
+@auth_bp.route("/register", methods=["GET", "POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("tasks.index"))
+
+    form = RegisterForm()
+
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+
+        existing_user = db.session.scalar(
+            select(User).where(User.username == username)
+        )
+
+        if existing_user:
+            flash("Esse nome de usuário já está em uso.")
+            return render_template("auth/register.html", form=form)
+
+        user = User(username=username)
+        user.set_password(form.password.data)
+
+        db.session.add(user)
+        db.session.commit()
+
+        flash("Cadastro realizado. Faça login.")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/register.html", form=form)
+
+
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("tasks.index"))
+
+    form = LoginForm()
+
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+
+        user = db.session.scalar(
+            select(User).where(User.username == username)
+        )
+
+        if user and user.check_password(form.password.data):
+            login_user(user)
+            return redirect(url_for("tasks.index"))
+
+        flash("Usuário ou senha inválidos.")
+
+    return render_template("auth/login.html", form=form)
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    logout_user()
+    return redirect(url_for("auth.login"))
+```
+
+### Fluxo do cadastro
+
+1. O usuário acessa `/auth/register`.
+    
+2. O formulário é exibido.
+    
+3. O navegador envia os dados por POST.
+    
+4. `validate_on_submit()` verifica o método e a validade do formulário.
+    
+5. A aplicação verifica se o nome já existe.
+    
+6. A senha é transformada em hash.
+    
+7. O usuário é salvo no banco.
+    
+8. O usuário é redirecionado para o login.
+    
+
+A restrição `unique=True` no modelo também protege a unicidade no banco. Em uma aplicação concorrente, ainda é necessário tratar a possível violação de unicidade no momento do `commit()`.
+
+### Fluxo do login
+
+A aplicação busca o usuário pelo nome e verifica a senha com `check_password()`. Se as credenciais forem válidas, `login_user(user)` inicia a sessão autenticada.
+
+O logout utiliza POST porque altera o estado da sessão. O formulário de logout deve incluir o token CSRF.
+
+## 11. Criando a interface HTML
+
+No arquivo `app/templates/base.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Gerenciador de tarefas{% endblock %}</title>
+</head>
+<body>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul>
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
+```
+
+Esse arquivo utiliza herança de templates do Jinja. As páginas filhas podem preencher os blocos `title` e `content` sem duplicar toda a estrutura HTML.
+
+No arquivo `app/templates/auth/login.html`:
+
+```
+{% extends "base.html" %}
+
+{% block title %}Entrar{% endblock %}
+
+{% block content %}
+<h1>Entrar</h1>
+
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <div>
+        {{ form.username.label }}
+        {{ form.username() }}
+        {% for error in form.username.errors %}
+            <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+
+    <div>
+        {{ form.password.label }}
+        {{ form.password() }}
+        {% for error in form.password.errors %}
+            <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+
+    {{ form.submit() }}
+</form>
+
+<a href="{{ url_for('auth.register') }}">Criar conta</a>
+{% endblock %}
+```
+
+O método `hidden_tag()` inclui os campos ocultos necessários ao formulário, incluindo o token CSRF.
+
+O WTForms também disponibiliza os erros de validação por campo, permitindo informar ao usuário o que precisa ser corrigido.
+
+O template de cadastro pode seguir o mesmo padrão, utilizando os campos `username`, `password` e `confirm_password`.
+
+## 12. Implementando o CRUD de tarefas
+
+CRUD significa _Create, Read, Update, Delete_: criar, consultar, atualizar e excluir dados.
+
+No arquivo `app/tasks/__init__.py`, prepare o pacote. Em `app/tasks/routes.py`:
+
+```
+from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
+from sqlalchemy import select
+
+from app.extensions import db
+from app.models import Task
+
+tasks_bp = Blueprint("tasks", __name__)
+
+
+@tasks_bp.route("/", methods=["GET", "POST"])
+@login_required
+def index():
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+
+        if not title or len(title) > 200:
+            abort(400, description="Título inválido.")
+
+        task = Task(
+            title=title,
+            user_id=current_user.id,
+        )
+
+        db.session.add(task)
+        db.session.commit()
+
+        return redirect(url_for("tasks.index"))
+
+    tasks = db.session.scalars(
+        select(Task)
+        .where(Task.user_id == current_user.id)
+        .order_by(Task.id.desc())
+    ).all()
+
+    return render_template("tasks/index.html", tasks=tasks)
+
+
+@tasks_bp.route("/<int:task_id>/complete", methods=["POST"])
+@login_required
+def complete(task_id):
+    task = db.session.scalar(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+        )
+    )
+
+    if task is None:
+        abort(404)
+
+    task.completed = not task.completed
+    db.session.commit()
+
+    return redirect(url_for("tasks.index"))
+
+
+@tasks_bp.route("/<int:task_id>/delete", methods=["POST"])
+@login_required
+def delete(task_id):
+    task = db.session.scalar(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+        )
+    )
+
+    if task is None:
+        abort(404)
+
+    db.session.delete(task)
+    db.session.commit()
+
+    return redirect(url_for("tasks.index"))
+```
+
+### O ponto mais importante: autorização por proprietário
+
+Observe a consulta:
+
+```
+select(Task).where(
+    Task.id == task_id,
+    Task.user_id == current_user.id,
+)
+```
+
+Ela não procura apenas a tarefa pelo identificador. Também exige que ela pertença ao usuário autenticado.
+
+Isso impede que uma pessoa tente alterar ou excluir tarefas de outra pessoa simplesmente modificando o ID na URL.
+
+O decorador `@login_required` exige autenticação, mas **não garante, sozinho, que o usuário tenha permissão sobre cada registro**. A aplicação deve verificar a propriedade ou a autorização necessária em cada operação.
+
+### Template das tarefas
+
+No arquivo `app/templates/tasks/index.html`:
+
+```
+{% extends "base.html" %}
+
+{% block title %}Minhas tarefas{% endblock %}
+
+{% block content %}
+<h1>Minhas tarefas</h1>
+
+<form method="post">
+    <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ csrf_token() }}"
+    >
+
+    <label for="title">Nova tarefa</label>
+    <input id="title" name="title" maxlength="200" required>
+
+    <button type="submit">Adicionar</button>
+</form>
+
+<ul>
+    {% for task in tasks %}
+        <li>
+            {% if task.completed %}
+                <s>{{ task.title }}</s>
+            {% else %}
+                {{ task.title }}
+            {% endif %}
+
+            <form method="post"
+                  action="{{ url_for('tasks.complete', task_id=task.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit">
+                    {% if task.completed %}Reabrir{% else %}Concluir{% endif %}
+                </button>
+            </form>
+
+            <form method="post"
+                  action="{{ url_for('tasks.delete', task_id=task.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit">Excluir</button>
+            </form>
+        </li>
+    {% else %}
+        <li>Você ainda não tem tarefas.</li>
+    {% endfor %}
+</ul>
+
+<form method="post" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">Sair</button>
+</form>
+{% endblock %}
+```
+
+O atributo `required` no HTML melhora a experiência no navegador, mas a validação no servidor continua necessária, pois os dados enviados pelo cliente podem ser modificados.
+
+## 13. Criando uma API JSON
+
+Uma API permite que outros programas interajam com a aplicação sem depender da interface HTML.
+
+No arquivo `app/api/__init__.py`, prepare o pacote. Em `app/api/routes.py`:
+
+```
+from flask import Blueprint, jsonify
+from flask_login import current_user, login_required
+from sqlalchemy import select
+
+from app.extensions import db
+from app.models import Task
+
+api_bp = Blueprint("api", __name__)
+
+
+@api_bp.route("/tasks", methods=["GET"])
+@login_required
+def list_tasks():
+    tasks = db.session.scalars(
+        select(Task)
+        .where(Task.user_id == current_user.id)
+        .order_by(Task.id.desc())
+    ).all()
+
+    return jsonify([
+        {
+            "id": task.id,
+            "title": task.title,
+            "completed": task.completed,
+        }
+        for task in tasks
+    ])
+```
+
+A rota `GET /api/tasks` retorna as tarefas do usuário autenticado em JSON.
+
+Exemplo de resposta:
+
+```
+[
+  {
+    "id": 3,
+    "title": "Estudar Flask",
+    "completed": false
+  },
+  {
+    "id": 2,
+    "title": "Praticar SQLAlchemy",
+    "completed": true
+  }
+]
+```
+
+A API reaproveita o mesmo banco e as mesmas regras de propriedade das tarefas.
+
+**Observação sobre autenticação:** esse exemplo utiliza a sessão do Flask-Login. Ele não é, por si só, uma API de autenticação por token para clientes externos. Para esse cenário, seria necessário definir um mecanismo próprio de autenticação, autorização e proteção contra abuso. Em requisições autenticadas por cookie, mantenha uma estratégia CSRF apropriada para as operações que modificam dados.
+
+## 14. Criando o ponto de entrada
+
+No arquivo `run.py`:
+
+```
+from app import create_app
+
+app = create_app()
+```
+
+Para iniciar localmente, com a variável `SECRET_KEY` configurada:
+
+```
+flask --app run run --debug
+```
+
+O modo de depuração deve ser usado apenas durante o desenvolvimento. Não o habilite em produção.
+
+Antes de executar a aplicação pela primeira vez, configure o esquema do banco. Para um exercício inicial, é possível criar as tabelas explicitamente em um contexto da aplicação:
+
+```
+from app import create_app
+from app.extensions import db
+from app import models
+
+app = create_app()
+
+with app.app_context():
+    db.create_all()
+```
+
+Esse trecho pode ser executado uma única vez em um script separado de inicialização. O `import models` garante que os modelos sejam carregados antes da criação das tabelas.
+
+`db.create_all()` cria tabelas ausentes, mas não atualiza automaticamente a estrutura de tabelas existentes quando os modelos mudam. Para evoluir o banco sem recriá-lo, utilize Flask-Migrate e Alembic.
+
+## 15. Testando a aplicação com pytest
+
+Os testes verificam se a aplicação se comporta como esperado e ajudam a detectar regressões quando o código é alterado.
+
+Crie `tests/conftest.py`:
+
+```
+import pytest
+
+from app import create_app
+from app.extensions import db
+
+
+@pytest.fixture
+def app():
+    app = create_app({
+        "TESTING": True,
+        "SECRET_KEY": "chave-exclusiva-dos-testes",
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "WTF_CSRF_ENABLED": False,
+    })
+
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+```
+
+### Entendendo as fixtures
+
+- `app`: cria uma aplicação configurada para testes.
+    
+- `TESTING=True`: ativa o modo de teste.
+    
+- `sqlite://`: utiliza um banco SQLite em memória para esse exemplo.
+    
+- `WTF_CSRF_ENABLED=False`: simplifica os testes HTTP apresentados aqui.
+    
+- `db.create_all()`: cria as tabelas antes dos testes.
+    
+- `db.drop_all()`: remove as tabelas ao terminar.
+    
+
+Desativar CSRF nesse contexto é uma conveniência para testes específicos, não uma recomendação para produção. Também é importante criar testes próprios que confirmem o funcionamento da proteção CSRF.
+
+Crie `tests/test_auth.py`:
+
+```
+def test_login_page_returns_success(client):
+    response = client.get("/auth/login")
+
+    assert response.status_code == 200
+    assert b"Entrar" in response.data
+```
+
+Esse teste verifica se a página de login é acessível e retorna HTTP 200.
+
+Execute:
+
+```
+pytest -v
+```
+
+### Próximos testes necessários
+
+Depois do primeiro teste, amplie a cobertura para verificar:
+
+- Cadastro com dados válidos.
+    
+- Rejeição de nomes de usuário duplicados.
+    
+- Login com credenciais corretas e incorretas.
+    
+- Redirecionamento de usuários não autenticados.
+    
+- Criação e conclusão de tarefas.
+    
+- Impossibilidade de acessar tarefas de outro usuário.
+    
+- Proteção CSRF nos formulários.
+    
+- Respostas e permissões dos endpoints da API.
+    
+
+Não basta testar apenas se uma página abre. Em uma aplicação com usuários e dados privados, os testes de autorização são especialmente importantes.
+
+## 16. Preparando o projeto para produção
+
+Antes de publicar a aplicação:
+
+1. Configure uma `SECRET_KEY` forte fora do código-fonte.
+    
+2. Desative o modo de depuração.
+    
+3. Use um servidor WSGI de produção, como Gunicorn, em vez do servidor de desenvolvimento do Flask.
+    
+4. Configure corretamente o banco de dados e as migrações.
+    
+5. Habilite HTTPS no ambiente de implantação.
+    
+6. Revise cookies, sessões, CSRF e permissões.
+    
+7. Configure logs e monitoramento de erros.
+    
+8. Execute os testes automatizados antes de cada implantação.
+    
+9. Não exponha arquivos `.env`, bancos locais ou credenciais no repositório.
+    
+10. Verifique se as consultas sempre respeitam as permissões do usuário autenticado.
+    
+
+O comando utilizado para executar a aplicação em produção depende da forma como o ambiente é configurado. Por exemplo, Gunicorn pode importar o objeto `app` definido em `run.py`, mas o processo deve receber as variáveis de ambiente e as configurações de rede apropriadas.
+
+## 17. Como os componentes se conectam
+
+O fluxo de uma operação típica pode ser representado assim:
+
+```
+Navegador
+   |
+   | Requisição HTTP
+   v
+Blueprint / Rota
+   |
+   | Verifica autenticação e autorização
+   v
+Validação dos dados
+   |
+   v
+Modelo SQLAlchemy
+   |
+   | Consulta ou alteração
+   v
+Banco de dados
+   |
+   | Resultado
+   v
+Template HTML ou resposta JSON
+   |
+   v
+Navegador ou cliente da API
+```
+
+Cada camada possui uma responsabilidade específica:
+
+- **Rota:** recebe a requisição e coordena a operação.
+    
+- **Formulário e validação:** verificam os dados enviados.
+    
+- **Autenticação e autorização:** determinam quem está acessando e o que pode fazer.
+    
+- **Modelo:** representa os dados e seus relacionamentos.
+    
+- **Banco:** persiste os registros.
+    
+- **Template ou JSON:** apresenta ou disponibiliza o resultado.
+    
+- **Testes:** verificam se os fluxos funcionam e se as regras de segurança são respeitadas.
+    
+
+Essa separação torna a aplicação mais fácil de entender, testar, manter e ampliar.

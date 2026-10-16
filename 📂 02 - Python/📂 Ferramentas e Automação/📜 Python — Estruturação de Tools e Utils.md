@@ -2793,3 +2793,4 @@ Essa arquitetura também permite que operações de análise estática, leitura 
 
 O objetivo não é criar a maior quantidade possível de módulos, e sim manter cada responsabilidade clara, testável e fácil de modificar.
 
+---

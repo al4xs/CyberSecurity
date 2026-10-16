@@ -4560,3 +4560,518 @@ A ordem exata pode variar conforme a extensão, mas carregar as configurações 
 - Não transforme silenciosamente uma operação malsucedida em uma resposta de sucesso.
 
 ---
+## 10. Segurança Web no Flask
+
+Segurança web é o conjunto de práticas utilizadas para proteger uma aplicação, seus usuários, seus dados e seus recursos contra acessos indevidos e entradas maliciosas.
+
+O Flask oferece mecanismos úteis de segurança, mas não torna uma aplicação segura automaticamente. O desenvolvedor precisa compreender como as requisições são processadas, como os dados são armazenados e quais operações cada usuário pode executar.
+
+Neste módulo, vamos estudar os principais riscos encontrados em aplicações Flask e como reduzi-los.
+
+### 10.1. Os princípios básicos da segurança web
+
+Antes de analisar vulnerabilidades específicas, é importante compreender alguns princípios.
+
+**Validação de entrada:** os dados recebidos do usuário precisam ser verificados antes de serem utilizados.
+
+**Autorização:** mesmo que um usuário esteja autenticado, ele só deve acessar os recursos para os quais possui permissão.
+
+**Confidencialidade:** senhas, tokens e outras informações sensíveis não devem ser expostos indevidamente.
+
+**Integridade:** a aplicação deve impedir alterações não autorizadas nos dados.
+
+**Privilégio mínimo:** cada usuário e componente deve possuir apenas as permissões necessárias para executar suas funções.
+
+Esses princípios se aplicam tanto a aplicações pequenas quanto a sistemas com banco de dados, APIs e múltiplos níveis de acesso.
+
+### 10.2. SQL Injection
+
+SQL Injection ocorre quando dados controlados pelo usuário são incorporados de maneira insegura a uma consulta SQL, permitindo que a estrutura da consulta seja alterada.
+
+Considere um exemplo inseguro:
+
+```
+query = (
+    "SELECT * FROM usuarios "
+    f"WHERE email = '{email}'"
+)
+```
+
+Se `email` contiver caracteres especiais ou fragmentos de SQL, a consulta final poderá ter um significado diferente do pretendido.
+
+O problema não é simplesmente receber caracteres especiais. O problema é misturar dados externos diretamente com a estrutura do comando SQL.
+
+#### Utilizando parâmetros
+
+Uma maneira adequada de evitar essa situação é utilizar consultas parametrizadas.
+
+Exemplo com SQLite:
+
+```
+import sqlite3
+
+conexao = sqlite3.connect("app.db")
+
+email = "usuario@exemplo.com"
+
+cursor = conexao.execute(
+    "SELECT id, email FROM usuarios WHERE email = ?",
+    (email,),
+)
+
+usuarios = cursor.fetchall()
+```
+
+O `?` representa um parâmetro da consulta. O valor de `email` é fornecido separadamente, permitindo que o driver trate o conteúdo como dado, e não como parte da estrutura SQL.
+
+A sintaxe dos marcadores depende do driver utilizado. Outros bancos de dados podem utilizar formatos diferentes.
+
+#### Utilizando Flask-SQLAlchemy
+
+Em uma aplicação que utiliza SQLAlchemy, prefira as operações da ORM ou consultas parametrizadas.
+
+```
+usuario = db.session.execute(
+    db.select(Usuario).where(Usuario.email == email)
+).scalar_one_or_none()
+```
+
+Nesse exemplo:
+
+- `db.select(Usuario)` constrói uma consulta para o modelo `Usuario`.
+    
+- `.where(Usuario.email == email)` define a condição.
+    
+- `scalar_one_or_none()` retorna um resultado ou `None` quando nenhum registro corresponde à consulta.
+    
+
+O exemplo pressupõe que `db` seja a instância configurada do SQLAlchemy e `Usuario` seja um modelo existente.
+
+**Boa prática:** não construa consultas SQL por concatenação de strings com dados externos.
+
+### 10.3. XSS — Cross-Site Scripting
+
+XSS ocorre quando conteúdo controlado por um usuário é interpretado pelo navegador como código executável, geralmente JavaScript.
+
+Imagine uma aplicação que recebe o nome de uma pessoa e o exibe em uma página. Se a aplicação inserir o valor diretamente no HTML sem tratamento adequado, um conteúdo malicioso poderá ser interpretado pelo navegador.
+
+#### Exibição segura com Jinja
+
+O Flask utiliza Jinja como mecanismo de templates. Em arquivos HTML, a saída de expressões normalmente é escapada automaticamente.
+
+```
+<p>Olá, {{ nome }}!</p>
+```
+
+Se `nome` contiver conteúdo semelhante a uma tag HTML, o escape automático de Jinja impede que esse conteúdo seja interpretado como marcação executável no contexto HTML comum.
+
+Por exemplo, uma entrada contendo uma tag de script tende a ser exibida como texto escapado, em vez de ser executada.
+
+Esse comportamento depende do contexto e da configuração do template. Não significa que todo tipo de saída seja automaticamente seguro.
+
+#### Evite desativar o escape sem necessidade
+
+O filtro `safe` informa ao Jinja que a saída deve ser tratada como HTML confiável:
+
+```
+{{ conteudo | safe }}
+```
+
+Isso pode introduzir uma vulnerabilidade se `conteudo` tiver sido fornecido por um usuário ou vier de uma fonte não confiável.
+
+Use `safe` apenas quando tiver certeza de que o conteúdo foi construído ou sanitizado de maneira apropriada para o contexto HTML.
+
+**Regra prática:** não transforme entrada de usuário em HTML confiável apenas porque ela precisa aparecer na página.
+
+### 10.4. CSRF — Cross-Site Request Forgery
+
+CSRF é um ataque no qual um navegador autenticado é induzido a enviar uma requisição não desejada para uma aplicação em que o usuário já possui uma sessão válida.
+
+Por exemplo, imagine uma aplicação em que um formulário permite alterar o endereço de e-mail de uma conta. Se a operação depender apenas do cookie de sessão, um site externo pode tentar induzir o navegador a enviar uma requisição usando essa sessão.
+
+O problema é que o navegador pode incluir automaticamente cookies associados ao site de destino.
+
+#### Proteção com Flask-WTF
+
+Uma solução comum em aplicações Flask que utilizam formulários HTML é a extensão Flask-WTF, que oferece proteção CSRF.
+
+Instalação:
+
+```
+pip install Flask-WTF
+```
+
+Configuração:
+
+```
+from flask import Flask
+from flask_wtf.csrf import CSRFProtect
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "substitua-por-uma-chave-segura"
+
+csrf = CSRFProtect(app)
+```
+
+A chave literal é apenas ilustrativa. Em um projeto real, carregue-a de uma variável de ambiente, conforme estudado no módulo anterior.
+
+Com a proteção CSRF habilitada, as requisições modificadoras de estado precisam fornecer um token válido, conforme as regras da extensão.
+
+Em formulários renderizados pelo Flask-WTF:
+
+```
+<form method="POST">
+    {{ form.hidden_tag() }}
+
+    {{ form.email.label }}
+    {{ form.email() }}
+
+    <button type="submit">Salvar</button>
+</form>
+```
+
+`hidden_tag()` inclui os campos ocultos necessários ao formulário, incluindo o token CSRF quando a proteção está configurada.
+
+Em formulários HTML comuns, sem uma classe de formulário Flask-WTF, é necessário inserir o token CSRF de acordo com a configuração adotada.
+
+Não desative a proteção CSRF indiscriminadamente para fazer um formulário funcionar. Investigue por que o token está ausente ou inválido.
+
+### 10.5. Autenticação não é autorização
+
+Esses conceitos são relacionados, mas diferentes.
+
+**Autenticação** responde: quem é você?
+
+**Autorização** responde: o que você pode fazer?
+
+Uma aplicação pode autenticar corretamente um usuário e ainda apresentar uma falha de autorização caso permita que ele acesse dados de outras pessoas.
+
+Considere uma rota:
+
+```
+@app.route("/documentos/<int:documento_id>")
+@login_required
+def visualizar_documento(documento_id):
+    documento = db.session.get(Documento, documento_id)
+
+    if documento is None:
+        abort(404)
+
+    return render_template(
+        "documentos/detalhe.html",
+        documento=documento,
+    )
+```
+
+O decorador `@login_required` exige autenticação, mas **não verifica se o documento pertence ao usuário atual**.
+
+Se a aplicação não realizar essa verificação, um usuário autenticado poderá tentar alterar o identificador na URL para acessar documentos de outras pessoas.
+
+Uma verificação adicional pode ser necessária:
+
+```
+if documento.usuario_id != current_user.id:
+    abort(403)
+```
+
+Esse trecho pressupõe que o modelo `Documento` tenha o campo `usuario_id` e que o usuário autenticado seja representado por `current_user`.
+
+A regra correta depende do sistema: documentos compartilhados, administradores e usuários com permissões especiais podem precisar de políticas diferentes.
+
+O importante é verificar a autorização no servidor, a cada operação protegida. Esconder um botão no HTML não substitui essa verificação.
+
+### 10.6. IDOR e acesso a objetos
+
+IDOR, sigla de _Insecure Direct Object Reference_, descreve uma situação em que uma aplicação permite acessar um objeto sem verificar adequadamente se o usuário possui autorização.
+
+A vulnerabilidade pode aparecer quando o sistema utiliza identificadores previsíveis em URLs, formulários ou APIs.
+
+Exemplo conceitual:
+
+```
+/documentos/100
+/documentos/101
+/documentos/102
+```
+
+Um identificador numérico não é, por si só, uma vulnerabilidade. O problema aparece quando a aplicação confia no identificador recebido sem validar as permissões de acesso.
+
+Uma estratégia é buscar o objeto já considerando o usuário autorizado:
+
+```
+documento = db.session.execute(
+    db.select(Documento).where(
+        Documento.id == documento_id,
+        Documento.usuario_id == current_user.id,
+    )
+).scalar_one_or_none()
+
+if documento is None:
+    abort(404)
+```
+
+Essa consulta pressupõe que `Documento` possua os campos `id` e `usuario_id`.
+
+Ao limitar a consulta aos documentos do usuário, o código evita retornar diretamente um registro pertencente a outra pessoa. Dependendo dos requisitos do sistema, a aplicação pode optar por responder `403` ou `404` para objetos sem acesso.
+
+**Importante:** a autorização deve ser aplicada a todas as operações relevantes, incluindo visualizar, editar, excluir, exportar e baixar arquivos.
+
+### 10.7. Senhas e armazenamento seguro
+
+Senhas não devem ser armazenadas em texto puro no banco de dados.
+
+Se o banco for exposto, o armazenamento em texto puro revela diretamente as credenciais dos usuários.
+
+Uma alternativa é armazenar hashes de senha gerados por algoritmos apropriados para senhas, como os disponibilizados por Werkzeug.
+
+```
+from werkzeug.security import generate_password_hash
+
+senha = "senha-fornecida-pelo-usuario"
+
+hash_senha = generate_password_hash(senha)
+```
+
+Para verificar a senha durante o login:
+
+```
+from werkzeug.security import check_password_hash
+
+senha_valida = check_password_hash(
+    hash_senha,
+    senha_informada,
+)
+```
+
+`generate_password_hash()` produz um hash apropriado para armazenar a senha. `check_password_hash()` compara a senha fornecida com o hash armazenado.
+
+A verificação retorna um valor booleano que pode ser utilizado no fluxo de autenticação.
+
+Não compare a senha recebida diretamente com o hash, porque o processo de geração inclui mecanismos como salt e parâmetros de derivação que tornam a comparação direta inadequada.
+
+Também não utilize criptografia reversível como substituto de hashing de senhas. A aplicação normalmente precisa verificar uma senha, não recuperar seu texto original.
+
+### 10.8. Cookies de sessão
+
+O Flask oferece sessões para manter dados associados a um usuário entre requisições.
+
+```
+from flask import session
+
+session["tema"] = "escuro"
+```
+
+Esse exemplo armazena uma preferência simples na sessão.
+
+Na configuração padrão do Flask, os dados da sessão são armazenados em um cookie assinado pelo servidor. A assinatura ajuda a detectar alterações não autorizadas, mas **não torna o conteúdo secreto**.
+
+Não armazene senhas, tokens privados ou informações confidenciais diretamente na sessão padrão.
+
+Algumas configurações importantes:
+
+```
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+```
+
+- `SESSION_COOKIE_HTTPONLY=True`: impede o acesso ao cookie por JavaScript comum.
+    
+- `SESSION_COOKIE_SECURE=True`: restringe o envio do cookie a conexões HTTPS.
+    
+- `SESSION_COOKIE_SAMESITE="Lax"`: aplica uma política que restringe parte do envio de cookies em contextos entre sites.
+    
+
+Em desenvolvimento local sem HTTPS, `SESSION_COOKIE_SECURE=True` pode impedir que o navegador envie o cookie por HTTP. Configure os ambientes de acordo com a forma de execução e mantenha a proteção adequada em produção.
+
+Essas opções ajudam a reduzir riscos, mas não substituem a proteção contra XSS, CSRF e falhas de autorização.
+
+### 10.9. Validação de dados
+
+Toda entrada externa deve ser tratada como não confiável até que seja validada.
+
+As entradas podem vir de:
+
+- Parâmetros de URL.
+    
+- Query strings.
+    
+- Formulários.
+    
+- JSON enviado a uma API.
+    
+- Cabeçalhos HTTP.
+    
+- Cookies.
+    
+- Arquivos enviados pelo usuário.
+    
+- Serviços externos.
+    
+
+Considere uma rota que recebe uma quantidade:
+
+```
+from flask import request, abort
+
+@app.route("/comprar", methods=["POST"])
+def comprar():
+    quantidade_texto = request.form.get("quantidade", "")
+
+    try:
+        quantidade = int(quantidade_texto)
+    except ValueError:
+        abort(400)
+
+    if quantidade < 1 or quantidade > 100:
+        abort(400)
+
+    return f"Quantidade solicitada: {quantidade}"
+```
+
+O código:
+
+1. Obtém o valor enviado pelo formulário.
+    
+2. Tenta convertê-lo para inteiro.
+    
+3. Responde com `400` se a conversão falhar.
+    
+4. Verifica se o valor está dentro do intervalo permitido.
+    
+
+A validação deve corresponder às regras reais do negócio. Verificar apenas o tipo de um dado não garante que ele seja permitido.
+
+Por exemplo, uma quantidade pode ser um inteiro válido e ainda exceder o limite aceito pela aplicação.
+
+### 10.10. Upload de arquivos
+
+Uploads exigem cuidado porque arquivos recebidos de usuários podem conter conteúdo malicioso, ser excessivamente grandes ou tentar sobrescrever arquivos existentes.
+
+Medidas importantes incluem:
+
+- Limitar o tamanho da requisição.
+    
+- Validar extensões e tipos de arquivo permitidos.
+    
+- Não confiar apenas no nome ou no `Content-Type` fornecido pelo navegador.
+    
+- Gerar nomes de armazenamento controlados pela aplicação.
+    
+- Evitar salvar arquivos em locais onde possam ser executados diretamente.
+    
+- Aplicar autorização ao upload e ao download.
+    
+- Considerar análise adicional dos arquivos, conforme o risco do sistema.
+    
+
+O Flask oferece `secure_filename()` por meio de Werkzeug para reduzir problemas com nomes de arquivos:
+
+```
+from werkzeug.utils import secure_filename
+
+nome_seguro = secure_filename(
+    arquivo.filename or ""
+)
+```
+
+Isso ajuda a normalizar o nome, mas **não valida o conteúdo do arquivo nem garante que ele seja seguro**.
+
+Para arquivos sensíveis, considere armazenar os arquivos fora do diretório público da aplicação e disponibilizá-los por uma rota que verifique as permissões do usuário.
+
+### 10.11. Proteção contra exposição de informações
+
+Mensagens de erro detalhadas são úteis durante o desenvolvimento, mas podem revelar informações internas se forem expostas publicamente.
+
+Evite apresentar ao usuário:
+
+- Tracebacks completos.
+    
+- Caminhos internos do servidor.
+    
+- Strings de conexão com o banco de dados.
+    
+- Chaves secretas.
+    
+- Tokens de autenticação.
+    
+- Detalhes da infraestrutura.
+    
+
+Em vez disso, apresente uma mensagem genérica e registre os detalhes técnicos em logs protegidos.
+
+Também não coloque segredos em arquivos versionados, mensagens de erro, respostas de API ou logs de depuração.
+
+### 10.12. HTTPS e comunicação segura
+
+HTTPS protege a comunicação entre o cliente e o servidor usando TLS.
+
+Sem HTTPS, informações transmitidas pela rede podem ficar expostas a quem consiga observar ou modificar o tráfego.
+
+Em produção:
+
+- Configure um certificado TLS válido.
+    
+- Utilize HTTPS para páginas, formulários e APIs.
+    
+- Configure cookies de sessão para serem enviados somente por HTTPS.
+    
+- Evite transmitir credenciais por conexões não criptografadas.
+    
+- Se houver um proxy reverso, configure corretamente a comunicação entre o proxy e a aplicação.
+    
+
+A configuração do Flask não substitui a configuração TLS do servidor web, proxy ou plataforma de hospedagem.
+
+### 10.13. CORS não é um mecanismo de autenticação
+
+CORS, sigla de _Cross-Origin Resource Sharing_, é um mecanismo do navegador que controla como páginas de uma origem podem acessar recursos de outra origem.
+
+Ele é relevante principalmente para aplicações que disponibilizam APIs consumidas por páginas web em outros domínios.
+
+Permitir uma origem no CORS não comprova a identidade do cliente e não substitui autenticação ou autorização.
+
+Da mesma forma, restringir CORS não protege automaticamente todos os tipos de clientes. Ferramentas de linha de comando e outros programas podem fazer requisições sem aplicar as mesmas restrições de navegador.
+
+Configure CORS de acordo com as origens realmente necessárias, evitando permissões amplas sem justificativa.
+
+### 10.14. Checklist de segurança para uma aplicação Flask
+
+Antes de disponibilizar uma aplicação publicamente, verifique os seguintes pontos:
+
+- O modo de depuração não está exposto em produção.
+    
+- A `SECRET_KEY` é forte, estável e mantida fora do código versionado.
+    
+- Consultas ao banco de dados utilizam parâmetros ou recursos seguros da ORM.
+    
+- Templates escapam corretamente conteúdo não confiável.
+    
+- A aplicação não utiliza `safe` indiscriminadamente.
+    
+- Formulários que modificam dados estão protegidos contra CSRF quando aplicável.
+    
+- As rotas verificam autenticação e autorização no servidor.
+    
+- As senhas são armazenadas usando hashes apropriados.
+    
+- Os cookies de sessão possuem configurações adequadas ao ambiente.
+    
+- Entradas externas são validadas conforme as regras do negócio.
+    
+- Uploads têm limites, validações e armazenamento apropriado.
+    
+- Respostas públicas não revelam detalhes internos.
+    
+- Logs não armazenam senhas, tokens ou outros segredos.
+    
+- A comunicação externa utiliza HTTPS.
+    
+- As dependências são mantidas atualizadas e avaliadas quanto a vulnerabilidades.
+    
+
+Essas medidas reduzem riscos comuns, mas a segurança também depende da arquitetura, das permissões do banco de dados, da infraestrutura e das regras específicas de cada aplicação.
+
+---

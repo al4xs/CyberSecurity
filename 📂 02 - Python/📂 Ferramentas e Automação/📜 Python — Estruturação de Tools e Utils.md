@@ -1385,3 +1385,830 @@ Tokens e senhas não devem ser armazenados diretamente no código-fonte ou no `p
 A estrutura deve refletir as responsabilidades reais do projeto, não uma lista obrigatória de arquivos.
 
 ---
+# 📜 Python — Configuração, Variáveis de Ambiente e Logging
+
+## 1. Por que separar a configuração do código?
+
+Imagine uma ferramenta Python que consulta uma API, salva relatórios e registra erros.
+
+No início, é comum encontrar valores diretamente no código:
+
+```
+API_URL = "https://api.exemplo.com"
+TIMEOUT = 10
+MAX_RETRIES = 3
+```
+
+Essa abordagem pode funcionar em um projeto pequeno. Porém, conforme o programa cresce, as configurações podem ficar espalhadas por vários módulos.
+
+Isso dificulta:
+
+- Alterar valores sem procurar em vários arquivos.
+    
+- Utilizar configurações diferentes em ambientes distintos.
+    
+- Proteger credenciais e tokens.
+    
+- Testar o programa com configurações controladas.
+    
+- Entender por que uma execução falhou.
+    
+
+Uma solução é separar três responsabilidades:
+
+|Recurso|Responsabilidade|
+|---|---|
+|Arquivo de configuração|Organizar valores e opções do programa.|
+|Variáveis de ambiente|Permitir configurar o processo sem alterar o código.|
+|Logging|Registrar eventos, avisos e erros durante a execução.|
+
+Esses recursos são complementares. Uma variável de ambiente não é automaticamente um segredo protegido, e um log não deve conter indiscriminadamente tudo o que o programa recebe.
+
+## 2. Configurações fixas no código
+
+Valores constantes podem ficar em um módulo como `config.py`.
+
+```
+API_URL = "https://api.exemplo.com"
+TIMEOUT = 10
+MAX_RETRIES = 3
+```
+
+### Entendendo cada linha
+
+- `API_URL`: endereço-base utilizado pelo cliente HTTP.
+    
+- `TIMEOUT`: tempo de espera configurado para as requisições, normalmente em segundos quando passado ao Requests.
+    
+- `MAX_RETRIES`: quantidade de tentativas adicionais ou limite de repetição definido pela implementação que utilizar essa configuração.
+    
+
+A última constante exige atenção: o significado exato de `MAX_RETRIES` depende de como o código implementa as tentativas. É importante documentar se o número representa tentativas totais ou tentativas adicionais.
+
+Em outro módulo, as constantes podem ser importadas:
+
+```
+from config import API_URL, TIMEOUT
+
+print(API_URL)
+print(TIMEOUT)
+```
+
+Essa organização centraliza os valores, mas não é suficiente para configurações que precisam variar entre máquinas ou ambientes.
+
+## 3. Variáveis de ambiente
+
+Uma variável de ambiente é um valor disponibilizado pelo sistema operacional ao processo.
+
+Ela pode representar, por exemplo:
+
+- O endereço de uma API.
+    
+- Um diretório de saída.
+    
+- O nível de logging.
+    
+- Um token de autenticação.
+    
+- O modo de execução, como desenvolvimento ou produção.
+    
+
+No Python, o módulo `os` permite acessar essas variáveis.
+
+```
+import os
+
+api_url = os.environ.get("API_URL")
+```
+
+### O que significa cada parte?
+
+- `import os`: importa o módulo da biblioteca padrão responsável por funcionalidades relacionadas ao sistema operacional.
+    
+- `os.environ`: disponibiliza o mapeamento das variáveis de ambiente do processo.
+    
+- `.get("API_URL")`: consulta a variável `API_URL` e retorna seu valor, ou `None` se ela não existir.
+    
+
+Exemplo no terminal Linux:
+
+```
+export API_URL="https://api.exemplo.com"
+python main.py
+```
+
+O comando `export` disponibiliza a variável para os processos iniciados a partir daquele shell.
+
+O valor não é gravado automaticamente no código Python. Ele é fornecido pelo ambiente de execução.
+
+### 3.1. Utilizando um valor padrão
+
+É possível definir um valor padrão quando a variável não estiver configurada:
+
+```
+import os
+
+api_url = os.environ.get(
+    "API_URL",
+    "https://api.exemplo.com",
+)
+```
+
+O segundo argumento de `.get()` é o valor retornado quando a variável não existe.
+
+Isso é útil para configurações opcionais, como um endpoint público de demonstração. Para credenciais obrigatórias, usar um valor padrão fictício pode mascarar erros de configuração.
+
+### 3.2. Diferença entre `os.environ.get()` e `os.environ[]`
+
+Com `.get()`:
+
+```
+import os
+
+token = os.environ.get("API_TOKEN")
+```
+
+Se `API_TOKEN` não existir, `token` receberá `None`.
+
+Com acesso por chave:
+
+```
+import os
+
+token = os.environ["API_TOKEN"]
+```
+
+Se a variável não existir, o Python lançará `KeyError`.
+
+A escolha depende do comportamento desejado:
+
+- Use `.get()` quando a ausência for aceitável ou será verificada explicitamente.
+    
+- Use `os.environ["NOME"]` quando a variável for obrigatória e sua ausência deva provocar uma falha imediata.
+    
+
+## 4. Convertendo variáveis de ambiente para os tipos corretos
+
+Variáveis de ambiente são recebidas como texto. Mesmo quando representam números ou valores booleanos, o Python não converte automaticamente o conteúdo para o tipo desejado.
+
+Considere:
+
+```
+export REQUEST_TIMEOUT="15"
+```
+
+Ao executar:
+
+```
+import os
+
+timeout = os.environ.get("REQUEST_TIMEOUT")
+print(type(timeout))
+```
+
+O resultado será:
+
+```
+<class 'str'>
+```
+
+Para converter o valor para um número:
+
+```
+import os
+
+timeout = float(os.environ.get("REQUEST_TIMEOUT", "5"))
+```
+
+Agora, `timeout` será um `float`.
+
+A conversão pode falhar se a variável contiver um valor inválido, como `"abc"`. Por isso, configurações externas devem ser validadas.
+
+### 4.1. Validando uma configuração numérica
+
+```
+import os
+
+
+def obter_timeout():
+    valor = os.environ.get("REQUEST_TIMEOUT", "5")
+
+    try:
+        timeout = float(valor)
+    except ValueError as exc:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser um número."
+        ) from exc
+
+    if timeout <= 0:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser maior que zero."
+        )
+
+    return timeout
+```
+
+A função executa quatro etapas:
+
+1. Lê a variável de ambiente.
+    
+2. Utiliza `"5"` como padrão quando ela não existe.
+    
+3. Converte o texto para `float`.
+    
+4. Rejeita valores menores ou iguais a zero.
+    
+
+O `except ValueError` trata a falha de conversão. O `raise ... from exc` apresenta uma mensagem mais clara e preserva a exceção original como causa.
+
+A função retorna o número validado, em vez de devolver diretamente o texto recebido do ambiente.
+
+## 5. Criando um módulo central de configuração
+
+Em um projeto com vários módulos, é útil concentrar a leitura e a validação das configurações.
+
+Estrutura:
+
+```
+minha_ferramenta/
+├── main.py
+├── config.py
+├── api_client.py
+└── utilidades.py
+```
+
+Arquivo `config.py`:
+
+```
+import os
+
+
+def carregar_configuracao():
+    api_url = os.environ.get(
+        "API_URL",
+        "https://api.exemplo.com",
+    )
+
+    timeout_texto = os.environ.get(
+        "REQUEST_TIMEOUT",
+        "5",
+    )
+
+    try:
+        timeout = float(timeout_texto)
+    except ValueError as exc:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser numérico."
+        ) from exc
+
+    if timeout <= 0:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser maior que zero."
+        )
+
+    return {
+        "api_url": api_url.rstrip("/"),
+        "timeout": timeout,
+    }
+```
+
+### Por que utilizar uma função?
+
+A função `carregar_configuracao()` agrupa a leitura e a validação das opções em um único ponto.
+
+O dicionário retornado contém as configurações já processadas:
+
+```
+{
+    "api_url": "https://api.exemplo.com",
+    "timeout": 5.0,
+}
+```
+
+O resultado exato depende das variáveis de ambiente presentes durante a execução.
+
+Em projetos maiores, esse dicionário pode ser substituído por uma classe ou por uma `dataclass`, permitindo tipagem e organização mais explícitas.
+
+### Utilizando a configuração
+
+Em `main.py`:
+
+```
+from config import carregar_configuracao
+
+
+def main():
+    config = carregar_configuracao()
+
+    print(config["api_url"])
+    print(config["timeout"])
+
+
+if __name__ == "__main__":
+    main()
+```
+
+O módulo principal não precisa conhecer os detalhes de leitura das variáveis de ambiente. Ele solicita a configuração pronta e utiliza os valores retornados.
+
+## 6. Segredos e credenciais
+
+Tokens, senhas e chaves de API devem ser tratados de maneira diferente de configurações comuns.
+
+Exemplo de leitura de um token:
+
+```
+import os
+
+token = os.environ.get("API_TOKEN")
+
+if not token:
+    raise RuntimeError(
+        "A variável de ambiente API_TOKEN não foi configurada."
+    )
+```
+
+A condição `if not token` verifica se o valor está ausente ou vazio.
+
+Para configurar o token temporariamente em um shell Linux:
+
+```
+export API_TOKEN="seu_token_de_teste"
+python main.py
+```
+
+Use apenas credenciais autorizadas. O texto mostrado é ilustrativo, não um token funcional.
+
+### Boas práticas para segredos
+
+- Não escreva tokens diretamente no código-fonte.
+    
+- Não os envie para repositórios Git.
+    
+- Não os imprima em mensagens de diagnóstico.
+    
+- Não os inclua em capturas de tela ou relatórios compartilhados.
+    
+- Limite as permissões das credenciais ao necessário.
+    
+- Revogue e substitua uma credencial caso ela seja exposta.
+    
+
+**Atenção:** variáveis de ambiente ajudam a separar segredos do código, mas não são um cofre de credenciais. Processos com permissões suficientes podem conseguir acessar seus valores. Em sistemas mais sensíveis, considere um gerenciador de segredos apropriado.
+
+## 7. Arquivos `.env`
+
+Durante o desenvolvimento, algumas pessoas utilizam um arquivo `.env` para manter configurações locais.
+
+Exemplo de conteúdo:
+
+```
+API_URL=https://api.exemplo.com
+REQUEST_TIMEOUT=5
+API_TOKEN=token_local_de_teste
+```
+
+Esse arquivo é texto simples. O Python não carrega arquivos `.env` automaticamente.
+
+Uma biblioteca popular para esse propósito é `python-dotenv`.
+
+Instalação:
+
+```
+python -m pip install python-dotenv
+```
+
+Utilização:
+
+```
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+api_url = os.environ.get("API_URL")
+```
+
+A chamada `load_dotenv()` procura um arquivo `.env` de acordo com as regras da biblioteca e carrega as variáveis encontradas no ambiente do processo, sem sobrescrever variáveis já existentes por padrão.
+
+Se o projeto utilizar `.env`, adicione-o ao `.gitignore`:
+
+```
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+```
+
+O `.gitignore` instrui o Git a ignorar esses caminhos quando aplicável. Ele não remove arquivos que já foram adicionados ao controle de versão; se um segredo já tiver sido enviado a um repositório, será necessário tratar a exposição e substituir a credencial.
+
+Para projetos pequenos, variáveis de ambiente configuradas no shell podem ser suficientes. Não é necessário adicionar `python-dotenv` se o projeto não precisa desse recurso.
+
+## 8. O que é logging?
+
+Logging é o registro de eventos que acontecem durante a execução de um programa.
+
+Por exemplo, uma ferramenta pode precisar registrar:
+
+- Quando uma execução começa.
+    
+- Qual operação está sendo realizada.
+    
+- Quando uma resposta HTTP é recebida.
+    
+- Quando ocorre um timeout.
+    
+- Quando uma configuração está inválida.
+    
+- Quando uma operação termina com sucesso.
+    
+
+A biblioteca `logging` faz parte da biblioteca padrão do Python.
+
+Diferentemente de `print()`, ela oferece níveis de severidade, formatos configuráveis, timestamps e diferentes destinos para as mensagens.
+
+## 9. Os níveis de logging
+
+O módulo `logging` possui cinco níveis de uso comum:
+
+|Nível|Valor padrão|Quando utilizar|
+|---|---|---|
+|`DEBUG`|10|Informações detalhadas para investigação de problemas.|
+|`INFO`|20|Eventos normais da execução.|
+|`WARNING`|30|Situações inesperadas que não interromperam necessariamente o programa.|
+|`ERROR`|40|Falhas que impediram uma operação.|
+|`CRITICAL`|50|Falhas graves que podem comprometer a continuidade da aplicação.|
+
+Os números representam os valores de severidade usados pelo sistema de logging. Em geral, quanto maior o valor, maior a severidade.
+
+Exemplo:
+
+```
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+logging.debug("Detalhe técnico da execução.")
+logging.info("Programa iniciado.")
+logging.warning("A resposta demorou mais que o esperado.")
+logging.error("Não foi possível concluir a operação.")
+logging.critical("Falha grave na aplicação.")
+```
+
+O `basicConfig()` configura o sistema básico de logging. O parâmetro `level=logging.DEBUG` permite que todos os níveis listados sejam considerados para exibição, desde que não haja outra configuração ou filtro que os descarte.
+
+Se nenhum formato for definido, o logging utiliza um formato padrão.
+
+## 10. Configurando um formato de log
+
+Uma configuração mais informativa:
+
+```
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+```
+
+O parâmetro `format` define a composição de cada registro.
+
+|Campo|Significado|
+|---|---|
+|`%(asctime)s`|Data e hora do registro.|
+|`%(levelname)s`|Nome do nível, como `INFO` ou `ERROR`.|
+|`%(name)s`|Nome do logger que produziu a mensagem.|
+|`%(message)s`|Mensagem registrada.|
+
+Para registrar um evento:
+
+```
+logging.info("Consulta à API iniciada.")
+```
+
+A saída terá um formato semelhante a:
+
+```
+2026-10-16 10:00:00,000 | INFO | root | Consulta à API iniciada.
+```
+
+O horário é ilustrativo. A saída real depende do relógio do sistema e da configuração do logging.
+
+### Por que o nível é `INFO`?
+
+Com `level=logging.INFO`, os registros `INFO`, `WARNING`, `ERROR` e `CRITICAL` normalmente são aceitos. Os registros `DEBUG` são descartados pelo filtro de nível.
+
+Isso permite reduzir o volume de mensagens em execuções comuns e ativar mais detalhes quando necessário.
+
+## 11. Utilizando um logger por módulo
+
+Em projetos maiores, é comum criar um logger com o nome do módulo:
+
+```
+import logging
+
+logger = logging.getLogger(__name__)
+```
+
+A variável especial `__name__` contém o nome do módulo no contexto em que ele está sendo utilizado.
+
+Assim, um módulo chamado `api_client.py` pode produzir registros identificados por `api_client`, enquanto outro módulo pode utilizar seu próprio nome.
+
+Exemplo:
+
+```
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def consultar_api():
+    logger.info("Iniciando consulta.")
+```
+
+A função registra um evento sem precisar conhecer o formato global do log.
+
+**Importante:** `getLogger(__name__)` cria ou recupera um logger identificado por aquele nome. A configuração dos handlers, do formato e dos níveis pode ser feita centralmente pela aplicação principal.
+
+Isso evita que cada módulo configure o logging de maneira diferente.
+
+## 12. Registrando exceções corretamente
+
+Considere uma operação que pode falhar:
+
+```
+import logging
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+def consultar(url):
+    try:
+        response = requests.get(
+            url,
+            timeout=5,
+        )
+        response.raise_for_status()
+
+    except requests.exceptions.RequestException:
+        logger.exception("Falha ao consultar a API.")
+        raise
+
+    return response
+```
+
+### Entendendo o tratamento
+
+```
+except requests.exceptions.RequestException:
+```
+
+Captura exceções da família `RequestException`, que inclui diversas falhas de requisição da biblioteca Requests.
+
+```
+logger.exception("Falha ao consultar a API.")
+```
+
+Registra uma mensagem de erro e inclui informações do traceback da exceção atual. Por isso, deve ser chamado dentro do bloco `except`.
+
+```
+raise
+```
+
+Lança novamente a mesma exceção. Isso permite que a camada superior decida se deve apresentar uma mensagem ao usuário, encerrar a execução ou tentar outra estratégia.
+
+Esse padrão registra o erro sem escondê-lo.
+
+Evite capturar todas as exceções com `except Exception` quando não houver uma razão concreta. Capturas genéricas podem ocultar erros de programação que deveriam ser corrigidos.
+
+### Não registre dados sensíveis
+
+A mensagem acima não inclui o token, cookies ou cabeçalhos da requisição.
+
+Ao registrar erros HTTP, tenha cuidado com URLs que possam conter dados privados, parâmetros sensíveis ou informações pessoais. O traceback deve ajudar no diagnóstico sem expor segredos.
+
+## 13. Salvando logs em arquivo
+
+Para gravar mensagens em um arquivo:
+
+```
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    filename="app.log",
+    encoding="utf-8",
+)
+```
+
+O argumento `filename` define o arquivo de destino. O argumento `encoding="utf-8"` especifica a codificação utilizada para gravar os registros.
+
+Quando o logging é configurado para usar `filename`, as mensagens são enviadas ao arquivo em vez de serem exibidas pelo handler padrão do console.
+
+A opção `encoding` está disponível nas versões modernas do Python, incluindo Python 3.10.
+
+Para enviar mensagens tanto ao terminal quanto a um arquivo, é possível configurar handlers separados, por exemplo `StreamHandler` e `FileHandler`.
+
+Em ferramentas que executam muitas operações, considere também rotação de logs, retenção e permissões adequadas para evitar que o arquivo cresça indefinidamente ou exponha informações a usuários não autorizados.
+
+## 14. Exemplo integrado: configuração e logging
+
+Considere esta estrutura:
+
+```
+minha_ferramenta/
+├── main.py
+├── config.py
+└── api_client.py
+```
+
+Arquivo `config.py`:
+
+```
+import os
+
+
+def carregar_configuracao():
+    api_url = os.environ.get("API_URL")
+
+    if not api_url:
+        raise ValueError(
+            "Configure a variável de ambiente API_URL."
+        )
+
+    timeout_texto = os.environ.get(
+        "REQUEST_TIMEOUT",
+        "5",
+    )
+
+    try:
+        timeout = float(timeout_texto)
+    except ValueError as exc:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser numérico."
+        ) from exc
+
+    if timeout <= 0:
+        raise ValueError(
+            "REQUEST_TIMEOUT deve ser maior que zero."
+        )
+
+    return {
+        "api_url": api_url.rstrip("/"),
+        "timeout": timeout,
+    }
+```
+
+Arquivo `api_client.py`:
+
+```
+import logging
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+def consultar_status(api_url, timeout):
+    url = f"{api_url}/status"
+
+    logger.info("Consultando endpoint de status.")
+
+    response = requests.get(
+        url,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+
+    logger.info(
+        "Consulta concluída com status HTTP %s.",
+        response.status_code,
+    )
+
+    return response
+```
+
+O endpoint `/status` é ilustrativo: o servidor utilizado precisa implementá-lo.
+
+Observe esta linha:
+
+```
+logger.info(
+    "Consulta concluída com status HTTP %s.",
+    response.status_code,
+)
+```
+
+O logging aceita argumentos separados para interpolação da mensagem. Isso evita precisar construir manualmente a string antes de saber se o registro será emitido.
+
+Arquivo `main.py`:
+
+```
+import logging
+
+from config import carregar_configuracao
+from api_client import consultar_status
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+
+
+def main():
+    try:
+        config = carregar_configuracao()
+
+        consultar_status(
+            api_url=config["api_url"],
+            timeout=config["timeout"],
+        )
+
+    except ValueError as exc:
+        logging.error("Configuração inválida: %s", exc)
+
+    except Exception:
+        logging.exception("Falha inesperada na execução.")
+        raise
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Nesse exemplo:
+
+- `config.py` lê e valida as configurações.
+    
+- `api_client.py` realiza a operação HTTP.
+    
+- `main.py` configura o logging e coordena a execução.
+    
+
+A captura genérica do último bloco serve para registrar uma falha inesperada e relançá-la, sem fingir que a operação terminou com sucesso. Em uma aplicação real, é possível refinar as exceções tratadas conforme os requisitos.
+
+## 15. Executando no Linux
+
+Defina as variáveis:
+
+```
+export API_URL="https://api.exemplo.com"
+export REQUEST_TIMEOUT="5"
+```
+
+Execute:
+
+```
+python main.py
+```
+
+Para alterar o nível de detalhe do logging, uma próxima melhoria seria permitir configurar o nível por variável de ambiente ou argumento de linha de comando.
+
+Se o endpoint não existir no servidor informado, a requisição poderá falhar. Isso não significa necessariamente que a configuração ou o logging estejam incorretos; o exemplo exige um endpoint compatível.
+
+## 16. Erros comuns
+
+### Configuração inválida tratada como texto
+
+Uma variável como `REQUEST_TIMEOUT="abc"` não pode ser convertida para número. Converta e valide valores antes de utilizá-los.
+
+### Variável de ambiente ausente
+
+`os.environ.get()` retorna `None` quando não encontra a variável e nenhum valor padrão foi definido. Verifique a ausência de configurações obrigatórias antes de iniciar operações externas.
+
+### Segredos expostos em logs
+
+Evite registrar tokens, senhas, cookies ou cabeçalhos de autenticação. Também revise URLs e mensagens de erro que possam conter informações privadas.
+
+### `logging.basicConfig()` não altera a configuração esperada
+
+Em geral, `basicConfig()` não substitui handlers existentes se o sistema de logging já estiver configurado. Em aplicações maiores, centralize a configuração e evite chamar `basicConfig()` repetidamente em diferentes módulos.
+
+### Usar `print()` para todos os eventos
+
+`print()` continua útil para a saída que o usuário deve receber. Logging é mais adequado para eventos operacionais, níveis de severidade e diagnóstico.
+
+### Capturar erros e ignorá-los
+
+Um bloco `except` vazio ou que apenas imprime uma mensagem genérica pode esconder falhas importantes. Registre informações úteis e decida explicitamente se a exceção será relançada ou tratada.
+
+## 17. Quando utilizar cada recurso?
+
+- **Constantes em** `**config.py**`**:** valores simples e estáveis que fazem parte da configuração do programa.
+    
+- **Variáveis de ambiente:** valores que precisam mudar entre execuções ou ambientes sem alteração do código.
+    
+- **Arquivo** `**.env**`**:** conveniência de desenvolvimento local quando a equipe precisa carregar configurações de um arquivo.
+    
+- `**logging**`**:** registro estruturado de eventos, avisos e falhas.
+    
+- `**print()**`**:** apresentação direta de resultados ao usuário da ferramenta.
+    
+
+Uma aplicação bem organizada mantém a configuração separada da lógica principal, valida os valores externos antes de utilizá-los e registra informações suficientes para investigar falhas sem expor dados sensíveis.

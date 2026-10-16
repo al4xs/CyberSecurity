@@ -1357,3 +1357,512 @@ Os códigos não substituem o tratamento correto das condições da aplicação.
 Esses recursos não são intercambiáveis. Cada um resolve uma parte diferente do processamento HTTP, e a escolha depende do tipo de dado recebido ou da resposta que queremos produzir.
 
 ---
+## 4. HTML, templates e formulários
+
+Até aqui, as funções de visualização do Flask podiam retornar textos diretamente. Porém, em aplicações reais, normalmente precisamos apresentar páginas HTML, exibir dados dinâmicos e permitir que o usuário interaja com a aplicação.
+
+Para isso, o Flask utiliza o sistema de templates do **Jinja**, integrado ao framework.
+
+### 4.1. O que são templates?
+
+Um template é um arquivo que contém a estrutura de uma página, geralmente HTML, com espaços reservados para inserir dados dinamicamente.
+
+Por exemplo, uma página estática pode conter:
+
+```
+<h1>Olá, visitante!</h1>
+```
+
+Mas uma aplicação pode precisar mostrar o nome de cada usuário. Em vez de criar um HTML diferente para cada pessoa, podemos utilizar um template:
+
+```
+<h1>Olá, {{ nome }}!</h1>
+```
+
+A expressão `{{ nome }}` é interpretada pelo Jinja. Quando o Flask renderiza o template, o valor da variável é inserido no HTML resultante.
+
+Isso permite separar responsabilidades:
+
+- **Python:** processa dados, executa a lógica e prepara as informações.
+    
+- **HTML:** define a estrutura da página.
+    
+- **Jinja:** permite inserir dados e controlar partes do HTML.
+    
+
+### 4.2. Organizando os arquivos
+
+Por padrão, o Flask procura templates em um diretório chamado `templates`, localizado na raiz da aplicação.
+
+Uma estrutura simples pode ser:
+
+```
+meu_projeto/
+├── app.py
+└── templates/
+    ├── index.html
+    └── perfil.html
+```
+
+O arquivo `app.py` contém o código Python, enquanto os arquivos dentro de `templates/` contêm as páginas HTML.
+
+Também é possível criar subdiretórios dentro de `templates/` para organizar páginas maiores.
+
+### 4.3. Renderizando um template com `render_template()`
+
+A função `render_template()` carrega um template, processa suas expressões Jinja e retorna o HTML renderizado como resposta.
+
+Exemplo de `app.py`:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route("/")
+def inicio():
+    return render_template("index.html")
+```
+
+Arquivo `templates/index.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Minha aplicação</title>
+</head>
+<body>
+    <h1>Minha primeira página Flask</h1>
+    <p>Esta página foi renderizada por um template.</p>
+</body>
+</html>
+```
+
+#### Analisando o código Python
+
+- `from flask import Flask, render_template`: importa a classe responsável pela aplicação e a função usada para renderizar templates.
+    
+- `app = Flask(__name__)`: cria a aplicação Flask.
+    
+- `@app.route("/")`: associa a URL `/` à função `inicio`.
+    
+- `def inicio()`: define a função que será executada quando a rota for acessada.
+    
+- `render_template("index.html")`: procura o arquivo `index.html` no diretório de templates e gera o HTML final.
+    
+- `return`: entrega o resultado como resposta HTTP.
+    
+
+#### Parâmetros de `render_template()`
+
+|Parâmetro|Obrigatório?|Comportamento|
+|---|---|---|
+|`template_name_or_list`|Sim|Nome de um template ou lista de nomes candidatos.|
+|`**context`|Não|Dados enviados ao template como variáveis.|
+
+O primeiro argumento identifica o template. Os argumentos nomeados adicionais fornecem os dados que estarão disponíveis durante a renderização.
+
+Exemplo:
+
+```
+return render_template(
+    "index.html",
+    nome="Marcos",
+    idade=17
+)
+```
+
+No HTML, as variáveis podem ser utilizadas assim:
+
+```
+<h1>Olá, {{ nome }}!</h1>
+<p>Idade: {{ idade }}</p>
+```
+
+O resultado renderizado conterá o nome e a idade fornecidos pelo Python.
+
+### 4.4. Exibindo dados dinâmicos
+
+Um dos usos mais importantes dos templates é apresentar informações que mudam conforme a requisição ou os dados da aplicação.
+
+Arquivo `app.py`:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route("/perfil/<nome>")
+def perfil(nome):
+    return render_template(
+        "perfil.html",
+        nome=nome
+    )
+```
+
+Arquivo `templates/perfil.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Perfil</title>
+</head>
+<body>
+    <h1>Perfil de {{ nome }}</h1>
+    <p>Bem-vindo à sua página de perfil.</p>
+</body>
+</html>
+```
+
+Ao acessar `/perfil/Marcos`, o Flask captura `Marcos` como parâmetro da rota e o envia ao template.
+
+O Jinja substitui `{{ nome }}` pelo valor recebido. Assim, a mesma página pode exibir diferentes nomes sem precisar duplicar o arquivo HTML.
+
+### 4.5. Variáveis, condições e loops no Jinja
+
+Além de exibir variáveis, o Jinja permite controlar a renderização do HTML.
+
+#### Exibindo variáveis
+
+```
+<p>Usuário: {{ nome }}</p>
+<p>E-mail: {{ email }}</p>
+```
+
+As expressões entre `{{ }}` exibem valores no HTML renderizado.
+
+#### Utilizando condições
+
+```
+{% if autenticado %}
+    <p>Você está autenticado.</p>
+{% else %}
+    <p>Faça login para continuar.</p>
+{% endif %}
+```
+
+As instruções entre `{% %}` controlam a execução de estruturas do template.
+
+A variável `autenticado` precisa ser enviada pelo Python ou estar disponível no contexto do template.
+
+#### Percorrendo listas
+
+No Python:
+
+```
+@app.route("/linguagens")
+def linguagens():
+    nomes = ["Python", "JavaScript", "C"]
+    return render_template(
+        "linguagens.html",
+        linguagens=nomes
+    )
+```
+
+No arquivo `templates/linguagens.html`:
+
+```
+<h1>Linguagens</h1>
+
+<ul>
+    {% for linguagem in linguagens %}
+        <li>{{ linguagem }}</li>
+    {% endfor %}
+</ul>
+```
+
+O `for` percorre os elementos da lista, gerando um elemento `<li>` para cada linguagem.
+
+Essas estruturas pertencem à sintaxe do Jinja, não à sintaxe comum do HTML nem à do Python executado diretamente no arquivo `app.py`.
+
+### 4.6. Criando um diretório para arquivos estáticos
+
+Aplicações web também precisam de arquivos que não são processados como templates, como folhas de estilo CSS, JavaScript e imagens.
+
+Por padrão, o Flask procura esses arquivos no diretório `static`.
+
+Estrutura:
+
+```
+meu_projeto/
+├── app.py
+├── static/
+│   ├── css/
+│   │   └── estilo.css
+│   └── imagens/
+│       └── logo.png
+└── templates/
+    └── index.html
+```
+
+Para carregar um CSS no HTML, utilize `url_for()`:
+
+```
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/estilo.css') }}"
+>
+```
+
+A função `url_for()` gera uma URL para um endpoint do Flask. Nesse caso, `static` é o endpoint padrão para servir arquivos estáticos, e `filename` identifica o caminho do arquivo dentro de `static/`.
+
+É preferível utilizar `url_for()` em vez de escrever manualmente o caminho completo, pois isso reduz problemas quando a aplicação muda de configuração ou de localização.
+
+### 4.7. Criando formulários HTML
+
+Um formulário permite que o usuário envie informações à aplicação, como nome, e-mail, senha ou termos de pesquisa.
+
+Exemplo:
+
+```
+<form action="/cadastro" method="POST">
+    <label for="nome">Nome:</label>
+    <input type="text" id="nome" name="nome" required>
+
+    <button type="submit">Cadastrar</button>
+</form>
+```
+
+Principais elementos:
+
+- `<form>`: define o formulário.
+    
+- `action`: indica a URL que receberá os dados.
+    
+- `method`: define o método HTTP utilizado no envio.
+    
+- `<input>`: cria um campo de entrada.
+    
+- `name`: identifica o campo enviado na requisição.
+    
+- `required`: exige que o campo seja preenchido no navegador.
+    
+- `<button type="submit">`: envia o formulário.
+    
+
+**Atenção:** o atributo `name` é essencial para identificar os campos recebidos pelo Flask. O atributo `id`, por sua vez, é útil para associar o campo ao seu `<label>` e para referenciá-lo em CSS ou JavaScript.
+
+O `required` ajuda na validação no navegador, mas não substitui a validação no servidor. Uma requisição pode ser construída fora do navegador e enviada diretamente à aplicação.
+
+### 4.8. Recebendo os dados com `request.form`
+
+Quando um formulário é enviado com `method="POST"` e os dados são codificados como um formulário HTML convencional, o Flask disponibiliza os campos por meio de `request.form`.
+
+Exemplo completo:
+
+```
+from flask import Flask, render_template, request
+
+app = Flask(__name__)
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+
+        if not nome:
+            return "O nome é obrigatório.", 400
+
+        return f"Cadastro recebido para {nome}."
+
+    return render_template("cadastro.html")
+```
+
+Arquivo `templates/cadastro.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro</title>
+</head>
+<body>
+    <h1>Cadastro</h1>
+
+    <form action="{{ url_for('cadastro') }}" method="POST">
+        <label for="nome">Nome:</label>
+        <input type="text" id="nome" name="nome" required>
+
+        <button type="submit">Enviar</button>
+    </form>
+</body>
+</html>
+```
+
+#### Entendendo o fluxo
+
+1. O navegador acessa `/cadastro` com uma requisição `GET`.
+    
+2. Como o método não é `POST`, a função renderiza `cadastro.html`.
+    
+3. O usuário preenche o campo `nome` e envia o formulário.
+    
+4. O navegador envia uma requisição `POST` para `/cadastro`.
+    
+5. O Flask identifica o método por meio de `request.method`.
+    
+6. `request.form.get("nome", "")` tenta obter o campo chamado `nome`. Se ele não existir, retorna uma string vazia.
+    
+7. `.strip()` remove espaços em branco do início e do fim do texto.
+    
+8. Se o nome estiver vazio, a aplicação responde com o status HTTP `400`.
+    
+9. Caso contrário, a aplicação retorna uma mensagem de confirmação.
+    
+
+#### Por que utilizar `request.form.get()`?
+
+Existem duas formas comuns de acessar um campo:
+
+```
+nome = request.form["nome"]
+```
+
+```
+nome = request.form.get("nome")
+```
+
+A primeira forma pode gerar um erro `BadRequestKeyError` se o campo não existir. A segunda retorna `None` quando a chave não existe e nenhum valor padrão é fornecido.
+
+Também é possível definir um valor padrão:
+
+```
+nome = request.form.get("nome", "")
+```
+
+Nesse caso, uma chave ausente resulta em uma string vazia.
+
+O valor padrão evita o erro por chave ausente, mas não significa que o dado seja válido. A aplicação ainda precisa verificar o conteúdo recebido.
+
+### 4.9. GET e POST em formulários
+
+O método HTTP escolhido muda a maneira como os dados são enviados e interpretados.
+
+|Característica|GET|POST|
+|---|---|---|
+|Uso comum|Pesquisas e filtros|Cadastros e envio de dados|
+|Dados de formulário|Normalmente na URL, como parâmetros de consulta|Normalmente no corpo da requisição|
+|`request.args`|Lê parâmetros da URL|Também pode ler parâmetros presentes na URL|
+|`request.form`|Geralmente não contém os campos enviados por um formulário GET|Lê campos de formulários convencionais enviados no corpo|
+|Sensibilidade dos dados|Valores podem aparecer na URL e no histórico|Os dados não aparecem automaticamente na URL, mas isso não os torna seguros por si só|
+
+Um formulário GET pode ser útil para uma busca:
+
+```
+<form action="{{ url_for('buscar') }}" method="GET">
+    <input type="text" name="q" placeholder="Pesquisar">
+    <button type="submit">Buscar</button>
+</form>
+```
+
+No Flask:
+
+```
+@app.route("/buscar")
+def buscar():
+    termo = request.args.get("q", "")
+    return f"Você pesquisou por: {termo}"
+```
+
+Ao pesquisar `Flask`, o navegador poderá acessar uma URL semelhante a `/buscar?q=Flask`.
+
+Já formulários POST são normalmente utilizados para operações que enviam dados para processamento, como criação ou alteração de registros. O método HTTP, isoladamente, não fornece autenticação, autorização ou proteção contra falsificação de requisições.
+
+### 4.10. Redirecionando após um POST
+
+Depois de processar um formulário, uma boa prática comum é redirecionar o navegador para outra rota. Esse padrão é conhecido como **Post/Redirect/Get (PRG)**.
+
+Exemplo:
+
+```
+from flask import Flask, redirect, render_template, request, url_for
+
+app = Flask(__name__)
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+
+        if not nome:
+            return "O nome é obrigatório.", 400
+
+        # Aqui poderia ocorrer a gravação do cadastro no banco.
+        return redirect(url_for("sucesso"))
+
+    return render_template("cadastro.html")
+
+
+@app.route("/sucesso")
+def sucesso():
+    return "Cadastro processado com sucesso."
+```
+
+Quando o formulário é enviado corretamente, o Flask responde com um redirecionamento para `/sucesso`. O navegador então faz uma nova requisição GET para essa rota.
+
+Isso reduz o risco de o usuário reenviar acidentalmente o mesmo formulário ao atualizar a página de confirmação. Porém, não impede duplicações em todos os cenários: operações críticas podem precisar de validação de duplicidade ou mecanismos de idempotência.
+
+#### Funções utilizadas
+
+- `redirect(location, code=302)`: cria uma resposta de redirecionamento. O destino é obrigatório; o código HTTP é opcional e, por padrão, é `302`.
+    
+- `url_for(endpoint, **values)`: gera a URL de um endpoint. O nome do endpoint é obrigatório; os demais valores são usados para preencher parâmetros de rota ou gerar parâmetros de consulta quando aplicável.
+    
+
+No exemplo, `url_for("sucesso")` gera a URL da função associada ao endpoint `sucesso`, e `redirect()` instrui o navegador a acessá-la.
+
+### 4.11. Erros comuns com templates e formulários
+
+`**TemplateNotFound**`
+
+O Flask não encontrou o template solicitado. Verifique se o arquivo existe no diretório `templates`, se o nome está correto e se a estrutura de diretórios corresponde ao esperado.
+
+`**BuildError**` **ao utilizar** `**url_for()**`
+
+O endpoint informado não foi encontrado ou os parâmetros necessários para gerar a URL não foram fornecidos. Por padrão, o endpoint de uma rota costuma ser o nome da função associada a ela.
+
+**O campo chega vazio ao Flask**
+
+Verifique se o elemento HTML possui o atributo `name`, se o formulário está enviando o campo correto e se o código está consultando a fonte adequada, como `request.form` para um formulário POST convencional.
+
+**Erro** `**405 Method Not Allowed**`
+
+A rota foi acessada com um método HTTP que não está autorizado na configuração dela. Se a mesma rota deve exibir um formulário e processar seu envio, configure os métodos necessários, como `GET` e `POST`.
+
+**O HTML não exibe o valor esperado**
+
+Confirme se o Python enviou a variável ao `render_template()` com o mesmo nome utilizado no template. Por exemplo, `nome="Marcos"` disponibiliza a variável `nome`, não uma variável chamada `usuario`.
+
+**Dados inválidos são aceitos**
+
+Valide os dados no servidor. A validação do HTML melhora a experiência do usuário, mas não deve ser considerada uma barreira de segurança.
+
+### 4.12. Segurança básica ao renderizar e receber dados
+
+O Flask utiliza o mecanismo de autoescape do Jinja nos templates HTML convencionais. Isso ajuda a evitar que valores inseridos em expressões como `{{ nome }}` sejam interpretados como HTML ou JavaScript executável.
+
+Ainda assim, há cuidados importantes:
+
+- Não utilize `|safe` para dados não confiáveis sem entender suas consequências.
+    
+- Valide os dados recebidos no servidor, independentemente das validações HTML.
+    
+- Não armazene senhas em texto puro.
+    
+- Não considere o método POST um mecanismo de criptografia; utilize HTTPS em produção.
+    
+- Em formulários que alteram dados ou executam ações autenticadas, implemente proteção contra CSRF quando aplicável.
+    
+- A validação dos dados não substitui a autenticação nem a autorização.
+    
+- Evite concatenar entradas do usuário em consultas SQL; utilize mecanismos de parametrização ou ORM apropriados.
+    
+
+Esses cuidados serão aprofundados nas partes de banco de dados, autenticação e segurança web.
+
+---

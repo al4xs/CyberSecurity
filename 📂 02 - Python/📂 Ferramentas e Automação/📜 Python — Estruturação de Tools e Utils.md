@@ -1383,3 +1383,5 @@ As responsabilidades seriam:
 Tokens e senhas não devem ser armazenados diretamente no código-fonte ou no `pyproject.toml`. Para segredos, utilize mecanismos apropriados, como variáveis de ambiente ou um gerenciador de segredos.
 
 A estrutura deve refletir as responsabilidades reais do projeto, não uma lista obrigatória de arquivos.
+
+---

@@ -4483,3 +4483,600 @@ Esses comandos pressupõem que as ferramentas correspondentes estejam instaladas
 O fluxo básico é: organizar o pacote, declarar dependências e metadados, instalar em um ambiente virtual, testar o comando de entrada, executar os testes e construir a distribuição. Antes de publicar uma versão, verifique os artefatos gerados e teste a instalação em um ambiente limpo.
 
 ---
+# 📜 Python — Projeto Integrado de Automação: CLI, Serviços e Testes
+
+## 1. Objetivo do projeto
+
+Até aqui, os conceitos foram estudados separadamente: módulos, pacotes, configuração, logging, interfaces de linha de comando, testes e empacotamento.
+
+Nesta anotação, vamos integrá-los em um projeto funcional.
+
+A ferramenta será um **verificador de disponibilidade de serviços TCP**. Ela receberá um host e uma ou mais portas, tentará estabelecer conexões e produzirá um resultado para cada porta.
+
+O projeto será limitado a verificações de conectividade em sistemas próprios ou explicitamente autorizados.
+
+O objetivo é praticar a construção de uma ferramenta organizada, não desenvolver um scanner completo.
+
+## 2. Arquitetura e responsabilidades
+
+A estrutura será:
+
+```
+verificador-tcp/
+├── pyproject.toml
+├── README.md
+├── src/
+│   └── verificador_tcp/
+│       ├── __init__.py
+│       ├── cli.py
+│       ├── config.py
+│       ├── services.py
+│       └── models.py
+└── tests/
+    ├── test_services.py
+    └── test_cli.py
+```
+
+Responsabilidades:
+
+|Arquivo|Responsabilidade|
+|---|---|
+|`cli.py`|Interpretar argumentos e coordenar a execução|
+|`config.py`|Definir e validar configurações|
+|`services.py`|Executar as verificações de conectividade|
+|`models.py`|Representar os resultados|
+|`tests/`|Verificar o comportamento esperado|
+|`pyproject.toml`|Configurar o pacote e suas ferramentas|
+
+A separação impede que toda a aplicação fique concentrada em um único arquivo.
+
+## 3. Criando o projeto
+
+No terminal do Ubuntu:
+
+```
+mkdir -p verificador-tcp/src/verificador_tcp
+mkdir -p verificador-tcp/tests
+
+cd verificador-tcp
+
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Crie os arquivos apresentados nas próximas seções.
+
+## 4. Modelando os resultados
+
+Arquivo `src/verificador_tcp/models.py`:
+
+```
+from dataclasses import dataclass
+
+
+@dataclass
+class ResultadoTCP:
+    host: str
+    porta: int
+    acessivel: bool
+    erro: str | None = None
+```
+
+A classe `ResultadoTCP` representa o resultado de uma tentativa de conexão.
+
+- `host`: endereço utilizado.
+    
+- `porta`: porta TCP verificada.
+    
+- `acessivel`: indica se a conexão foi estabelecida.
+    
+- `erro`: descrição opcional de um erro ocorrido.
+    
+
+A utilização de uma `dataclass` evita a necessidade de construir manualmente um inicializador e facilita a representação dos resultados.
+
+A anotação `str | None` requer Python 3.10 ou superior.
+
+## 5. Implementando o serviço TCP
+
+Arquivo `src/verificador_tcp/services.py`:
+
+```
+import socket
+
+from verificador_tcp.models import ResultadoTCP
+
+
+def verificar_porta(
+    host: str,
+    porta: int,
+    timeout: float = 2.0,
+) -> ResultadoTCP:
+    """Verifica se é possível estabelecer uma conexão TCP."""
+
+    try:
+        with socket.create_connection(
+            (host, porta),
+            timeout=timeout,
+        ):
+            return ResultadoTCP(
+                host=host,
+                porta=porta,
+                acessivel=True,
+            )
+
+    except OSError as erro:
+        return ResultadoTCP(
+            host=host,
+            porta=porta,
+            acessivel=False,
+            erro=str(erro),
+        )
+```
+
+### 5.1. Entendendo a implementação
+
+`socket.create_connection()` tenta estabelecer uma conexão TCP com o endereço fornecido.
+
+O argumento `timeout` limita o tempo de espera de cada tentativa de conexão. Em hosts que resolvem para vários endereços, o tempo total pode ser maior que esse limite, pois pode haver mais de uma tentativa.
+
+O bloco `with` garante que o socket seja fechado ao sair do contexto.
+
+O tratamento de `OSError` captura erros de conexão e de sistema operacional, incluindo situações como conexão recusada, falhas de resolução de nomes e timeouts.
+
+**Importante:** uma conexão bem-sucedida indica que foi possível estabelecer uma conexão TCP naquele momento. Não comprova que a aplicação está funcionando corretamente, nem que o serviço oferece determinada funcionalidade.
+
+Da mesma forma, uma falha de conexão não prova que a porta esteja definitivamente fechada: filtros de rede, rotas e indisponibilidade temporária também podem causar falhas.
+
+## 6. Centralizando configurações
+
+Arquivo `src/verificador_tcp/config.py`:
+
+```
+DEFAULT_TIMEOUT = 2.0
+MAX_TIMEOUT = 30.0
+```
+
+Esses valores estabelecem um padrão para o projeto.
+
+O timeout padrão é de dois segundos e o máximo permitido pela interface será de trinta segundos.
+
+Manter esses valores centralizados evita espalhar números de configuração pelo código.
+
+## 7. Construindo a interface CLI
+
+Arquivo `src/verificador_tcp/cli.py`:
+
+```
+import argparse
+import logging
+import sys
+
+from verificador_tcp.config import DEFAULT_TIMEOUT, MAX_TIMEOUT
+from verificador_tcp.services import verificar_porta
+
+
+logger = logging.getLogger(__name__)
+
+
+def configurar_logging(verbose: bool) -> None:
+    nivel = logging.DEBUG if verbose else logging.INFO
+
+    logging.basicConfig(
+        level=nivel,
+        format="%(levelname)s: %(message)s",
+    )
+
+
+def validar_porta(valor: str) -> int:
+    try:
+        porta = int(valor)
+    except ValueError as erro:
+        raise argparse.ArgumentTypeError(
+            "a porta deve ser um número inteiro"
+        ) from erro
+
+    if not 1 <= porta <= 65535:
+        raise argparse.ArgumentTypeError(
+            "a porta deve estar entre 1 e 65535"
+        )
+
+    return porta
+
+
+def validar_timeout(valor: str) -> float:
+    try:
+        timeout = float(valor)
+    except ValueError as erro:
+        raise argparse.ArgumentTypeError(
+            "o timeout deve ser numérico"
+        ) from erro
+
+    if not 0 < timeout <= MAX_TIMEOUT:
+        raise argparse.ArgumentTypeError(
+            f"o timeout deve ser maior que zero e até {MAX_TIMEOUT}"
+        )
+
+    return timeout
+
+
+def criar_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="verificador-tcp",
+        description="Verifica a conectividade TCP de um host autorizado.",
+    )
+
+    parser.add_argument(
+        "host",
+        help="Hostname ou endereço IP do sistema autorizado",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--portas",
+        nargs="+",
+        type=validar_porta,
+        default=[80, 443],
+        help="Uma ou mais portas TCP",
+    )
+
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        type=validar_timeout,
+        default=DEFAULT_TIMEOUT,
+        help="Timeout por tentativa de conexão",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Ativa mensagens de diagnóstico",
+    )
+
+    return parser
+
+
+def main() -> int:
+    parser = criar_parser()
+    args = parser.parse_args()
+
+    configurar_logging(args.verbose)
+
+    resultados = []
+
+    for porta in args.portas:
+        logger.debug("Verificando %s:%s", args.host, porta)
+
+        resultado = verificar_porta(
+            host=args.host,
+            porta=porta,
+            timeout=args.timeout,
+        )
+
+        resultados.append(resultado)
+
+        if resultado.acessivel:
+            print(f"[ABERTA/ACESSÍVEL] {resultado.host}:{resultado.porta}")
+        else:
+            print(f"[SEM CONEXÃO] {resultado.host}:{resultado.porta}")
+            logger.debug("Motivo: %s", resultado.erro)
+
+    if any(resultado.acessivel for resultado in resultados):
+        return 0
+
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### 7.1. O que a CLI faz?
+
+O `argparse` interpreta os argumentos recebidos pelo programa.
+
+Exemplo:
+
+```
+verificador-tcp 127.0.0.1 --portas 22 80 443 --timeout 3
+```
+
+O programa recebe:
+
+- Host: `127.0.0.1`.
+    
+- Portas: `22`, `80` e `443`.
+    
+- Timeout: `3` segundos.
+    
+- Logging detalhado: desativado.
+    
+
+A opção `--verbose` ativa mensagens de diagnóstico:
+
+```
+verificador-tcp 127.0.0.1 -p 22 80 443 -v
+```
+
+A função `validar_porta()` impede que valores fora do intervalo válido sejam aceitos pela interface.
+
+A função `validar_timeout()` rejeita timeouts menores ou iguais a zero e valores superiores ao limite definido.
+
+### 7.2. Interpretando os códigos de saída
+
+O programa retorna:
+
+- `0`: pelo menos uma conexão foi estabelecida.
+    
+- `1`: nenhuma conexão foi estabelecida.
+    
+
+O código `1` não significa necessariamente que o programa falhou tecnicamente. Significa que nenhuma das tentativas produziu uma conexão bem-sucedida.
+
+Erros de argumentos são tratados pelo próprio `argparse`, que normalmente encerra o programa com código `2`.
+
+Em automações com scripts shell, esses códigos podem ser utilizados para decidir os próximos passos.
+
+## 8. Configurando o pacote instalável
+
+Arquivo `src/verificador_tcp/__init__.py`:
+
+```
+"""Verificador de conectividade TCP."""
+```
+
+Arquivo `pyproject.toml`:
+
+```
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verificador-tcp"
+version = "0.1.0"
+description = "Ferramenta de verificação de conectividade TCP"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+verificador-tcp = "verificador_tcp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+```
+
+Instale o pacote no ambiente virtual:
+
+```
+python -m pip install -e ".[dev]"
+```
+
+A opção `-e` instala o projeto em modo editável. O extra `dev` instala as dependências de desenvolvimento declaradas no arquivo.
+
+Teste a interface:
+
+```
+verificador-tcp --help
+```
+
+E execute uma verificação local:
+
+```
+verificador-tcp 127.0.0.1 --portas 22 80 443
+```
+
+Os resultados dependerão dos serviços que estiverem escutando localmente e das condições do sistema.
+
+## 9. Testando o serviço sem depender da rede
+
+Os testes unitários devem verificar o comportamento do código sem exigir que uma porta real esteja aberta ou fechada.
+
+Arquivo `tests/test_services.py`:
+
+```
+from unittest.mock import patch
+
+from verificador_tcp.models import ResultadoTCP
+from verificador_tcp.services import verificar_porta
+
+
+def test_verificar_porta_com_conexao_bem_sucedida():
+    with patch(
+        "verificador_tcp.services.socket.create_connection"
+    ) as mock_connection:
+        resultado = verificar_porta(
+            "127.0.0.1",
+            8000,
+            timeout=1.0,
+        )
+
+    assert resultado == ResultadoTCP(
+        host="127.0.0.1",
+        porta=8000,
+        acessivel=True,
+    )
+
+    mock_connection.assert_called_once_with(
+        ("127.0.0.1", 8000),
+        timeout=1.0,
+    )
+
+
+def test_verificar_porta_com_conexao_recusada():
+    with patch(
+        "verificador_tcp.services.socket.create_connection",
+        side_effect=ConnectionRefusedError("Conexão recusada"),
+    ):
+        resultado = verificar_porta(
+            "127.0.0.1",
+            8000,
+        )
+
+    assert resultado.acessivel is False
+    assert resultado.erro == "Conexão recusada"
+```
+
+O `patch()` substitui temporariamente a função usada pelo módulo testado.
+
+No primeiro teste, o mock simula uma conexão bem-sucedida. No segundo, simula uma conexão recusada.
+
+Assim, os testes não precisam depender do estado da rede local.
+
+Execute:
+
+```
+pytest -v
+```
+
+Os dois testes devem passar se os arquivos e o ambiente estiverem configurados corretamente.
+
+## 10. Testando a interface CLI
+
+Arquivo `tests/test_cli.py`:
+
+```
+from unittest.mock import patch
+
+from verificador_tcp.cli import main
+from verificador_tcp.models import ResultadoTCP
+
+
+def test_cli_com_uma_porta_acessivel(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "verificador-tcp",
+            "127.0.0.1",
+            "--portas",
+            "8000",
+        ],
+    )
+
+    resultado_simulado = ResultadoTCP(
+        host="127.0.0.1",
+        porta=8000,
+        acessivel=True,
+    )
+
+    with patch(
+        "verificador_tcp.cli.verificar_porta",
+        return_value=resultado_simulado,
+    ):
+        codigo = main()
+
+    assert codigo == 0
+
+
+def test_cli_sem_portas_acessiveis(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "verificador-tcp",
+            "127.0.0.1",
+            "--portas",
+            "8000",
+        ],
+    )
+
+    resultado_simulado = ResultadoTCP(
+        host="127.0.0.1",
+        porta=8000,
+        acessivel=False,
+        erro="Conexão recusada",
+    )
+
+    with patch(
+        "verificador_tcp.cli.verificar_porta",
+        return_value=resultado_simulado,
+    ):
+        codigo = main()
+
+    assert codigo == 1
+```
+
+Execute todos os testes:
+
+```
+pytest -v
+```
+
+Esses testes verificam os códigos de saída da CLI sem abrir conexões reais. O `monkeypatch` modifica temporariamente os argumentos do processo, e o `patch` substitui o serviço de rede.
+
+O teste não comprova que todas as combinações de argumentos estão corretas. Para ampliar a cobertura, também é possível testar portas inválidas, timeouts inválidos, múltiplas portas e saída textual.
+
+## 11. Verificações de qualidade
+
+Execute o linter:
+
+```
+ruff check .
+```
+
+Formate o código:
+
+```
+ruff format .
+```
+
+Depois, execute novamente os testes:
+
+```
+pytest -v
+```
+
+O fluxo é importante porque alterações automáticas e refatorações também podem introduzir erros.
+
+## 12. Limitações e possíveis evoluções
+
+A ferramenta atual é intencionalmente simples.
+
+Ela não implementa:
+
+- Varredura de grandes intervalos de portas.
+    
+- Execução concorrente.
+    
+- Detecção da versão de serviços.
+    
+- Identificação de vulnerabilidades.
+    
+- Exportação de relatórios.
+    
+- Retentativas automáticas.
+    
+- Diferenciação detalhada entre todos os tipos de falha de rede.
+    
+
+Possíveis melhorias, sempre dentro de um escopo autorizado, incluem:
+
+1. Exportar resultados em JSON.
+    
+2. Adicionar testes para validação dos argumentos.
+    
+3. Registrar resultados em arquivo.
+    
+4. Implementar concorrência com limites explícitos.
+    
+5. Criar relatórios que distingam timeout, conexão recusada e falhas de resolução de nomes.
+    
+6. Construir uma distribuição instalável e testá-la em um ambiente limpo.
+    
+
+Cada melhoria deve ter uma responsabilidade clara e testes próprios. Não é necessário adicionar todos esses recursos de uma só vez.
+
+---

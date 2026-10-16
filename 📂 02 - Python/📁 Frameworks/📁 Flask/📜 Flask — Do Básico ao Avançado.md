@@ -6298,3 +6298,574 @@ Também é importante manter os testes independentes: um teste não deve depende
 Os testes automatizados ajudam a transformar requisitos da aplicação em verificações repetíveis, facilitando a manutenção e reduzindo o risco de regressões.
 
 ---
+## 13. Produção e deploy de aplicações Flask
+
+Desenvolver uma aplicação Flask localmente é diferente de disponibilizá-la para outras pessoas pela internet.
+
+No ambiente de desenvolvimento, normalmente executamos o código diretamente, fazemos alterações frequentes e utilizamos ferramentas de depuração. Em produção, precisamos considerar disponibilidade, segurança, gerenciamento de processos, configuração, logs e capacidade de atender às requisições.
+
+O processo de disponibilizar uma aplicação em um ambiente onde ela possa ser acessada é chamado de _deploy_ ou implantação.
+
+### 13.1. Desenvolvimento versus produção
+
+Durante o desenvolvimento, podemos executar a aplicação com o servidor integrado do Flask:
+
+```
+flask --app app run --debug
+```
+
+Esse comando pressupõe que o módulo `app` disponibilize uma aplicação Flask ou uma fábrica de aplicação reconhecida pelo Flask.
+
+A opção `--debug` ativa recursos de depuração, incluindo recarga automática do código em condições apropriadas.
+
+Esse servidor é destinado ao desenvolvimento. **Não utilize o servidor de desenvolvimento do Flask como servidor de produção.**
+
+Em produção, utilize um servidor WSGI adequado e configure a infraestrutura de acordo com os requisitos da aplicação.
+
+### 13.2. O que é WSGI?
+
+WSGI significa _Web Server Gateway Interface_. É uma especificação que define uma interface entre servidores web compatíveis e aplicações Python.
+
+O Flask é uma aplicação WSGI. Isso permite que ele seja executado por servidores que implementam essa interface.
+
+O fluxo simplificado é:
+
+```
+Cliente HTTP
+     |
+     v
+Servidor web / proxy reverso
+     |
+     v
+Servidor WSGI
+     |
+     v
+Aplicação Flask
+     |
+     v
+Banco de dados e outros serviços
+```
+
+Cada componente pode ter uma responsabilidade diferente:
+
+- **Cliente HTTP:** navegador, aplicativo móvel ou outro programa.
+    
+- **Servidor web ou proxy reverso:** pode receber conexões externas, terminar TLS e encaminhar requisições.
+    
+- **Servidor WSGI:** executa a aplicação Python e coordena o processamento das requisições.
+    
+- **Flask:** executa as rotas, os manipuladores de erro e a lógica da aplicação.
+    
+- **Serviços externos:** banco de dados, armazenamento de arquivos e outras dependências.
+    
+
+Essa arquitetura é um modelo comum, não uma exigência de que todos os projetos tenham exatamente os mesmos componentes.
+
+### 13.3. O que é Gunicorn?
+
+Gunicorn é um servidor WSGI utilizado para executar aplicações Python em ambientes Unix, incluindo diversas distribuições Linux.
+
+Instalação:
+
+```
+python -m pip install gunicorn
+```
+
+Considere uma estrutura simples:
+
+```
+meu_projeto/
+├── app.py
+└── .venv/
+```
+
+Se `app.py` contém:
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def inicio():
+    return "Aplicação Flask em execução"
+```
+
+Podemos executar a aplicação com:
+
+```
+gunicorn --bind 127.0.0.1:8000 app:app
+```
+
+A expressão `app:app` possui duas partes:
+
+- O primeiro `app` é o módulo Python, correspondente ao arquivo `app.py`.
+    
+- O segundo `app` é o objeto Flask definido dentro desse módulo.
+    
+
+O argumento `--bind 127.0.0.1:8000` faz o servidor escutar na interface de loopback, na porta `8000`.
+
+Essa configuração é útil quando o Gunicorn será acessado por um proxy reverso na mesma máquina. Para acessá-lo diretamente a partir de outro computador, seria necessário considerar a interface de escuta, o firewall e as medidas de segurança apropriadas.
+
+O Gunicorn é uma opção comum em Linux, mas não é a única alternativa de servidor WSGI.
+
+### 13.4. Executando uma Application Factory
+
+No módulo de estrutura do Flask, estudamos o padrão Application Factory, no qual uma função cria e retorna a aplicação.
+
+Exemplo de `app.py`:
+
+```
+from flask import Flask
+
+
+def create_app():
+    app = Flask(__name__)
+
+    @app.route("/")
+    def inicio():
+        return "Aplicação em produção"
+
+    return app
+```
+
+Nesse caso, não existe necessariamente uma variável global chamada `app` contendo a instância Flask. Existe a função `create_app()`.
+
+O Gunicorn pode utilizar a fábrica:
+
+```
+gunicorn --bind 127.0.0.1:8000 'app:create_app()'
+```
+
+A expressão `app:create_app()` informa que o Gunicorn deve carregar o módulo `app` e chamar a fábrica para obter a aplicação WSGI.
+
+Se a fábrica exigir argumentos, eles precisam ser fornecidos de acordo com a forma como ela foi implementada e com a sintaxe aceita pelo servidor.
+
+### 13.5. Utilizando workers
+
+Um servidor WSGI pode utilizar múltiplos workers para processar requisições.
+
+No Gunicorn, um worker é um processo ou unidade de execução responsável por atender requisições, conforme a classe de worker utilizada.
+
+Exemplo:
+
+```
+gunicorn --workers 2 --bind 127.0.0.1:8000 app:app
+```
+
+A opção `--workers 2` solicita dois workers.
+
+O número ideal depende de fatores como:
+
+- Memória disponível.
+    
+- Quantidade de requisições simultâneas.
+    
+- Tempo de processamento.
+    
+- Tipo de operação realizada.
+    
+- Dependências externas e conexões com o banco de dados.
+    
+
+Mais workers não significam automaticamente melhor desempenho. Cada processo pode consumir memória adicional e manter suas próprias conexões e estruturas de dados.
+
+Em uma máquina com recursos limitados, comece com uma configuração modesta e avalie o consumo e o comportamento real antes de aumentar a quantidade de workers.
+
+### 13.6. Configuração por variáveis de ambiente
+
+Aplicações em produção frequentemente precisam receber configurações específicas do ambiente, como:
+
+- Chave secreta.
+    
+- URI do banco de dados.
+    
+- Credenciais de serviços externos.
+    
+- Endereço de armazenamento.
+    
+- Opções de integração.
+    
+
+Esses valores não devem ficar fixos no código versionado.
+
+No Flask, podemos ler variáveis de ambiente com `os.environ` ou `os.getenv()`.
+
+```
+import os
+
+from flask import Flask
+
+
+def create_app():
+    app = Flask(__name__)
+
+    app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+    app.config["DEBUG"] = False
+
+    return app
+```
+
+A expressão `os.environ["SECRET_KEY"]` acessa uma variável de ambiente obrigatória. Se ela não existir, Python gera `KeyError`, fazendo a inicialização falhar.
+
+Essa falha antecipada pode ser útil para impedir que uma aplicação seja iniciada com uma configuração obrigatória ausente.
+
+Também é possível usar `os.getenv()`, que retorna `None` quando a variável não existe, a menos que seja fornecido um valor padrão. Nesse caso, o desenvolvedor precisa validar explicitamente o resultado.
+
+Não coloque chaves reais diretamente no código-fonte ou em arquivos versionados.
+
+### 13.7. Definindo variáveis no Linux
+
+Para definir uma variável no terminal atual:
+
+```
+export SECRET_KEY="substitua-por-uma-chave-segura"
+```
+
+Para definir a URI de um banco de dados:
+
+```
+export DATABASE_URL="sqlite:///app.db"
+```
+
+Esses exemplos mostram como o processo pode receber configurações. A URI do banco deve corresponder ao banco de dados e à extensão utilizados pela aplicação.
+
+Em seguida, o programa pode ser iniciado a partir desse terminal.
+
+Entretanto, variáveis definidas com `export` dessa maneira geralmente existem apenas para aquele processo e seus processos filhos. Elas não são automaticamente persistidas para futuras sessões nem configuradas em serviços gerenciados pelo sistema.
+
+Em produção, utilize o mecanismo de configuração de ambiente fornecido pelo sistema de implantação, pelo gerenciador de serviços ou pela plataforma de hospedagem.
+
+### 13.8. Configurando um banco de dados para produção
+
+Aplicações que utilizam Flask-SQLAlchemy precisam receber a URI correta antes da inicialização da extensão.
+
+Exemplo:
+
+```
+import os
+
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+
+def create_app():
+    app = Flask(__name__)
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ[
+        "DATABASE_URL"
+    ]
+
+    db.init_app(app)
+
+    return app
+```
+
+Nesse exemplo:
+
+1. A aplicação Flask é criada.
+    
+2. A URI do banco de dados é carregada.
+    
+3. A extensão SQLAlchemy é inicializada com a aplicação.
+    
+4. A fábrica retorna a aplicação configurada.
+    
+
+O código pressupõe que o driver necessário esteja instalado e que a URI corresponda ao banco utilizado.
+
+O valor `sqlite:///app.db` pode ser útil para um projeto simples, mas não é automaticamente a melhor opção para uma aplicação que precisa de acesso concorrente, persistência gerenciada, backups e operação em múltiplos servidores.
+
+A escolha do banco depende das necessidades do projeto.
+
+**Importante:** criar tabelas automaticamente durante cada inicialização não substitui um processo de migração. Em aplicações com dados importantes, mudanças de estrutura devem ser planejadas e aplicadas de forma controlada, utilizando ferramentas como Flask-Migrate e Alembic.
+
+### 13.9. Proxy reverso
+
+Um proxy reverso recebe requisições dos clientes e as encaminha para um ou mais servidores internos.
+
+Nginx é um exemplo de software frequentemente utilizado nessa função.
+
+Uma arquitetura comum é:
+
+```
+Navegador
+    |
+    | HTTPS
+    v
+Nginx
+    |
+    | HTTP interno
+    v
+Gunicorn
+    |
+    v
+Flask
+```
+
+O Nginx pode receber conexões públicas, lidar com TLS e encaminhar requisições para o Gunicorn, que escuta em uma interface local.
+
+Uma configuração conceitual de Nginx pode conter:
+
+```
+server {
+    listen 80;
+    server_name exemplo.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Esse exemplo encaminha as requisições recebidas na porta `80` para um serviço local na porta `8000`.
+
+Ele não configura HTTPS. Para uma implantação pública, é necessário configurar TLS e redirecionamentos apropriados, conforme a infraestrutura utilizada.
+
+O proxy reverso também não substitui a autenticação, a autorização ou a validação implementadas na aplicação.
+
+### 13.10. Cabeçalhos encaminhados pelo proxy
+
+Quando uma aplicação Flask está atrás de um proxy reverso, alguns detalhes da requisição original podem ser diferentes daqueles observados pelo processo Python.
+
+Por exemplo, o Flask pode receber a requisição por HTTP internamente, embora o usuário tenha acessado o site por HTTPS.
+
+Proxies podem encaminhar informações por cabeçalhos como `X-Forwarded-Proto` e `X-Forwarded-For`.
+
+Esses cabeçalhos só devem ser confiados quando a aplicação estiver atrás de um proxy conhecido e configurado corretamente.
+
+O Flask pode utilizar o middleware `ProxyFix`, disponibilizado pelo Werkzeug, para interpretar determinados cabeçalhos encaminhados.
+
+Exemplo conceitual:
+
+```
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+)
+```
+
+Os valores numéricos indicam quantos proxies confiáveis devem ser considerados para cada cabeçalho.
+
+Os valores acima não devem ser copiados indiscriminadamente: eles precisam corresponder à topologia real da infraestrutura. Confiar em cabeçalhos fornecidos diretamente por clientes não confiáveis pode permitir falsificação de informações sobre IP, protocolo ou host.
+
+### 13.11. Arquivos estáticos
+
+Arquivos estáticos incluem CSS, JavaScript, imagens e outros recursos que não precisam ser gerados dinamicamente para cada requisição.
+
+O Flask oferece um mecanismo próprio para disponibilizar arquivos estáticos, normalmente a partir do diretório `static`.
+
+Exemplo:
+
+```
+meu_projeto/
+├── app.py
+├── static/
+│   ├── css/
+│   │   └── estilo.css
+│   └── img/
+│       └── logo.png
+└── templates/
+    └── index.html
+```
+
+Em templates Jinja:
+
+```
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/estilo.css') }}"
+>
+```
+
+Em produção, arquivos estáticos também podem ser servidos por um proxy reverso, CDN ou serviço de armazenamento, dependendo da arquitetura.
+
+A aplicação precisa garantir que esses arquivos estejam disponíveis no destino do deploy. Arquivos que existem apenas no computador de desenvolvimento não serão automaticamente copiados para outro ambiente.
+
+### 13.12. Logs em produção
+
+Os logs ajudam a identificar falhas, acompanhar o funcionamento e investigar comportamentos inesperados.
+
+Em uma aplicação Flask, podemos registrar eventos usando `app.logger`:
+
+```
+@app.route("/processar")
+def processar():
+    app.logger.info("Iniciando processamento")
+
+    try:
+        executar_operacao()
+    except Exception:
+        app.logger.exception("Falha no processamento")
+        return "Não foi possível concluir a operação.", 500
+
+    return "Processamento concluído"
+```
+
+`executar_operacao()` representa uma função hipotética.
+
+O exemplo registra a falha com traceback, mas uma aplicação real deve avaliar quais exceções são esperadas e tratar cada tipo de falha de maneira apropriada.
+
+Em produção, também é necessário definir onde os logs serão armazenados, quem pode acessá-los e por quanto tempo serão mantidos.
+
+Não registre senhas, tokens de autenticação, cookies completos ou chaves secretas.
+
+### 13.13. Gerenciamento do processo
+
+Iniciar o Gunicorn em um terminal pode ser suficiente durante um teste local, mas um serviço de produção precisa de uma estratégia para manter o processo sob controle.
+
+Um gerenciador de serviços, como o systemd em distribuições Linux, pode iniciar a aplicação, reiniciá-la quando necessário e gerenciar sua execução.
+
+Um serviço precisa considerar:
+
+- Usuário do sistema responsável pelo processo.
+    
+- Diretório de trabalho.
+    
+- Caminho do ambiente virtual.
+    
+- Variáveis de ambiente.
+    
+- Política de reinicialização.
+    
+- Permissões de arquivos.
+    
+- Destino dos logs.
+    
+
+Evite executar a aplicação como `root` sem necessidade. Um usuário de serviço com permissões limitadas reduz o impacto de determinados comprometimentos.
+
+O gerenciador de serviços deve ser configurado de acordo com o sistema operacional e a infraestrutura utilizados.
+
+### 13.14. Saúde e monitoramento
+
+Uma aplicação pode estar em execução sem conseguir atender corretamente às requisições.
+
+Por isso, sistemas de produção frequentemente possuem verificações de saúde (_health checks_).
+
+Uma rota simples pode indicar que o processo Flask está respondendo:
+
+```
+from flask import jsonify
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+```
+
+Essa rota verifica apenas se o Flask consegue responder. Ela não garante que o banco de dados, o armazenamento ou todas as integrações estejam funcionando.
+
+Se a infraestrutura precisar verificar dependências, crie verificações específicas e controle quais informações são expostas publicamente.
+
+O monitoramento também pode acompanhar latência, taxa de erros, consumo de recursos e disponibilidade dos serviços externos.
+
+### 13.15. Segurança antes do deploy
+
+Antes de disponibilizar a aplicação, revise as configurações de segurança.
+
+- Mantenha o modo de depuração desativado em produção.
+    
+- Utilize uma `SECRET_KEY` protegida e estável.
+    
+- Não publique credenciais no repositório.
+    
+- Utilize HTTPS para conexões públicas.
+    
+- Configure os cookies de sessão adequadamente.
+    
+- Mantenha autenticação e autorização nas rotas protegidas.
+    
+- Utilize consultas parametrizadas ou recursos seguros da ORM.
+    
+- Evite mensagens de erro que revelem detalhes internos.
+    
+- Mantenha dependências atualizadas.
+    
+- Restrinja permissões do usuário que executa a aplicação.
+    
+- Faça backups e teste os procedimentos de recuperação.
+    
+- Utilize configurações e dados separados para desenvolvimento, testes e produção.
+    
+
+Essas medidas precisam ser adaptadas ao sistema e aos riscos específicos da aplicação.
+
+### 13.16. Problemas comuns durante a implantação
+
+**O Gunicorn não consegue importar a aplicação**
+
+Verifique o módulo e o objeto informados no comando, o diretório de trabalho, as dependências instaladas e a ativação do ambiente correto.
+
+Por exemplo, `app:app` exige um módulo importável chamado `app` com um objeto Flask chamado `app`.
+
+**A aplicação não encontra uma variável de ambiente**
+
+Verifique se a variável está configurada no processo que inicia o serviço. Uma variável exportada em um terminal não é necessariamente herdada por um serviço iniciado pelo systemd ou por outra ferramenta.
+
+**O proxy retorna** `**502 Bad Gateway**`
+
+Verifique se o Gunicorn está em execução, se está escutando no endereço configurado e se o Nginx consegue se conectar a ele.
+
+**A aplicação funciona localmente, mas falha no servidor**
+
+Compare as versões do Python, as dependências instaladas, as variáveis de ambiente, as permissões e as configurações do banco de dados.
+
+**Os usuários perdem sessões após reinicializações**
+
+Verifique se a `SECRET_KEY` é estável e está configurada de forma consistente entre as instâncias que atendem a aplicação.
+
+**Os arquivos enviados pelo usuário desaparecem**
+
+Verifique onde os arquivos são armazenados e se esse local é persistente. Alguns ambientes de implantação utilizam sistemas de arquivos temporários ou recriam os diretórios a cada atualização.
+
+**As alterações no banco de dados não são aplicadas**
+
+Verifique se as migrações necessárias foram criadas e executadas no ambiente correto. A simples publicação de uma nova versão do código não garante que a estrutura do banco tenha sido atualizada.
+
+### 13.17. Checklist de implantação
+
+Antes de considerar o deploy concluído, confirme:
+
+- A aplicação inicia corretamente no ambiente de destino.
+    
+- O servidor WSGI está configurado.
+    
+- O modo de depuração está desativado.
+    
+- As variáveis de ambiente obrigatórias estão definidas.
+    
+- O banco de dados está acessível.
+    
+- As migrações necessárias foram aplicadas.
+    
+- O proxy reverso está encaminhando as requisições corretamente, quando utilizado.
+    
+- HTTPS está configurado para acesso público.
+    
+- Os arquivos estáticos estão disponíveis.
+    
+- Os logs podem ser consultados sem expor dados sensíveis.
+    
+- O processo pode ser monitorado e reiniciado.
+    
+- Os backups e procedimentos de recuperação foram planejados.
+    
+- Os testes automatizados foram executados.
+    
+- As permissões do processo e dos arquivos foram revisadas.
+    
+
+Uma implantação confiável envolve mais do que fazer o servidor iniciar. Ela exige que a aplicação seja configurada, monitorada, protegida e mantida de maneira consistente.

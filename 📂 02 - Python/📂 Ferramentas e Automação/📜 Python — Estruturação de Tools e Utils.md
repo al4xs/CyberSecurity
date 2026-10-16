@@ -4481,3 +4481,5 @@ Para ferramentas de segurança, também documente o escopo de utilização e os 
 Esses comandos pressupõem que as ferramentas correspondentes estejam instaladas e que você esteja executando-os no diretório adequado.
 
 O fluxo básico é: organizar o pacote, declarar dependências e metadados, instalar em um ambiente virtual, testar o comando de entrada, executar os testes e construir a distribuição. Antes de publicar uma versão, verifique os artefatos gerados e teste a instalação em um ambiente limpo.
+
+---

@@ -3979,3 +3979,505 @@ Os comandos devem ser executados no ambiente virtual e na raiz do projeto. Ajust
 Em ferramentas de segurança, esse processo é especialmente útil para reduzir regressões em funções de processamento de alvos, interpretação de respostas, tratamento de erros e geração de relatórios. Ainda assim, os testes precisam cobrir os comportamentos relevantes; ferramentas de estilo e tipos não demonstram, sozinhas, que uma ferramenta é segura ou correta.
 
 ---
+# 📜 Python — Empacotamento, Dependências e Distribuição de Ferramentas
+
+## 1. O que significa empacotar um projeto Python?
+
+Desenvolver um programa Python e conseguir executá-lo na própria máquina é diferente de preparar esse programa para instalação e utilização em outros ambientes.
+
+Um projeto pode funcionar no computador do desenvolvedor porque depende de bibliotecas já instaladas, arquivos locais, variáveis de ambiente ou configurações que não existem em outra máquina.
+
+**Empacotamento** é o processo de preparar um projeto para que ele possa ser instalado e distribuído de maneira organizada.
+
+Em um projeto Python, isso pode envolver:
+
+- Metadados, como nome e versão.
+    
+- Código-fonte organizado em um pacote.
+    
+- Declaração das dependências.
+    
+- Pontos de entrada para execução.
+    
+- Configurações de construção do pacote.
+    
+- Documentação e instruções de instalação.
+    
+
+Por exemplo, uma ferramenta de enumeração de hosts pode ser desenvolvida em uma pasta e executada com:
+
+```
+python main.py
+```
+
+Mas, se o projeto for organizado como um pacote instalável, poderá oferecer um comando próprio:
+
+```
+minha-ferramenta --help
+```
+
+O comando só estará disponível depois que o pacote for instalado corretamente e seu ponto de entrada estiver configurado.
+
+## 2. Dependências: o que o projeto precisa para funcionar?
+
+Uma dependência é um componente externo utilizado pelo projeto.
+
+Exemplos:
+
+- `requests`: comunicação HTTP.
+    
+- `pytest`: testes automatizados.
+    
+- `rich`: saída formatada no terminal.
+    
+- `ruff`: análise e formatação do código.
+    
+
+O Python possui uma biblioteca padrão bastante ampla. Portanto, nem todo projeto precisa instalar dependências externas.
+
+### 2.1. Dependências de execução e de desenvolvimento
+
+É útil distinguir as bibliotecas necessárias para executar a aplicação daquelas usadas apenas durante o desenvolvimento.
+
+|Categoria|Exemplos|Finalidade|
+|---|---|---|
+|Execução|`requests`|Realizar requisições HTTP|
+|Testes|`pytest`|Executar testes automatizados|
+|Qualidade|`ruff`, `mypy`|Verificar código e tipos|
+|Construção|`build`|Gerar distribuições instaláveis|
+
+Essa separação evita instalar ferramentas de desenvolvimento desnecessárias em ambientes destinados apenas à execução.
+
+### 2.2. Por que usar um ambiente virtual?
+
+O ambiente virtual isola os pacotes Python de um projeto dos pacotes utilizados por outros projetos.
+
+No Ubuntu, dentro da pasta do projeto:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Instale uma dependência:
+
+```
+python -m pip install requests
+```
+
+Confira os pacotes instalados:
+
+```
+python -m pip list
+```
+
+Para sair do ambiente virtual:
+
+```
+deactivate
+```
+
+O ambiente virtual não é o projeto inteiro e normalmente não deve ser distribuído junto com o código-fonte. Cada usuário pode criar seu próprio ambiente e instalar as dependências declaradas.
+
+## 3. `requirements.txt` e `pyproject.toml`
+
+Esses arquivos podem aparecer no mesmo projeto, mas possuem finalidades diferentes.
+
+### 3.1. `requirements.txt`
+
+É frequentemente utilizado para registrar pacotes que devem ser instalados com o `pip`.
+
+Exemplo:
+
+```
+requests>=2.31,<3.0
+```
+
+Instalação:
+
+```
+python -m pip install -r requirements.txt
+```
+
+Também é possível gerar uma lista dos pacotes instalados no ambiente:
+
+```
+python -m pip freeze > requirements.txt
+```
+
+**Atenção:** `pip freeze` registra os pacotes presentes no ambiente, inclusive aqueles que podem ter sido instalados para testes ou outras atividades. Ele não identifica automaticamente quais dependências são realmente utilizadas pelo projeto.
+
+Por isso, não é recomendável gerar um arquivo de dependências de produção a partir de um ambiente cheio de ferramentas sem revisar o resultado.
+
+### 3.2. `pyproject.toml`
+
+O `pyproject.toml` é o arquivo moderno utilizado para declarar metadados do projeto e configurações das ferramentas de desenvolvimento e construção.
+
+Exemplo:
+
+```
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha-ferramenta"
+version = "0.1.0"
+description = "Ferramenta de automação em Python"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31,<3.0"
+]
+```
+
+Entendendo os campos:
+
+- `build-system`: informa como o pacote será construído.
+    
+- `requires`: declara os componentes necessários para a construção.
+    
+- `build-backend`: identifica o backend responsável pela construção.
+    
+- `name`: nome de distribuição do pacote.
+    
+- `version`: versão atual.
+    
+- `description`: descrição curta.
+    
+- `requires-python`: versões de Python compatíveis.
+    
+- `dependencies`: dependências necessárias para executar a aplicação.
+    
+
+O exemplo utiliza o backend `setuptools`. O arquivo não exige que todo projeto Python seja empacotado, mas é importante quando se deseja criar uma distribuição instalável.
+
+### 3.3. Declarando dependências de desenvolvimento
+
+É possível separar as dependências opcionais das dependências principais.
+
+```
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy"
+]
+```
+
+Para instalar o projeto com essas dependências opcionais:
+
+```
+python -m pip install -e ".[dev]"
+```
+
+Esse comando pressupõe que você esteja na raiz do projeto e que ele tenha sido configurado como um pacote instalável.
+
+O grupo `dev` não é instalado automaticamente como dependência obrigatória para todos os usuários.
+
+## 4. Estrutura de um pacote instalável
+
+Considere a seguinte organização:
+
+```
+minha-ferramenta/
+├── pyproject.toml
+├── README.md
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       ├── cli.py
+│       └── services.py
+└── tests/
+    └── test_services.py
+```
+
+O diretório `src/` contém o pacote Python. A pasta `tests/` reúne os testes automatizados.
+
+A separação entre o nome de distribuição `minha-ferramenta` e o nome do pacote Python `minha_ferramenta` é intencional. Nomes de distribuição podem conter hífens; nomes de módulos Python seguem as regras de identificadores da linguagem.
+
+### 4.1. Código da aplicação
+
+Arquivo `src/minha_ferramenta/services.py`:
+
+```
+def saudar(nome: str) -> str:
+    return f"Olá, {nome}!"
+```
+
+Arquivo `src/minha_ferramenta/cli.py`:
+
+```
+import argparse
+
+from minha_ferramenta.services import saudar
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Exemplo de ferramenta Python"
+    )
+
+    parser.add_argument(
+        "--nome",
+        default="usuário",
+        help="Nome para a saudação",
+    )
+
+    args = parser.parse_args()
+    print(saudar(args.nome))
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+O módulo `services.py` contém a lógica reutilizável. O módulo `cli.py` é responsável pela interface de linha de comando.
+
+A função `main()` retorna um código de saída, e `SystemExit` permite que esse código seja transmitido ao sistema operacional.
+
+### 4.2. Configurando o pacote e o comando
+
+Para o exemplo com `setuptools`, complemente o `pyproject.toml`:
+
+```
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha-ferramenta"
+version = "0.1.0"
+description = "Exemplo de ferramenta Python"
+requires-python = ">=3.10"
+
+[project.scripts]
+minha-ferramenta = "minha_ferramenta.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+```
+
+O campo `[project.scripts]` cria um comando de terminal associado à função indicada.
+
+A expressão:
+
+```
+minha-ferramenta = "minha_ferramenta.cli:main"
+```
+
+significa que o comando `minha-ferramenta` executará a função `main` do módulo `minha_ferramenta.cli`.
+
+O comando será disponibilizado no ambiente em que o pacote estiver instalado.
+
+## 5. Instalando o projeto durante o desenvolvimento
+
+Dentro da raiz do projeto, crie e ative o ambiente virtual:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Instale o projeto em modo editável:
+
+```
+python -m pip install -e .
+```
+
+O modo editável permite desenvolver o pacote sem precisar reconstruuir e reinstalar a distribuição a cada alteração no código-fonte.
+
+Teste o comando:
+
+```
+minha-ferramenta --help
+```
+
+E execute:
+
+```
+minha-ferramenta --nome Marcos
+```
+
+Saída esperada:
+
+```
+Olá, Marcos!
+```
+
+Para instalar também as dependências opcionais de desenvolvimento, quando declaradas:
+
+```
+python -m pip install -e ".[dev]"
+```
+
+Se o comando não for encontrado, verifique se o ambiente virtual está ativado e se a instalação terminou sem erros.
+
+## 6. Construindo uma distribuição
+
+O pacote pode ser preparado para distribuição por meio de arquivos chamados _wheels_ e arquivos-fonte.
+
+- **Wheel (**`**.whl**`**):** formato de distribuição pré-construído para instalação.
+    
+- **Source distribution (**`**.tar.gz**`**):** contém os arquivos-fonte necessários para construir ou instalar o pacote.
+    
+
+Instale a ferramenta de construção:
+
+```
+python -m pip install build
+```
+
+Na raiz do projeto, execute:
+
+```
+python -m build
+```
+
+A construção normalmente gera uma pasta `dist/` com os artefatos de distribuição.
+
+Exemplo:
+
+```
+dist/
+├── minha_ferramenta-0.1.0-py3-none-any.whl
+└── minha_ferramenta-0.1.0.tar.gz
+```
+
+Os nomes exatos dependem dos metadados e do processo de construção.
+
+Para testar a wheel em um ambiente separado, crie outro ambiente virtual e instale o arquivo gerado:
+
+```
+python3 -m venv /tmp/teste-ferramenta
+source /tmp/teste-ferramenta/bin/activate
+
+python -m pip install dist/minha_ferramenta-0.1.0-py3-none-any.whl
+minha-ferramenta --help
+```
+
+Substitua o nome do arquivo pelo artefato realmente produzido. Esse teste ajuda a encontrar arquivos ausentes e dependências não declaradas que poderiam passar despercebidos no ambiente de desenvolvimento.
+
+## 7. Controle de versão e releases
+
+O controle de versão permite identificar mudanças no projeto e acompanhar sua evolução.
+
+Um projeto pode começar em `0.1.0` e avançar para versões posteriores conforme amadurece.
+
+No versionamento semântico, o formato usual é:
+
+```
+MAJOR.MINOR.PATCH
+```
+
+- **MAJOR:** mudanças incompatíveis com a interface anterior.
+    
+- **MINOR:** funcionalidades novas compatíveis com a interface anterior.
+    
+- **PATCH:** correções compatíveis com a interface existente.
+    
+
+Por exemplo, uma correção de erro sem alteração incompatível pode justificar `1.2.0` → `1.2.1`. A introdução de uma funcionalidade compatível pode justificar `1.2.0` → `1.3.0`.
+
+A versão deve ser atualizada de forma consistente nos metadados da distribuição. O versionamento semântico é uma convenção útil, mas a decisão concreta depende da política de releases do projeto.
+
+### 7.1. Git e arquivos que não devem ser distribuídos
+
+Em geral, não inclua no repositório:
+
+- O diretório `.venv/`.
+    
+- Arquivos temporários e caches.
+    
+- Segredos e credenciais.
+    
+- Arquivos locais com configurações privadas.
+    
+- Artefatos de construção desnecessários.
+    
+
+Um `.gitignore` simples:
+
+```
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+.env
+```
+
+O `.gitignore` não remove arquivos que já foram rastreados pelo Git. Além disso, se uma credencial já foi enviada ao repositório remoto, adicioná-la ao `.gitignore` não apaga o histórico nem torna a credencial segura. Nesse caso, revogue ou substitua o segredo e trate o histórico conforme necessário.
+
+## 8. Configuração segura de ferramentas distribuídas
+
+Uma ferramenta distribuída precisa funcionar em ambientes diferentes sem depender de caminhos específicos do computador de quem a desenvolveu.
+
+Evite:
+
+```
+ARQUIVO = "/home/mafiaboy/Documentos/projeto/config.json"
+```
+
+Esse caminho pode não existir na máquina de outra pessoa.
+
+Prefira receber o caminho como argumento ou utilizar uma configuração definida pelo usuário:
+
+```
+from pathlib import Path
+
+
+def carregar_arquivo(caminho: str) -> str:
+    arquivo = Path(caminho)
+
+    if not arquivo.is_file():
+        raise FileNotFoundError(
+            f"Arquivo não encontrado: {arquivo}"
+        )
+
+    return arquivo.read_text(encoding="utf-8")
+```
+
+O caminho é fornecido externamente, e a função verifica se existe um arquivo regular antes de tentar lê-lo.
+
+Outros cuidados importantes:
+
+- Não inclua tokens, senhas ou chaves de API no código-fonte.
+    
+- Declare as dependências necessárias.
+    
+- Informe as versões de Python suportadas.
+    
+- Documente a instalação e a execução.
+    
+- Trate erros de arquivos, permissões e conectividade.
+    
+- Teste o pacote instalado fora do diretório de desenvolvimento.
+    
+- Distribua apenas arquivos e funcionalidades que deveriam estar disponíveis ao usuário.
+    
+
+Para ferramentas de segurança, também documente o escopo de utilização e os requisitos de autorização. O empacotamento facilita a instalação, mas não substitui controles de acesso nem validação dos alvos.
+
+## 9. Comandos úteis para o ciclo de distribuição
+
+|Objetivo|Comando|
+|---|---|
+|Criar ambiente virtual|`python3 -m venv .venv`|
+|Ativar ambiente|`source .venv/bin/activate`|
+|Instalar dependências|`python -m pip install -r requirements.txt`|
+|Instalar projeto editável|`python -m pip install -e .`|
+|Instalar extras de desenvolvimento|`python -m pip install -e ".[dev]"`|
+|Conferir pacotes instalados|`python -m pip list`|
+|Verificar metadados de um pacote|`python -m pip show requests`|
+|Construir distribuições|`python -m build`|
+|Verificar o código|`ruff check .`|
+|Executar testes|`pytest`|
+
+Esses comandos pressupõem que as ferramentas correspondentes estejam instaladas e que você esteja executando-os no diretório adequado.
+
+O fluxo básico é: organizar o pacote, declarar dependências e metadados, instalar em um ambiente virtual, testar o comando de entrada, executar os testes e construir a distribuição. Antes de publicar uma versão, verifique os artefatos gerados e teste a instalação em um ambiente limpo.

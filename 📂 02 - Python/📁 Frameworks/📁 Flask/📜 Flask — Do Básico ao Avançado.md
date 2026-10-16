@@ -2359,3 +2359,569 @@ Em projetos com Application Factory, verifique se a extensão foi inicializada p
 - Não confunda Blueprint com uma aplicação Flask independente: ele agrupa componentes que serão registrados em uma aplicação.
     
 - Não crie diretórios e camadas desnecessários apenas para seguir uma estrutura considerada ideal; a organização deve facilitar a manutenção do projeto.
+---
+## 6. Banco de dados e ORM com Flask-SQLAlchemy
+
+Até agora, os exemplos do Flask retornavam textos e páginas HTML. Porém, quando precisamos cadastrar usuários, armazenar produtos ou manter informações entre diferentes acessos, precisamos de um mecanismo de persistência.
+
+É aí que entra o banco de dados.
+
+### 6.1. O que é um banco de dados?
+
+Um banco de dados é um sistema utilizado para armazenar, organizar, consultar e modificar informações.
+
+Imagine um sistema de cadastro de usuários. Cada usuário possui informações como nome, e-mail e idade. Em vez de manter esses dados apenas em variáveis Python, podemos armazená-los em um banco de dados para recuperá-los posteriormente.
+
+Um banco relacional organiza as informações em tabelas, compostas por colunas e registros.
+
+Exemplo de uma tabela `usuarios`:
+
+|id|nome|email|
+|---|---|---|
+|1|Ana|[ana@example.com](mailto:ana@example.com)|
+|2|Pedro|[pedro@example.com](mailto:pedro@example.com)|
+|3|Marcos|[marcos@example.com](mailto:marcos@example.com)|
+
+Nesse exemplo:
+
+- **Tabela:** `usuarios`.
+    
+- **Colunas:** `id`, `nome` e `email`.
+    
+- **Registros:** cada linha que representa um usuário.
+    
+- **Chave primária:** `id`, utilizada para identificar cada registro de maneira única.
+    
+
+O banco de dados pode continuar armazenando essas informações mesmo depois que o servidor Flask for encerrado.
+
+### 6.2. O que é SQL?
+
+SQL significa _Structured Query Language_. É uma linguagem utilizada para trabalhar com bancos de dados relacionais.
+
+Por exemplo, uma consulta SQL para buscar todos os usuários seria:
+
+```
+SELECT * FROM usuarios;
+```
+
+Para inserir um registro:
+
+```
+INSERT INTO usuarios (nome, email)
+VALUES ('Ana', 'ana@example.com');
+```
+
+Para atualizar um registro:
+
+```
+UPDATE usuarios
+SET nome = 'Ana Silva'
+WHERE id = 1;
+```
+
+Para excluir um registro:
+
+```
+DELETE FROM usuarios
+WHERE id = 1;
+```
+
+Esses comandos são executados pelo sistema de banco de dados. O Flask não é um banco de dados e não executa essas operações sozinho: ele utiliza bibliotecas para se comunicar com o banco.
+
+**Atenção:** o `WHERE` limita quais registros serão atualizados ou excluídos. Sem uma condição adequada, um `UPDATE` ou `DELETE` pode afetar todos os registros da tabela.
+
+### 6.3. O que é um ORM?
+
+ORM significa _Object-Relational Mapping_, ou mapeamento objeto-relacional.
+
+Um ORM permite representar registros do banco de dados como objetos Python. Em vez de escrever manualmente cada consulta SQL, podemos trabalhar com classes, atributos e métodos fornecidos pela biblioteca.
+
+Por exemplo, um usuário pode ser representado assim:
+
+```
+usuario = Usuario(
+    nome="Ana",
+    email="ana@example.com"
+)
+```
+
+A classe `Usuario` representa o modelo dos dados. Quando esse objeto é persistido no banco, seus atributos correspondem às colunas configuradas no modelo.
+
+O ORM ajuda a integrar a lógica da aplicação com o banco de dados, mas não elimina a necessidade de compreender SQL, relacionamentos, índices, transações e segurança.
+
+### 6.4. O que é Flask-SQLAlchemy?
+
+O Flask-SQLAlchemy é uma extensão do Flask que integra o SQLAlchemy à aplicação.
+
+O SQLAlchemy é a biblioteca que fornece o ORM e ferramentas de acesso a bancos de dados. O Flask-SQLAlchemy adapta essa integração ao contexto de uma aplicação Flask, facilitando a configuração e o uso da sessão de banco de dados.
+
+As responsabilidades ficam divididas assim:
+
+- **Flask:** recebe requisições HTTP e organiza a aplicação web.
+    
+- **Flask-SQLAlchemy:** integra o acesso ao banco com a aplicação Flask.
+    
+- **SQLAlchemy:** fornece o ORM e os mecanismos de comunicação com o banco.
+    
+- **Sistema de banco de dados:** armazena e consulta os dados efetivamente.
+    
+
+O Flask-SQLAlchemy é uma extensão externa. Ele não faz parte do núcleo do Flask e precisa ser instalado separadamente.
+
+### 6.5. Instalando as dependências
+
+Ative o ambiente virtual do projeto e execute:
+
+```
+python -m pip install Flask Flask-SQLAlchemy
+```
+
+Para verificar se a extensão está disponível:
+
+```
+python -m pip show Flask-SQLAlchemy
+```
+
+Em um projeto existente, mantenha as versões compatíveis com as demais dependências. Depois de instalar as bibliotecas, é uma boa prática registrar as dependências do projeto em um arquivo como `requirements.txt`.
+
+Por exemplo:
+
+```
+python -m pip freeze > requirements.txt
+```
+
+Esse comando registra as versões dos pacotes instalados no ambiente atual. Em projetos maiores, é importante garantir que o ambiente não contenha dependências irrelevantes antes de gerar o arquivo.
+
+### 6.6. Configurando o banco de dados
+
+Para aprender, podemos utilizar SQLite. Ele armazena o banco em um arquivo e não exige a execução de um servidor de banco de dados separado.
+
+Exemplo de estrutura:
+
+```
+meu_projeto/
+├── app.py
+└── instance/
+```
+
+O diretório `instance` é um local convencional do Flask para dados específicos da instância da aplicação, como um banco SQLite local.
+
+Exemplo de `app.py`:
+
+```
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    "sqlite:///aplicacao.db"
+)
+
+db = SQLAlchemy(app)
+```
+
+Vamos analisar as partes importantes:
+
+- `Flask(__name__)`: cria a aplicação Flask.
+    
+- `SQLALCHEMY_DATABASE_URI`: define a URI de conexão utilizada pela extensão.
+    
+- `sqlite:///aplicacao.db`: configura uma conexão com SQLite usando um caminho relativo ao diretório de instância da aplicação no padrão atual do Flask-SQLAlchemy.
+    
+- `SQLAlchemy(app)`: cria a extensão e a associa à aplicação.
+    
+
+Com essa configuração, o banco SQLite será criado no local correspondente à URI quando o mecanismo de criação das tabelas ou outra operação que precise do banco for executado. A simples configuração da URI não cria todas as tabelas automaticamente.
+
+O formato da URI depende do sistema de banco de dados utilizado. PostgreSQL e MySQL, por exemplo, utilizam configurações de conexão diferentes.
+
+### 6.7. O que são modelos?
+
+Um modelo é uma classe Python que descreve a estrutura de uma entidade persistida no banco de dados.
+
+Considere o modelo de usuário:
+
+```
+class Usuario(db.Model):
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    nome = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    email = db.Column(
+        db.String(150),
+        nullable=False
+    )
+```
+
+Nesse exemplo, `Usuario` representa a tabela de usuários.
+
+#### Analisando o modelo
+
+`**class Usuario(db.Model):**`
+
+Define uma classe de modelo baseada em `db.Model`. A extensão utiliza essa classe para mapear os objetos Python à estrutura relacional.
+
+`**id = db.Column(db.Integer, primary_key=True)**`
+
+Cria uma coluna inteira chamada `id` e a define como chave primária.
+
+O banco utiliza essa chave para identificar cada registro. Em uma configuração convencional do SQLite, o valor da chave primária inteira pode ser gerado automaticamente quando o registro é inserido sem um identificador explícito.
+
+`**nome = db.Column(db.String(100), nullable=False)**`
+
+Cria uma coluna textual com limite declarado de 100 caracteres no tipo SQLAlchemy e impede que a coluna aceite `NULL`.
+
+`**email = db.Column(db.String(150), nullable=False)**`
+
+Define uma coluna textual para armazenar o e-mail e exige um valor não nulo.
+
+`nullable=False` não garante que o texto seja um e-mail válido. Essa validação precisa ser realizada pela aplicação ou por mecanismos adicionais.
+
+### 6.8. Criando as tabelas
+
+Definir uma classe de modelo não significa que a tabela já exista no banco.
+
+Para criar as tabelas correspondentes aos modelos registrados, podemos utilizar `db.create_all()` dentro do contexto da aplicação.
+
+Exemplo didático completo:
+
+```
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    "sqlite:///aplicacao.db"
+)
+
+db = SQLAlchemy(app)
+
+
+class Usuario(db.Model):
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    nome = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    email = db.Column(
+        db.String(150),
+        nullable=False
+    )
+
+
+with app.app_context():
+    db.create_all()
+```
+
+#### O que é o contexto da aplicação?
+
+O contexto da aplicação disponibiliza a instância Flask ativa para recursos que dependem dela.
+
+Em uma aplicação Flask-SQLAlchemy, operações como acessar a sessão do banco precisam estar associadas ao contexto correto da aplicação.
+
+Por isso, no exemplo, `with app.app_context():` estabelece esse contexto antes da chamada a `db.create_all()`.
+
+#### O que `create_all()` faz?
+
+O método cria as tabelas mapeadas que ainda não existem no banco conectado.
+
+Ele **não é um sistema de migrações** e não atualiza automaticamente a estrutura de tabelas já existentes para refletir todas as mudanças feitas nos modelos. Para controlar alterações de esquema ao longo do tempo, utilizamos ferramentas de migração, como Flask-Migrate e Alembic.
+
+### 6.9. Inserindo registros
+
+Depois de configurar o banco e definir o modelo, podemos criar objetos Python e adicioná-los à sessão.
+
+Exemplo:
+
+```
+with app.app_context():
+    usuario = Usuario(
+        nome="Ana",
+        email="ana@example.com"
+    )
+
+    db.session.add(usuario)
+    db.session.commit()
+```
+
+O que acontece:
+
+1. `Usuario(...)` cria um objeto Python.
+    
+2. `db.session.add(usuario)` adiciona o objeto à sessão, preparando-o para persistência.
+    
+3. `db.session.commit()` confirma a transação e persiste as alterações no banco.
+    
+
+A sessão mantém o controle das alterações realizadas nos objetos durante a transação. Adicionar um objeto à sessão não significa necessariamente que ele já foi gravado de forma definitiva.
+
+Se a transação falhar, o `commit()` pode lançar uma exceção. Em aplicações reais, o código deve tratar falhas e, quando necessário, executar `db.session.rollback()` para reverter a transação pendente.
+
+### 6.10. Consultando registros
+
+Podemos utilizar consultas do SQLAlchemy para recuperar objetos do banco.
+
+Para obter todos os usuários:
+
+```
+usuarios = db.session.execute(
+    db.select(Usuario)
+).scalars().all()
+```
+
+Analisando:
+
+- `db.select(Usuario)`: constrói uma consulta que seleciona registros do modelo `Usuario`.
+    
+- `db.session.execute(...)`: executa a consulta por meio da sessão.
+    
+- `.scalars()`: extrai os objetos correspondentes aos resultados escalares da consulta.
+    
+- `.all()`: obtém todos os resultados em uma lista.
+    
+
+Para percorrer os resultados:
+
+```
+for usuario in usuarios:
+    print(usuario.nome, usuario.email)
+```
+
+Cada elemento é um objeto `Usuario`, por isso podemos acessar os atributos `nome` e `email`.
+
+#### Buscando um registro pelo identificador
+
+```
+usuario = db.session.get(Usuario, 1)
+
+if usuario is not None:
+    print(usuario.nome)
+else:
+    print("Usuário não encontrado")
+```
+
+`db.session.get(Usuario, 1)` busca a entidade cuja chave primária é `1`. Se não existir um registro correspondente, o resultado será `None`.
+
+Essa forma é apropriada quando conhecemos a chave primária e queremos recuperar uma entidade por ela.
+
+#### Filtrando por um campo
+
+```
+usuarios = db.session.execute(
+    db.select(Usuario).where(
+        Usuario.nome == "Ana"
+    )
+).scalars().all()
+```
+
+O método `.where()` adiciona uma condição à consulta. Nesse caso, selecionamos os usuários cujo nome corresponde a `"Ana"`.
+
+Observe que `Usuario.nome == "Ana"` é uma expressão do SQLAlchemy. Ela não executa uma comparação Python comum entre o atributo de uma instância e uma string: constrói uma condição que será interpretada na consulta SQL.
+
+### 6.11. Atualizando registros
+
+Para atualizar um usuário, podemos recuperar o objeto, modificar seus atributos e confirmar a transação.
+
+```
+with app.app_context():
+    usuario = db.session.get(Usuario, 1)
+
+    if usuario is not None:
+        usuario.nome = "Ana Silva"
+        db.session.commit()
+```
+
+O fluxo é:
+
+1. Recuperar o usuário pelo identificador.
+    
+2. Verificar se o registro existe.
+    
+3. Modificar o atributo `nome`.
+    
+4. Confirmar a transação.
+    
+
+O SQLAlchemy acompanha as alterações dos objetos persistentes associados à sessão. Ao executar `commit()`, as mudanças pendentes são sincronizadas com o banco.
+
+Se o usuário não existir, a condição evita tentar modificar um objeto inexistente.
+
+### 6.12. Excluindo registros
+
+Para excluir um registro:
+
+```
+with app.app_context():
+    usuario = db.session.get(Usuario, 1)
+
+    if usuario is not None:
+        db.session.delete(usuario)
+        db.session.commit()
+```
+
+`db.session.delete(usuario)` marca o objeto para exclusão dentro da sessão. A exclusão é efetivada no banco quando a transação é confirmada.
+
+Em aplicações reais, ações de exclusão devem considerar permissões, validações e possíveis dependências entre registros. Também é importante avaliar se a aplicação precisa de exclusão lógica, histórico de auditoria ou retenção de dados.
+
+### 6.13. Relacionando o banco às rotas Flask
+
+Até agora, as operações foram executadas diretamente dentro de um contexto da aplicação. Em uma aplicação web, normalmente elas são acionadas pelas rotas.
+
+Exemplo:
+
+```
+from flask import Flask, jsonify
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    "sqlite:///aplicacao.db"
+)
+
+db = SQLAlchemy(app)
+
+
+class Usuario(db.Model):
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    nome = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+
+@app.route("/usuarios")
+def listar_usuarios():
+    usuarios = db.session.execute(
+        db.select(Usuario)
+    ).scalars().all()
+
+    return jsonify([
+        {
+            "id": usuario.id,
+            "nome": usuario.nome
+        }
+        for usuario in usuarios
+    ])
+```
+
+A rota `/usuarios` consulta os registros e retorna uma representação JSON.
+
+O fluxo é:
+
+1. O navegador ou cliente HTTP envia uma requisição.
+    
+2. O Flask executa a função `listar_usuarios()`.
+    
+3. A consulta recupera os registros do banco.
+    
+4. A compreensão de lista transforma cada objeto em um dicionário.
+    
+5. `jsonify()` converte a estrutura em uma resposta JSON.
+    
+
+Nesse exemplo, os campos retornados foram escolhidos explicitamente. Isso evita expor automaticamente todos os atributos de um modelo, o que é especialmente importante quando existem dados sensíveis.
+
+A tabela precisa existir antes que a rota possa consultar seus registros. Em um projeto real, prepare o banco com um processo de inicialização ou migração apropriado, em vez de depender de uma rota web para criar tabelas.
+
+### 6.14. Tratando falhas de transação
+
+Operações de banco de dados podem falhar por motivos como restrições violadas, perda de conexão ou problemas de integridade.
+
+Quando uma transação falha, a sessão pode precisar ser revertida antes que novas operações sejam realizadas.
+
+Exemplo geral:
+
+```
+try:
+    db.session.add(usuario)
+    db.session.commit()
+except Exception:
+    db.session.rollback()
+    raise
+```
+
+Nesse exemplo:
+
+- `try` envolve a operação que pode falhar.
+    
+- `commit()` tenta confirmar a transação.
+    
+- `except` captura a exceção.
+    
+- `rollback()` reverte as alterações pendentes da transação.
+    
+- `raise` propaga a exceção para que o erro não seja ocultado.
+    
+
+Capturar `Exception` é útil para ilustrar a necessidade de rollback, mas não deve ser a estratégia final para todos os casos. Em código de produção, prefira tratar as exceções esperadas de forma específica, registrar informações úteis para diagnóstico e evitar expor detalhes internos ao usuário.
+
+Também não é recomendável ignorar uma falha e responder como se o cadastro tivesse sido concluído.
+
+### 6.15. Erros comuns com Flask-SQLAlchemy
+
+`**RuntimeError: Working outside of application context**`
+
+Uma operação dependente da aplicação foi executada sem um contexto Flask ativo. Em scripts independentes, utilize `with app.app_context():`. Nas rotas Flask convencionais, o contexto da requisição normalmente já disponibiliza o contexto da aplicação.
+
+`**no such table**`
+
+O banco não contém a tabela consultada. Verifique se o modelo foi importado e registrado, se o banco conectado é o esperado e se o processo de criação das tabelas ou de migração foi executado.
+
+**Alterações no modelo não aparecem no banco**
+
+Modificar a classe Python não altera automaticamente a estrutura de uma tabela existente. Utilize migrações para controlar mudanças no esquema.
+
+**O registro não é persistido**
+
+Verifique se o objeto foi adicionado à sessão e se a transação foi confirmada. Se o `commit()` falhar, examine a exceção e faça rollback quando necessário.
+
+**Violação de chave ou restrição de integridade**
+
+O dado pode violar uma restrição do banco, como uma chave única, uma chave estrangeira ou uma coluna obrigatória. Valide os dados e trate os erros apropriados.
+
+**Consulta retorna uma lista vazia**
+
+Isso pode significar que não existem registros que correspondam à consulta, que os dados foram inseridos em outro banco ou que os filtros estão incorretos. Confirme a URI de conexão e a condição utilizada na consulta.
+
+### 6.16. Boas práticas iniciais
+
+- Não armazene todos os dados somente em variáveis Python se eles precisarem persistir entre execuções.
+    
+- Utilize modelos para representar as entidades persistidas.
+    
+- Valide os dados antes de gravá-los.
+    
+- Utilize consultas parametrizadas ou os mecanismos de consulta do SQLAlchemy em vez de concatenar entradas do usuário em SQL.
+    
+- Não exponha todos os atributos dos modelos automaticamente nas respostas HTTP.
+    
+- Trate falhas de transação e utilize rollback quando necessário.
+    
+- Não utilize `create_all()` como substituto de migrações em aplicações que precisam evoluir o esquema.
+    
+- Mantenha credenciais de banco e segredos fora do código-fonte.
+    
+- Para aplicações com dados importantes, planeje backups, permissões, índices e políticas de retenção.
+    
+- Utilize transações para manter operações relacionadas consistentes.
+
+---

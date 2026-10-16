@@ -5689,3 +5689,612 @@ Além disso, evite armazenar informações privadas em respostas JSON sem necess
 Uma API bem estruturada não é apenas um conjunto de rotas que retornam JSON. Ela também precisa de um contrato previsível, validação rigorosa, tratamento de erros, persistência e controle de acesso.
 
 ---
+## 12. Testes automatizados com pytest e Flask
+
+Testes automatizados são programas que verificam se determinadas partes de uma aplicação funcionam como esperado.
+
+Em uma aplicação Flask, podemos testar rotas, respostas HTTP, validações, autenticação, permissões e operações relacionadas ao banco de dados sem precisar executar manualmente cada cenário pelo navegador.
+
+O Flask possui um cliente de testes integrado. O `pytest`, por sua vez, é uma ferramenta externa que facilita a escrita, a organização e a execução dos testes.
+
+Neste módulo, vamos entender como essas ferramentas trabalham juntas.
+
+### 12.1. Por que testar uma aplicação?
+
+Imagine uma rota responsável por cadastrar usuários. Ela pode funcionar corretamente quando recebe dados válidos, mas apresentar problemas quando:
+
+- O nome não é informado.
+    
+- O e-mail já está cadastrado.
+    
+- O usuário não está autenticado.
+    
+- O banco de dados apresenta uma falha.
+    
+- A aplicação retorna um código HTTP incorreto.
+    
+
+Testar apenas o caminho de sucesso não é suficiente.
+
+Um conjunto de testes pode verificar tanto o comportamento esperado quanto a maneira como a aplicação reage a situações inválidas.
+
+Os testes também ajudam a evitar regressões: problemas que reaparecem depois de uma alteração no código.
+
+### 12.2. O que é pytest?
+
+O `pytest` é uma ferramenta de testes para Python. Ele identifica funções de teste, executa essas funções e informa quais verificações passaram ou falharam.
+
+Instalação:
+
+```
+python3 -m pip install pytest
+```
+
+Em projetos organizados, é recomendável instalar ferramentas de desenvolvimento em um ambiente virtual e registrar as dependências utilizadas.
+
+Exemplo de um teste simples:
+
+```
+def somar(a, b):
+    return a + b
+
+
+def test_somar():
+    assert somar(2, 3) == 5
+```
+
+O `assert` verifica uma condição.
+
+Se `somar(2, 3)` retornar `5`, o teste passa. Se retornar outro valor, o pytest informa a falha.
+
+Por convenção, os arquivos de teste frequentemente utilizam nomes como `test_calculos.py`, e as funções de teste começam com `test_`.
+
+### 12.3. Instalando as dependências de teste
+
+Em um projeto Flask, podemos instalar o Flask e o pytest no ambiente virtual:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install Flask pytest
+```
+
+Os comandos criam um ambiente virtual, ativam esse ambiente e instalam as dependências.
+
+Se o projeto já possui um ambiente virtual e um arquivo de dependências, utilize a configuração existente em vez de criar outro ambiente desnecessariamente.
+
+Para executar os testes:
+
+```
+python -m pytest
+```
+
+O pytest procura automaticamente arquivos e funções que correspondem às convenções de descoberta de testes.
+
+Para executar um arquivo específico:
+
+```
+python -m pytest tests/test_app.py
+```
+
+Para mostrar mais detalhes sobre cada teste:
+
+```
+python -m pytest -v
+```
+
+### 12.4. O cliente de testes do Flask
+
+O Flask disponibiliza `app.test_client()` para simular requisições HTTP à aplicação.
+
+Esse cliente permite testar rotas sem iniciar um servidor web real nem realizar uma conexão de rede externa.
+
+Considere a aplicação:
+
+```
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+
+@app.route("/api/status")
+def status():
+    return jsonify({"status": "online"})
+```
+
+Um teste correspondente:
+
+```
+def test_status():
+    client = app.test_client()
+
+    resposta = client.get("/api/status")
+
+    assert resposta.status_code == 200
+    assert resposta.json == {"status": "online"}
+```
+
+Analisando:
+
+1. `app.test_client()` cria o cliente de testes.
+    
+2. `client.get()` simula uma requisição `GET`.
+    
+3. `resposta.status_code` contém o código HTTP retornado.
+    
+4. `resposta.json` permite acessar o JSON da resposta, quando válido.
+    
+5. Os `assert` verificam se a resposta corresponde ao esperado.
+    
+
+O teste não precisa abrir um navegador. O Flask processa a requisição dentro do ambiente de teste.
+
+### 12.5. Separando a aplicação dos testes
+
+Em projetos maiores, é melhor evitar misturar a definição da aplicação com a execução dos testes.
+
+Uma estrutura simples pode ser:
+
+```
+meu_projeto/
+├── app.py
+└── tests/
+    └── test_app.py
+```
+
+O arquivo `app.py`:
+
+```
+from flask import Flask, jsonify
+
+
+def create_app():
+    app = Flask(__name__)
+
+    @app.route("/api/status")
+    def status():
+        return jsonify({"status": "online"})
+
+    return app
+```
+
+A função `create_app()` é uma Application Factory: ela cria e retorna uma instância configurada da aplicação.
+
+O arquivo `tests/test_app.py`:
+
+```
+from app import create_app
+
+
+def test_status():
+    app = create_app()
+    client = app.test_client()
+
+    resposta = client.get("/api/status")
+
+    assert resposta.status_code == 200
+    assert resposta.json["status"] == "online"
+```
+
+Separar a criação da aplicação da execução do servidor facilita a criação de instâncias específicas para desenvolvimento e testes.
+
+### 12.6. Utilizando fixtures do pytest
+
+Uma fixture é um recurso que prepara algo necessário para um teste, como uma aplicação configurada, um cliente HTTP ou uma conexão de teste.
+
+O pytest disponibiliza o decorador `@pytest.fixture` para definir fixtures.
+
+```
+import pytest
+
+from app import create_app
+
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    return app
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+```
+
+Nesse exemplo:
+
+- A fixture `app` cria uma aplicação para os testes.
+    
+- `TESTING=True` indica que a aplicação está sendo utilizada no ambiente de testes.
+    
+- A fixture `client` recebe a aplicação preparada e cria um cliente de testes.
+    
+
+O pytest identifica os argumentos de uma função de teste que correspondem a fixtures e fornece os valores automaticamente.
+
+Podemos utilizar o cliente assim:
+
+```
+def test_status(client):
+    resposta = client.get("/api/status")
+
+    assert resposta.status_code == 200
+    assert resposta.json["status"] == "online"
+```
+
+Não é necessário chamar manualmente a fixture `client`. O pytest cuida de sua execução e injeta o resultado na função de teste.
+
+### 12.7. Testando diferentes códigos HTTP
+
+Um teste pode verificar tanto a resposta de sucesso quanto as respostas de erro.
+
+Considere uma rota:
+
+```
+from flask import Flask, abort, jsonify
+
+app = Flask(__name__)
+
+
+@app.route("/api/usuarios/<int:usuario_id>")
+def obter_usuario(usuario_id):
+    if usuario_id != 1:
+        abort(404)
+
+    return jsonify({
+        "id": 1,
+        "nome": "Ana",
+    })
+```
+
+Testes:
+
+```
+def test_usuario_existente(client):
+    resposta = client.get("/api/usuarios/1")
+
+    assert resposta.status_code == 200
+    assert resposta.json["nome"] == "Ana"
+
+
+def test_usuario_inexistente(client):
+    resposta = client.get("/api/usuarios/99")
+
+    assert resposta.status_code == 404
+```
+
+O primeiro teste verifica o comportamento de sucesso. O segundo verifica o comportamento de erro.
+
+A condição que define o usuário existente é apenas ilustrativa. Em uma aplicação real, essa verificação normalmente seria realizada consultando o banco de dados.
+
+### 12.8. Testando o envio de JSON
+
+O cliente de testes permite enviar JSON sem precisar montar manualmente o corpo da requisição e seus cabeçalhos.
+
+Considere uma rota que valida um campo `nome`:
+
+```
+from flask import request, jsonify
+
+
+@app.route("/api/usuarios", methods=["POST"])
+def criar_usuario():
+    dados = request.get_json()
+
+    if not isinstance(dados, dict):
+        return jsonify({"erro": "JSON inválido"}), 400
+
+    nome = dados.get("nome")
+
+    if not isinstance(nome, str) or not nome.strip():
+        return jsonify({"erro": "Nome obrigatório"}), 400
+
+    return jsonify({"nome": nome.strip()}), 201
+```
+
+Teste de sucesso:
+
+```
+def test_criar_usuario(client):
+    resposta = client.post(
+        "/api/usuarios",
+        json={"nome": "Mariana"},
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.json["nome"] == "Mariana"
+```
+
+Teste de entrada inválida:
+
+```
+def test_criar_usuario_sem_nome(client):
+    resposta = client.post(
+        "/api/usuarios",
+        json={},
+    )
+
+    assert resposta.status_code == 400
+    assert resposta.json["erro"] == "Nome obrigatório"
+```
+
+O argumento `json` faz com que o cliente envie os dados no formato JSON apropriado.
+
+Observe que a rota de exemplo não persiste o usuário. Os testes verificam o comportamento da validação e da resposta, não uma operação real no banco de dados.
+
+### 12.9. Testando os métodos HTTP
+
+É importante verificar se cada rota aceita os métodos previstos.
+
+Por exemplo, se uma rota foi projetada para receber apenas `GET`, uma requisição `POST` normalmente deve resultar em `405 Method Not Allowed`.
+
+```
+def test_metodo_nao_permitido(client):
+    resposta = client.post("/api/status")
+
+    assert resposta.status_code == 405
+```
+
+Esse teste pressupõe que `/api/status` aceite `GET`, mas não `POST`, e que nenhum outro manipulador altere esse comportamento.
+
+Testar métodos incorretos ajuda a detectar rotas configuradas de forma diferente da planejada.
+
+### 12.10. Testando formulários HTML
+
+O cliente de testes também pode enviar dados de formulário.
+
+Considere uma rota:
+
+```
+from flask import request, redirect, url_for, render_template_string
+
+
+@app.route("/contato", methods=["GET", "POST"])
+def contato():
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+
+        if not nome:
+            return "Nome obrigatório", 400
+
+        return redirect(url_for("contato"))
+
+    return render_template_string(
+        '<form method="post">'
+        '<input name="nome">'
+        '<button type="submit">Enviar</button>'
+        '</form>'
+    )
+```
+
+Teste de envio inválido:
+
+```
+def test_contato_sem_nome(client):
+    resposta = client.post(
+        "/contato",
+        data={"nome": ""},
+    )
+
+    assert resposta.status_code == 400
+```
+
+O argumento `data` envia os valores como dados de formulário.
+
+Em aplicações que utilizam Flask-WTF e proteção CSRF, os testes também precisam considerar o token CSRF. Não é recomendável desativar essa proteção em produção para facilitar os testes.
+
+### 12.11. Testando redirecionamentos
+
+Uma rota pode redirecionar o cliente para outra página.
+
+Por exemplo:
+
+```
+@app.route("/inicio")
+def inicio():
+    return "Página inicial"
+
+
+@app.route("/ir-inicio")
+def ir_inicio():
+    return redirect(url_for("inicio"))
+```
+
+Podemos testar o redirecionamento:
+
+```
+def test_redirecionamento(client):
+    resposta = client.get(
+        "/ir-inicio",
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith("/inicio")
+```
+
+O parâmetro `follow_redirects=False` impede que o cliente siga automaticamente o redirecionamento.
+
+Assim, o teste consegue verificar a resposta original e o cabeçalho `Location`.
+
+Se o objetivo for testar o conteúdo da página final, é possível usar `follow_redirects=True` e verificar a resposta após o redirecionamento.
+
+### 12.12. Testando autenticação e autorização
+
+Em uma aplicação que utiliza Flask-Login, alguns endpoints devem estar acessíveis apenas para usuários autenticados.
+
+Os testes devem verificar os dois cenários:
+
+- Usuário não autenticado tentando acessar uma rota protegida.
+    
+- Usuário autenticado tentando acessar uma rota para a qual não possui permissão.
+    
+
+O comportamento esperado depende da configuração da aplicação. Uma rota protegida por `login_required` pode redirecionar para a página de login, enquanto uma API pode retornar `401`.
+
+Além disso, um usuário autenticado ainda pode receber `403` ou `404` ao tentar acessar um recurso sem autorização.
+
+Não basta testar se o login funciona. Também é necessário testar se o sistema impede que usuários acessem dados de outras pessoas.
+
+### 12.13. Testando operações com banco de dados
+
+Quando uma aplicação utiliza Flask-SQLAlchemy, os testes precisam de um banco de dados isolado para evitar alterar informações reais.
+
+Uma estratégia comum é utilizar um banco SQLite separado para testes, quando ele for compatível com as funcionalidades utilizadas pelo projeto.
+
+Exemplo conceitual de configuração:
+
+```
+app.config.update(
+    TESTING=True,
+    SQLALCHEMY_DATABASE_URI="sqlite://",
+)
+```
+
+A configuração precisa ser aplicada antes da inicialização da extensão do banco de dados, se ela depender da URI durante a inicialização.
+
+O endereço `sqlite://` pode criar um banco SQLite em memória, dependendo da configuração do SQLAlchemy. O ciclo de vida da conexão e a forma como o banco é compartilhado precisam ser considerados para que as tabelas permaneçam disponíveis durante cada teste.
+
+Um fluxo de teste com banco de dados normalmente inclui:
+
+1. Criar a aplicação de teste.
+    
+2. Configurar o banco isolado.
+    
+3. Inicializar a extensão.
+    
+4. Criar as tabelas necessárias.
+    
+5. Executar o teste.
+    
+6. Remover os dados ou descartar o banco ao final.
+    
+
+Não utilize o banco de produção em testes automatizados. Um teste de exclusão, atualização ou cadastro pode modificar dados reais.
+
+### 12.14. Testes parametrizados
+
+Às vezes, precisamos verificar o mesmo comportamento com diferentes entradas. Em vez de repetir a função de teste, podemos utilizar `pytest.mark.parametrize`.
+
+```
+import pytest
+
+
+@pytest.mark.parametrize(
+    ("entrada", "esperado"),
+    [
+        (2, 4),
+        (3, 6),
+        (5, 10),
+    ],
+)
+def test_dobro(entrada, esperado):
+    assert entrada * 2 == esperado
+```
+
+O pytest executa a função para cada par de valores informado.
+
+Nesse exemplo, o mesmo teste verifica três entradas diferentes.
+
+A parametrização é útil para testar validações, conversões, códigos de status e várias combinações de dados sem duplicar a lógica do teste.
+
+### 12.15. Interpretando os resultados do pytest
+
+Ao executar:
+
+```
+python -m pytest -v
+```
+
+o pytest apresenta os testes encontrados e seus resultados.
+
+Os símbolos e as mensagens podem variar conforme as opções de execução, mas os resultados mais comuns incluem:
+
+- `PASSED`: o teste passou.
+    
+- `FAILED`: o teste foi executado, mas uma verificação falhou.
+    
+- `ERROR`: ocorreu um erro durante a preparação ou execução do teste, por exemplo em uma fixture.
+    
+
+Quando um teste falha, examine:
+
+1. O nome do teste.
+    
+2. A linha apontada pelo pytest.
+    
+3. O valor esperado.
+    
+4. O valor realmente recebido.
+    
+5. O traceback e a mensagem de erro.
+    
+
+Uma falha de teste não significa necessariamente que a implementação está errada. O próprio teste pode estar verificando um comportamento incorreto. É necessário comparar o resultado com o requisito esperado.
+
+### 12.16. Organização dos testes no projeto
+
+À medida que o projeto cresce, separe os testes por área funcional.
+
+Uma estrutura possível:
+
+```
+meu_projeto/
+├── app/
+│   ├── __init__.py
+│   ├── routes/
+│   ├── models/
+│   └── templates/
+├── tests/
+│   ├── conftest.py
+│   ├── test_rotas.py
+│   ├── test_usuarios.py
+│   ├── test_autenticacao.py
+│   └── test_api.py
+└── pytest.ini
+```
+
+O arquivo `conftest.py` pode conter fixtures compartilhadas pelos testes daquele diretório e seus subdiretórios.
+
+O arquivo `pytest.ini` permite centralizar opções do pytest. Ele não é obrigatório em todos os projetos.
+
+Evite criar muitos arquivos sem necessidade. A estrutura deve acompanhar a complexidade real da aplicação.
+
+### 12.17. O que os testes não garantem
+
+Uma aplicação com testes passando não é necessariamente segura, correta ou livre de defeitos.
+
+Os testes verificam os comportamentos que foram definidos e cobertos. Eles podem não detectar problemas que não foram considerados.
+
+Além dos testes automatizados, podem ser necessárias revisões de código, testes de integração, verificações de segurança, monitoramento e testes realizados em ambientes próximos da produção.
+
+Também é importante manter os testes independentes: um teste não deve depender da ordem em que outro teste foi executado nem de dados deixados por uma execução anterior.
+
+### 12.18. Boas práticas para testes Flask
+
+- Teste caminhos de sucesso e cenários de erro.
+    
+- Verifique códigos HTTP e conteúdo das respostas.
+    
+- Utilize fixtures para compartilhar a preparação da aplicação.
+    
+- Mantenha os dados de teste isolados dos dados reais.
+    
+- Teste autenticação e autorização separadamente.
+    
+- Verifique a validação de formulários e JSON.
+    
+- Utilize parametrização para entradas variadas.
+    
+- Evite testes que dependam de serviços externos sem necessidade.
+    
+- Não ignore falhas apenas para obter uma execução verde.
+    
+- Execute a suíte de testes depois de mudanças importantes no código.
+    
+
+Os testes automatizados ajudam a transformar requisitos da aplicação em verificações repetíveis, facilitando a manutenção e reduzindo o risco de regressões.
+
+---

@@ -7869,3 +7869,5 @@ Cada camada possui uma responsabilidade específica:
     
 
 Essa separação torna a aplicação mais fácil de entender, testar, manter e ampliar.
+
+---

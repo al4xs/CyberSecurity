@@ -2212,3 +2212,584 @@ Um bloco `except` vazio ou que apenas imprime uma mensagem genérica pode escond
     
 
 Uma aplicação bem organizada mantém a configuração separada da lógica principal, valida os valores externos antes de utilizá-los e registra informações suficientes para investigar falhas sem expor dados sensíveis.
+
+---
+# 📜 Python — CLI Profissional com Argparse
+
+## 1. O que é uma CLI?
+
+CLI significa _Command-Line Interface_, ou interface de linha de comando. É uma forma de interagir com um programa por meio de comandos e argumentos no terminal.
+
+Uma ferramenta simples pode ser executada assim:
+
+```
+python main.py
+```
+
+Já uma ferramenta com opções pode receber parâmetros:
+
+```
+python main.py --url https://exemplo.com --timeout 10
+```
+
+Uma ferramenta com subcomandos pode ter operações distintas:
+
+```
+python main.py verificar --url https://exemplo.com
+python main.py analisar --arquivo resultado.json
+```
+
+Uma CLI bem estruturada facilita a automação por scripts, o uso em terminais e a integração com outras ferramentas.
+
+O módulo `argparse`, incluído na biblioteca padrão do Python, permite definir argumentos, opções, mensagens de ajuda, validações e subcomandos.
+
+**Observação:** esta anotação aprofunda a organização de CLIs. Para os fundamentos de `argparse`, consulte também `[[Argparse - Argumentos de Linha de Comando]]`.
+
+## 2. Anatomia de um comando
+
+Considere:
+
+```
+python main.py verificar --url https://exemplo.com --timeout 10
+```
+
+|Elemento|Função|
+|---|---|
+|`python`|Interpretador que executa o programa.|
+|`main.py`|Arquivo de entrada.|
+|`verificar`|Subcomando que seleciona uma operação.|
+|`--url`|Opção que identifica o argumento seguinte como endereço.|
+|`https://exemplo.com`|Valor da opção `--url`.|
+|`--timeout`|Opção que configura o tempo limite.|
+|`10`|Valor fornecido para o timeout.|
+
+Essa separação permite que uma mesma aplicação ofereça diversas operações sem precisar criar um arquivo executável para cada uma.
+
+## 3. Separando a interface da lógica
+
+Uma CLI não deve concentrar toda a implementação da ferramenta em uma única função.
+
+Considere esta estrutura:
+
+```
+minha_ferramenta/
+├── main.py
+├── cli.py
+├── config.py
+├── servicos.py
+└── utilidades.py
+```
+
+Responsabilidades:
+
+- `main.py`: ponto de entrada do programa.
+    
+- `cli.py`: definição dos argumentos e encaminhamento das operações.
+    
+- `config.py`: leitura e validação das configurações.
+    
+- `servicos.py`: implementação das operações principais.
+    
+- `utilidades.py`: funções auxiliares reutilizáveis.
+    
+
+A CLI recebe a entrada, verifica os argumentos e chama a lógica correspondente. O módulo de serviços não precisa conhecer os detalhes de como o usuário digitou o comando.
+
+Essa separação também facilita os testes: a lógica pode ser testada sem simular toda a interação com o terminal.
+
+## 4. Criando uma CLI com subcomandos
+
+Os subcomandos permitem organizar operações diferentes sob o mesmo programa.
+
+Exemplo de estrutura:
+
+```
+ferramenta/
+├── main.py
+├── cli.py
+└── servicos.py
+```
+
+Arquivo `servicos.py`:
+
+```
+def verificar_endereco(url):
+    print(f"Endereço recebido: {url}")
+
+
+def analisar_arquivo(caminho):
+    print(f"Arquivo recebido: {caminho}")
+```
+
+As funções são propositalmente simples. Elas demonstram a separação da lógica e não realizam uma verificação real de rede nem a análise do conteúdo de um arquivo.
+
+### Criando o parser
+
+Arquivo `cli.py`:
+
+```
+import argparse
+
+from servicos import analisar_arquivo, verificar_endereco
+
+
+def criar_parser():
+    parser = argparse.ArgumentParser(
+        prog="ferramenta",
+        description="Ferramenta de demonstração com subcomandos.",
+    )
+
+    subparsers = parser.add_subparsers(
+        dest="comando",
+        required=True,
+    )
+
+    verificar = subparsers.add_parser(
+        "verificar",
+        help="Recebe um endereço para verificação.",
+    )
+
+    verificar.add_argument(
+        "--url",
+        required=True,
+        help="Endereço que será informado à operação.",
+    )
+
+    analisar = subparsers.add_parser(
+        "analisar",
+        help="Recebe um arquivo para análise.",
+    )
+
+    analisar.add_argument(
+        "--arquivo",
+        required=True,
+        help="Caminho do arquivo que será analisado.",
+    )
+
+    return parser
+```
+
+### Entendendo as partes
+
+#### `argparse.ArgumentParser()`
+
+Cria o parser principal:
+
+```
+parser = argparse.ArgumentParser(
+    prog="ferramenta",
+    description="Ferramenta de demonstração com subcomandos.",
+)
+```
+
+- `prog`: nome exibido nas mensagens de uso.
+    
+- `description`: descrição apresentada na ajuda.
+    
+- `parser`: objeto responsável por definir e interpretar os argumentos.
+    
+
+#### `add_subparsers()`
+
+```
+subparsers = parser.add_subparsers(
+    dest="comando",
+    required=True,
+)
+```
+
+Cria um grupo de subparsers.
+
+- `dest="comando"` determina o nome do atributo em que o subcomando selecionado será armazenado.
+    
+- `required=True` exige que o usuário escolha um subcomando.
+    
+
+Assim, executar apenas `python main.py` sem selecionar uma operação resulta em uma mensagem de uso e em um erro de argumentos.
+
+#### `add_parser()`
+
+```
+verificar = subparsers.add_parser("verificar")
+```
+
+Cria um parser para o subcomando `verificar`.
+
+Cada subcomando pode ter argumentos próprios, sem misturar opções que só fazem sentido para outra operação.
+
+#### `required=True` em uma opção
+
+```
+verificar.add_argument(
+    "--url",
+    required=True,
+)
+```
+
+Torna `--url` obrigatória quando o usuário seleciona `verificar`.
+
+Isso não significa que todas as operações precisam de uma URL. A obrigatoriedade pertence ao parser específico do subcomando.
+
+## 5. Encaminhando os argumentos para a operação correta
+
+Ainda em `cli.py`, acrescente a função:
+
+```
+def executar(args):
+    if args.comando == "verificar":
+        verificar_endereco(args.url)
+
+    elif args.comando == "analisar":
+        analisar_arquivo(args.arquivo)
+```
+
+A variável `args` é o objeto retornado pelo parser. Seus atributos dependem dos argumentos definidos e do subcomando escolhido.
+
+Quando o usuário escolhe `verificar`, a CLI acessa `args.url`. Quando escolhe `analisar`, acessa `args.arquivo`.
+
+Complete o arquivo com:
+
+```
+def main():
+    parser = criar_parser()
+    args = parser.parse_args()
+    executar(args)
+```
+
+O fluxo fica assim:
+
+1. Criar a definição dos comandos.
+    
+2. Interpretar os argumentos fornecidos.
+    
+3. Identificar o subcomando selecionado.
+    
+4. Encaminhar os dados para a função correspondente.
+    
+
+## 6. Criando o ponto de entrada
+
+Arquivo `main.py`:
+
+```
+from cli import main
+
+
+if __name__ == "__main__":
+    main()
+```
+
+A condição impede que `main()` seja executada automaticamente quando o arquivo é importado por outro módulo.
+
+Execute a ferramenta:
+
+```
+python main.py verificar --url https://exemplo.com
+```
+
+Saída esperada:
+
+```
+Endereço recebido: https://exemplo.com
+```
+
+Para o segundo subcomando:
+
+```
+python main.py analisar --arquivo resultado.json
+```
+
+Saída esperada:
+
+```
+Arquivo recebido: resultado.json
+```
+
+O segundo exemplo apenas recebe e exibe o caminho; ele não verifica se o arquivo existe nem lê seu conteúdo.
+
+## 7. Adicionando validação aos argumentos
+
+O `argparse` pode validar alguns tipos e restrições diretamente.
+
+Por exemplo, um timeout positivo:
+
+```
+import argparse
+
+
+def timeout_positivo(valor):
+    try:
+        numero = float(valor)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "O timeout deve ser numérico."
+        ) from exc
+
+    if numero <= 0:
+        raise argparse.ArgumentTypeError(
+            "O timeout deve ser maior que zero."
+        )
+
+    return numero
+```
+
+A função `timeout_positivo()` recebe o texto informado no terminal, converte-o para `float` e verifica se o número é maior que zero.
+
+Se o valor for inválido, ela lança `ArgumentTypeError`. O `argparse` utiliza essa exceção para apresentar uma mensagem de erro de argumentos ao usuário.
+
+Utilização:
+
+```
+parser.add_argument(
+    "--timeout",
+    type=timeout_positivo,
+    default=5.0,
+    help="Tempo limite em segundos (padrão: 5).",
+)
+```
+
+- `type=timeout_positivo`: encaminha o valor recebido à função de validação.
+    
+- `default=5.0`: utiliza esse valor se a opção não for informada.
+    
+- `help`: descreve a finalidade da opção.
+    
+
+A função retorna o valor convertido. Portanto, após o parsing, `args.timeout` será um número `float`, não uma string.
+
+## 8. Escolhendo entre `type`, `choices` e validação posterior
+
+Esses recursos atendem a necessidades diferentes.
+
+### `type`
+
+Converte ou valida um valor:
+
+```
+parser.add_argument("--porta", type=int)
+```
+
+O valor recebido precisa ser convertível para inteiro.
+
+### `choices`
+
+Limita o valor a opções conhecidas:
+
+```
+parser.add_argument(
+    "--formato",
+    choices=["json", "txt", "csv"],
+    default="json",
+)
+```
+
+O usuário só pode escolher um dos formatos permitidos.
+
+Exemplo:
+
+```
+python main.py --formato json
+```
+
+Se o usuário fornecer um formato não permitido, o `argparse` rejeita o argumento.
+
+### Validação posterior
+
+Algumas verificações dependem do estado do sistema ou de outros argumentos.
+
+Por exemplo, para verificar se um arquivo existe:
+
+```
+from pathlib import Path
+
+
+def validar_arquivo_existente(caminho):
+    arquivo = Path(caminho)
+
+    if not arquivo.is_file():
+        raise FileNotFoundError(
+            f"Arquivo não encontrado: {arquivo}"
+        )
+
+    return arquivo
+```
+
+Essa função utiliza `Path.is_file()` para verificar se o caminho corresponde a um arquivo existente.
+
+A validação pode ser realizada após o parsing, antes de iniciar a operação principal. Isso permite separar erros de sintaxe do comando de problemas encontrados durante a execução.
+
+## 9. Códigos de saída
+
+Programas de terminal comunicam o resultado da execução por meio de um código de saída.
+
+Em geral:
+
+- `0`: execução concluída com sucesso.
+    
+- Diferente de `0`: houve uma falha ou uma condição que não representa sucesso.
+    
+
+Esses códigos são úteis para scripts Bash, pipelines e sistemas de automação.
+
+No Python, o módulo `sys` permite definir o código de saída:
+
+```
+import sys
+
+sys.exit(0)
+```
+
+Ou:
+
+```
+import sys
+
+sys.exit(1)
+```
+
+O `sys.exit()` encerra a execução por meio de `SystemExit`. Quando recebe um inteiro, esse valor é utilizado como código de saída do processo.
+
+Uma organização comum é fazer a função principal retornar um código:
+
+```
+def main():
+    # Executar a operação.
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+O comentário indica o local em que a operação real seria implementada. A função `main()` retorna `0`, e `SystemExit` faz com que esse valor seja utilizado como código de saída.
+
+Para uma ferramenta maior, podem ser definidos códigos específicos para erros de argumentos, falhas de rede ou problemas de arquivo. Documente esses códigos para que outros programas saibam interpretá-los.
+
+## 10. Integrando logging à CLI
+
+O logging pode ser configurado no ponto de entrada da aplicação.
+
+Arquivo `main.py`:
+
+```
+import logging
+
+from cli import main
+
+
+def configurar_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+
+
+if __name__ == "__main__":
+    configurar_logging()
+    main()
+```
+
+A função `configurar_logging()` centraliza a configuração.
+
+Os módulos chamados pela CLI podem utilizar:
+
+```
+import logging
+
+logger = logging.getLogger(__name__)
+```
+
+E registrar eventos:
+
+```
+logger.info("Operação iniciada.")
+logger.warning("Uma opção opcional não foi configurada.")
+logger.error("A operação não pôde ser concluída.")
+```
+
+Evite configurar handlers independentes em todos os módulos. Centralizar a configuração facilita controlar o nível de detalhe e o destino dos logs.
+
+A saída destinada ao usuário e os logs operacionais são coisas diferentes. Uma ferramenta pode usar `print()` para apresentar o resultado final e `logging` para registrar detalhes de execução.
+
+## 11. Como testar a interface de linha de comando
+
+Uma CLI pode ser testada sem precisar executar operações reais de rede ou modificar arquivos importantes.
+
+O `pytest` permite testar funções diretamente. Também é possível utilizar `subprocess` para executar o programa como um processo separado.
+
+Exemplo simples para testar o código de saída de um comando:
+
+```
+import subprocess
+import sys
+
+
+def test_comando_sem_subcomando_falha():
+    resultado = subprocess.run(
+        [sys.executable, "main.py"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert resultado.returncode != 0
+```
+
+Explicação:
+
+- `subprocess.run()` executa um processo externo e aguarda sua conclusão.
+    
+- `sys.executable` aponta para o interpretador Python em uso.
+    
+- `capture_output=True` captura a saída padrão e a saída de erro.
+    
+- `text=True` devolve as saídas como strings.
+    
+- `check=False` evita lançar `CalledProcessError` apenas porque o processo terminou com código diferente de zero.
+    
+- `returncode` contém o código de saída.
+    
+
+Esse teste pressupõe que `main.py` esteja no diretório de trabalho utilizado pelo teste. Em um projeto instalado como pacote, é possível organizar os testes para executar o ponto de entrada do pacote ou chamar suas funções diretamente.
+
+Testes de CLI devem verificar não apenas o sucesso, mas também argumentos ausentes, valores inválidos e códigos de saída consistentes.
+
+## 12. Boas práticas para CLIs profissionais
+
+- Use nomes de comandos e opções que descrevam claramente a ação.
+    
+- Forneça mensagens de ajuda úteis.
+    
+- Valide os argumentos antes de iniciar operações demoradas.
+    
+- Mantenha a lógica de negócio fora do parser.
+    
+- Evite duplicar a mesma lógica em vários subcomandos.
+    
+- Retorne códigos de saída consistentes.
+    
+- Registre falhas relevantes sem expor tokens ou outros dados sensíveis.
+    
+- Teste os caminhos de sucesso e de erro.
+    
+- Documente exemplos reais de utilização no `README.md`.
+    
+
+Uma CLI deve ser previsível: o usuário precisa entender quais argumentos são aceitos, o que cada comando faz e como identificar se a execução foi bem-sucedida.
+
+## 13. Relação com ferramentas de automação e pentest
+
+A estrutura com subcomandos é útil quando uma ferramenta autorizada possui diferentes operações, por exemplo:
+
+```
+inventario listar
+inventario consultar
+inventario exportar
+```
+
+Cada subcomando pode ter argumentos próprios, mas todos compartilham a configuração, o logging e as funções reutilizáveis do projeto.
+
+Essa arquitetura também permite que operações de análise estática, leitura de arquivos e exportação de relatórios sejam testadas separadamente, sem que a interface de terminal precise conhecer todos os detalhes internos.
+
+O objetivo não é criar a maior quantidade possível de módulos, e sim manter cada responsabilidade clara, testável e fácil de modificar.
+

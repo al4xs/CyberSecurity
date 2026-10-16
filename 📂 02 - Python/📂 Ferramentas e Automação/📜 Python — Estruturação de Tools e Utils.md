@@ -663,3 +663,723 @@ Nesse exemplo:
     
 
 A ferramenta é simples, mas cada função tem uma responsabilidade identificável e pode ser reutilizada ou testada separadamente.
+
+---
+# 📜 Python — Pacotes, Imports e Estrutura Profissional de Projetos
+
+## 1. Por que aprofundar a estrutura de um projeto?
+
+Na anotação anterior, vimos como separar a interface de linha de comando, a lógica HTTP e as funções auxiliares em arquivos diferentes.
+
+Essa organização funciona bem para ferramentas pequenas. Porém, conforme um projeto cresce, surgem novas necessidades:
+
+- Separar funcionalidades em módulos e pacotes.
+    
+- Evitar imports confusos e dependências circulares.
+    
+- Executar o projeto de maneira consistente.
+    
+- Manter o código de produção separado dos testes.
+    
+- Declarar as dependências e os metadados do projeto.
+    
+- Facilitar a instalação e a reutilização do próprio código.
+    
+
+Para isso, vamos estudar uma estrutura que utiliza pacotes Python, o diretório `src/` e o arquivo `pyproject.toml`.
+
+**Importante:** nem todo script precisa dessa estrutura. Para um arquivo pequeno que resolve uma tarefa simples, uma organização mais enxuta pode ser suficiente.
+
+## 2. Módulos e pacotes
+
+### 2.1. Módulo
+
+Um módulo Python normalmente é um arquivo `.py` que contém código reutilizável.
+
+Exemplo:
+
+```
+projeto/
+├── main.py
+└── normalizacao.py
+```
+
+No arquivo `normalizacao.py`:
+
+```
+def normalizar_texto(texto):
+    return texto.strip().lower()
+```
+
+A função `normalizar_texto()` pode ser importada por outro arquivo:
+
+```
+from normalizacao import normalizar_texto
+
+nome = normalizar_texto("  ADMIN  ")
+print(nome)
+```
+
+Resultado:
+
+```
+admin
+```
+
+O comando `from normalizacao import normalizar_texto` significa:
+
+- `from normalizacao`: procura o módulo chamado `normalizacao`.
+    
+- `import normalizar_texto`: importa o nome definido nesse módulo.
+    
+
+O Python não exige que o nome do módulo seja escrito com a extensão `.py`.
+
+### 2.2. Pacote
+
+Um pacote permite agrupar módulos relacionados em uma estrutura de diretórios.
+
+Exemplo:
+
+```
+projeto/
+└── ferramentas/
+    ├── __init__.py
+    ├── arquivos.py
+    └── rede.py
+```
+
+Nesse exemplo:
+
+- `ferramentas/` é o diretório do pacote.
+    
+- `__init__.py` pode ser utilizado para inicializar o pacote e definir sua interface pública.
+    
+- `arquivos.py` contém funcionalidades relacionadas a arquivos.
+    
+- `rede.py` contém funcionalidades relacionadas a operações de rede.
+    
+
+O arquivo `__init__.py` pode ficar vazio. Em pacotes Python tradicionais, ele indica explicitamente que o diretório é um pacote. O Python também aceita _namespace packages_ sem esse arquivo, mas não precisamos começar por esse caso.
+
+Para importar uma função de `rede.py`:
+
+```
+from ferramentas.rede import verificar_conexao
+```
+
+A leitura é:
+
+1. Encontrar o pacote `ferramentas`.
+    
+2. Encontrar o módulo `rede` dentro dele.
+    
+3. Importar o nome `verificar_conexao`.
+    
+
+## 3. Entendendo a notação dos imports
+
+Considere esta estrutura:
+
+```
+projeto/
+└── ferramentas/
+    ├── __init__.py
+    ├── arquivos.py
+    └── rede.py
+```
+
+Os imports podem ser escritos de diferentes maneiras.
+
+### Importar o módulo inteiro
+
+```
+import ferramentas.rede
+
+ferramentas.rede.verificar_conexao()
+```
+
+O nome completo do módulo é utilizado para acessar a função.
+
+### Importar uma função específica
+
+```
+from ferramentas.rede import verificar_conexao
+
+verificar_conexao()
+```
+
+A função fica disponível diretamente pelo nome importado.
+
+### Utilizar um alias
+
+```
+import ferramentas.rede as rede
+
+rede.verificar_conexao()
+```
+
+O `as rede` define um nome alternativo para o módulo nesse arquivo.
+
+Aliases são úteis quando melhoram a legibilidade ou seguem convenções conhecidas. Evite criar abreviações obscuras que dificultem a leitura do código.
+
+## 4. O que é o diretório `src/`?
+
+O diretório `src/` é uma convenção utilizada para separar o código do pacote da raiz do projeto.
+
+Uma estrutura possível:
+
+```
+minha-ferramenta/
+├── pyproject.toml
+├── README.md
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── cli.py
+│       ├── config.py
+│       └── utilidades.py
+└── tests/
+    └── test_utilidades.py
+```
+
+Observe que `minha-ferramenta` e `minha_ferramenta` têm grafias diferentes:
+
+- `minha-ferramenta` é o nome do diretório do projeto.
+    
+- `minha_ferramenta` é o nome do pacote Python.
+    
+
+O hífen é comum em nomes de projetos de distribuição, mas não pode ser utilizado normalmente como parte de um identificador Python. Por isso, o pacote usa um sublinhado.
+
+### Responsabilidade de cada elemento
+
+|Elemento|Responsabilidade|
+|---|---|
+|`pyproject.toml`|Define metadados e configurações do projeto.|
+|`README.md`|Explica o propósito, a instalação e o uso da ferramenta.|
+|`src/`|Guarda o código-fonte do pacote.|
+|`__init__.py`|Marca o pacote tradicional e pode definir sua interface pública.|
+|`__main__.py`|Permite executar o pacote com `python -m`.|
+|`cli.py`|Implementa a interface de linha de comando.|
+|`config.py`|Centraliza configurações não secretas.|
+|`utilidades.py`|Reúne funções auxiliares relacionadas ao projeto.|
+|`tests/`|Contém testes automatizados.|
+
+O benefício de `src/` é ajudar a evitar que os testes importem acidentalmente o código diretamente da raiz do repositório, mascarando problemas de instalação ou de configuração de imports.
+
+## 5. Criando um pacote mínimo
+
+Vamos montar um exemplo executável, sem depender de bibliotecas externas.
+
+### 5.1. Criando a estrutura
+
+No terminal:
+
+```
+mkdir -p minha-ferramenta/src/minha_ferramenta
+mkdir -p minha-ferramenta/tests
+cd minha-ferramenta
+```
+
+Explicação:
+
+- `mkdir` cria diretórios.
+    
+- `-p` cria também os diretórios intermediários necessários e não falha simplesmente porque eles já existem.
+    
+- `cd` entra no diretório do projeto.
+    
+
+Crie os arquivos:
+
+```
+minha-ferramenta/
+├── pyproject.toml
+├── src/
+│   └── minha_ferramenta/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── cli.py
+│       └── utilidades.py
+└── tests/
+    └── test_utilidades.py
+```
+
+### 5.2. Criando uma função reutilizável
+
+Arquivo `src/minha_ferramenta/utilidades.py`:
+
+```
+def normalizar_texto(texto):
+    """Remove espaços externos e converte o texto para minúsculas."""
+    return texto.strip().lower()
+```
+
+O parâmetro `texto` representa a string recebida pela função.
+
+O método `.strip()` remove espaços em branco do início e do final. O método `.lower()` converte letras para minúsculas.
+
+A docstring entre aspas triplas descreve o comportamento esperado da função.
+
+Essa função é independente da interface de terminal: pode ser utilizada por uma CLI, por testes ou por outro módulo.
+
+### 5.3. Criando a interface de linha de comando
+
+Arquivo `src/minha_ferramenta/cli.py`:
+
+```
+import argparse
+
+from minha_ferramenta.utilidades import normalizar_texto
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Normaliza um texto."
+    )
+
+    parser.add_argument(
+        "texto",
+        help="Texto que será normalizado.",
+    )
+
+    args = parser.parse_args()
+
+    resultado = normalizar_texto(args.texto)
+    print(resultado)
+```
+
+O módulo importa `argparse` para processar argumentos do terminal e importa a função que implementa a operação.
+
+O argumento `"texto"` é posicional: quem executar o programa deve fornecer um valor para ele.
+
+A chamada `parser.parse_args()` interpreta os argumentos e os disponibiliza em `args.texto`.
+
+Por fim, a CLI chama a função de normalização e imprime o resultado. Ela não precisa reimplementar a lógica de tratamento do texto.
+
+### 5.4. Criando o ponto de entrada do pacote
+
+Arquivo `src/minha_ferramenta/__main__.py`:
+
+```
+from minha_ferramenta.cli import main
+
+
+if __name__ == "__main__":
+    main()
+```
+
+O arquivo `__main__.py` é o ponto de entrada executado quando o pacote é iniciado com `python -m minha_ferramenta`.
+
+A condição `if __name__ == "__main__":` evita que `main()` seja executada automaticamente caso o arquivo seja importado em outro contexto.
+
+## 6. Configurando o `pyproject.toml`
+
+O `pyproject.toml` é um arquivo de configuração padronizado para projetos Python. Ele pode conter metadados, dependências e configurações de ferramentas de desenvolvimento.
+
+Crie o arquivo `pyproject.toml` na raiz:
+
+```
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha-ferramenta"
+version = "0.1.0"
+description = "Uma ferramenta simples de normalização de texto"
+requires-python = ">=3.10"
+
+[project.scripts]
+normalizar-texto = "minha_ferramenta.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+```
+
+### 6.1. Seção `[build-system]`
+
+```
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+```
+
+- `requires`: declara a ferramenta de construção necessária para preparar o pacote.
+    
+- `setuptools>=68`: solicita uma versão compatível do Setuptools.
+    
+- `build-backend`: identifica o componente responsável pela construção do pacote.
+    
+
+Essas configurações permitem que ferramentas de empacotamento saibam como construir a distribuição.
+
+### 6.2. Seção `[project]`
+
+```
+[project]
+name = "minha-ferramenta"
+version = "0.1.0"
+description = "Uma ferramenta simples de normalização de texto"
+requires-python = ">=3.10"
+```
+
+- `name`: nome da distribuição.
+    
+- `version`: versão inicial do projeto.
+    
+- `description`: descrição curta.
+    
+- `requires-python`: versões de Python aceitas pelo projeto.
+    
+
+A versão `0.1.0` é apenas um exemplo. Ela não representa uma versão oficial de uma ferramenta publicada.
+
+### 6.3. Seção `[project.scripts]`
+
+```
+[project.scripts]
+normalizar-texto = "minha_ferramenta.cli:main"
+```
+
+Essa configuração declara um comando de terminal chamado `normalizar-texto`.
+
+O formato do valor é:
+
+```
+nome_do_pacote.modulo:funcao
+```
+
+Nesse caso:
+
+- `minha_ferramenta.cli` identifica o módulo.
+    
+- `main` identifica a função chamada quando o comando é executado.
+    
+
+Depois de instalar o projeto no ambiente, o instalador cria um comando que encaminha a execução para essa função.
+
+### 6.4. Configuração do código em `src/`
+
+```
+[tool.setuptools]
+package-dir = {"" = "src"}
+```
+
+Informa ao Setuptools que os pacotes ficam sob o diretório `src/`.
+
+```
+[tool.setuptools.packages.find]
+where = ["src"]
+```
+
+Instrui o mecanismo de descoberta de pacotes a procurar pacotes dentro de `src/`.
+
+Essas seções pertencem à configuração do Setuptools. Elas não são instruções executadas diretamente pelo interpretador Python.
+
+## 7. Criando um ambiente virtual e instalando o projeto
+
+Na raiz do projeto, execute:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+O primeiro comando cria um ambiente virtual. O segundo o ativa no shell.
+
+Instale o projeto em modo editável:
+
+```
+python -m pip install -e .
+```
+
+O `-e` significa _editable install_. Durante o desenvolvimento, o ambiente fica configurado para utilizar o código-fonte do projeto sem exigir uma nova instalação após cada alteração nos arquivos Python.
+
+O ponto `.` indica o diretório atual, onde está o `pyproject.toml`.
+
+Confira a instalação:
+
+```
+python -m pip show minha-ferramenta
+```
+
+Esse comando exibe os metadados do pacote instalado, quando ele está disponível nesse ambiente.
+
+## 8. Executando o pacote
+
+Com a instalação editável concluída, execute:
+
+```
+python -m minha_ferramenta "  ADMIN  "
+```
+
+Resultado esperado:
+
+```
+admin
+```
+
+O Python procura o pacote `minha_ferramenta` no ambiente de execução e executa seu `__main__.py`.
+
+Também é possível utilizar o comando declarado em `[project.scripts]`:
+
+```
+normalizar-texto "  ADMIN  "
+```
+
+O comando `normalizar-texto` estará disponível no ambiente virtual depois da instalação. Se o ambiente não estiver ativo, o shell pode não encontrá-lo.
+
+## 9. Entendendo imports absolutos e relativos
+
+Dentro de um pacote, os imports podem utilizar caminhos absolutos ou relativos.
+
+### 9.1. Import absoluto
+
+```
+from minha_ferramenta.utilidades import normalizar_texto
+```
+
+O import identifica o pacote desde sua raiz lógica.
+
+Vantagens:
+
+- Deixa explícita a origem do módulo.
+    
+- Facilita a leitura em projetos com vários pacotes.
+    
+- Reduz ambiguidades quando existem módulos com nomes iguais.
+    
+
+### 9.2. Import relativo
+
+Imagine um módulo chamado `validacao.py` dentro do pacote `minha_ferramenta`.
+
+Um import relativo poderia ser:
+
+```
+from .utilidades import normalizar_texto
+```
+
+O ponto inicial indica o pacote atual. O Python procura `utilidades` dentro desse mesmo pacote.
+
+Dois pontos, como em `from ..outro_pacote import funcao`, indicam subir um nível na hierarquia de pacotes, quando a estrutura permite.
+
+Imports relativos dependem do contexto de pacote. Executar um arquivo interno diretamente, por exemplo `python src/minha_ferramenta/cli.py`, pode fazer com que os imports não funcionem como esperado.
+
+Para esse projeto, prefira executar o pacote com `python -m minha_ferramenta` ou utilizar o comando instalado.
+
+## 10. Criando testes para o pacote
+
+Arquivo `tests/test_utilidades.py`:
+
+```
+from minha_ferramenta.utilidades import normalizar_texto
+
+
+def test_normalizar_texto_remove_espacos():
+    assert normalizar_texto("  ADMIN  ") == "admin"
+
+
+def test_normalizar_texto_converte_maiusculas():
+    assert normalizar_texto("PyThOn") == "python"
+
+
+def test_normalizar_texto_string_vazia():
+    assert normalizar_texto("") == ""
+```
+
+Os testes verificam três comportamentos:
+
+1. A remoção de espaços externos.
+    
+2. A conversão para minúsculas.
+    
+3. O tratamento de uma string vazia.
+    
+
+A instrução `assert` compara o resultado real com o esperado. Se a condição for falsa, o teste falha.
+
+Instale o pytest no ambiente de desenvolvimento:
+
+```
+python -m pip install pytest
+```
+
+Execute os testes:
+
+```
+python -m pytest -v
+```
+
+O modo `-v` exibe os nomes dos testes durante a execução.
+
+Como o projeto foi instalado em modo editável, o teste importa o pacote instalado no ambiente e utiliza o código-fonte correspondente.
+
+## 11. Por que evitar executar módulos internos diretamente?
+
+Considere:
+
+```
+python src/minha_ferramenta/cli.py
+```
+
+Essa forma executa `cli.py` como um arquivo isolado. Dependendo do contexto de execução, o diretório de importação e a identidade do módulo podem ser diferentes daqueles esperados pelo pacote.
+
+O problema não significa que executar arquivos diretamente seja sempre incorreto. É uma questão de contexto: um arquivo interno que depende de imports de pacote foi projetado para ser executado nesse contexto.
+
+Para o projeto deste exemplo, use:
+
+```
+python -m minha_ferramenta "  ADMIN  "
+```
+
+Ou, depois da instalação editável:
+
+```
+normalizar-texto "  ADMIN  "
+```
+
+Essas formas deixam explícito o ponto de entrada utilizado.
+
+## 12. Imports circulares
+
+Um import circular ocorre quando dois módulos dependem um do outro durante a inicialização.
+
+Exemplo conceitual:
+
+```
+modulo_a.py → importa modulo_b.py
+modulo_b.py → importa modulo_a.py
+```
+
+Esse tipo de dependência pode causar erros relacionados a módulos parcialmente inicializados e tornar a ordem de importação difícil de compreender.
+
+Uma solução frequente é reorganizar as responsabilidades:
+
+- Colocar a lógica compartilhada em um terceiro módulo.
+    
+- Fazer a dependência apontar em uma única direção.
+    
+- Evitar que módulos de baixo nível importem a interface de linha de comando.
+    
+- Importar apenas o necessário em cada módulo.
+    
+
+Por exemplo, uma organização mais saudável pode ser:
+
+```
+cli.py ───────→ servicos.py
+                   │
+                   ▼
+               utilidades.py
+```
+
+Nesse desenho, a CLI utiliza os serviços, e os serviços utilizam as funções auxiliares. As utilidades não precisam importar a CLI.
+
+O diagrama representa uma direção de dependência possível, não uma regra universal para todos os projetos.
+
+## 13. Estrutura mínima versus estrutura com `src/`
+
+|Situação|Estrutura recomendada|
+|---|---|
+|Script pequeno e descartável|Um arquivo Python pode ser suficiente.|
+|Ferramenta com alguns módulos|Separar a lógica em módulos e manter um ponto de entrada claro.|
+|Projeto com várias funcionalidades e testes|Considerar pacotes, testes separados e configuração de projeto.|
+|Biblioteca reutilizável ou ferramenta instalável|Considerar `pyproject.toml`, instalação e uma estrutura de pacote consistente.|
+|Aplicação com muitas integrações|Separar responsabilidades por domínio e controlar as dependências entre módulos.|
+
+Não adicione arquivos apenas para deixar o projeto aparentemente profissional. Cada módulo deve ter uma responsabilidade compreensível.
+
+## 14. Erros comuns
+
+### `ModuleNotFoundError`
+
+O Python não encontrou o módulo ou pacote solicitado.
+
+Verifique:
+
+- Se o nome do pacote está correto.
+    
+- Se o ambiente virtual está ativo.
+    
+- Se o projeto foi instalado quando necessário.
+    
+- Se o comando está sendo executado no contexto esperado.
+    
+
+### Comando de terminal não encontrado
+
+Se `normalizar-texto` não for reconhecido, confira se a instalação editável foi realizada no ambiente ativo e se esse ambiente está ativado.
+
+### Import relativo sem pacote pai
+
+Imports como `from .utilidades import ...` dependem do contexto de pacote. Executar um arquivo diretamente pode remover esse contexto.
+
+Utilize o ponto de entrada previsto pelo projeto.
+
+### Testes passam, mas o pacote não funciona após instalação
+
+Isso pode indicar que os testes estavam encontrando módulos pela raiz do repositório, em vez de utilizar a instalação esperada.
+
+A estrutura `src/` ajuda a revelar esse tipo de problema, mas a configuração e o ambiente de execução ainda precisam estar corretos.
+
+### Dependências instaladas no ambiente errado
+
+Utilize:
+
+```
+python -m pip install pytest
+```
+
+em vez de depender de um comando `pip` que talvez pertença a outra instalação de Python.
+
+O formato `python -m pip` associa a instalação de pacotes ao interpretador invocado.
+
+## 15. Relação com ferramentas de automação e segurança
+
+A estrutura de pacotes é útil quando uma ferramenta deixa de ser um script isolado e passa a ter diferentes componentes.
+
+Por exemplo, uma ferramenta de inventário de ativos autorizados poderia ser organizada assim:
+
+```
+inventario/
+├── pyproject.toml
+├── README.md
+├── src/
+│   └── inventario/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── cli.py
+│       ├── configuracao.py
+│       ├── coleta.py
+│       ├── relatorios.py
+│       └── utilidades.py
+└── tests/
+    ├── test_coleta.py
+    └── test_relatorios.py
+```
+
+As responsabilidades seriam:
+
+- `cli.py`: recebe argumentos e apresenta opções.
+    
+- `configuracao.py`: organiza configurações não secretas.
+    
+- `coleta.py`: implementa a coleta de informações permitidas.
+    
+- `relatorios.py`: transforma os dados em relatórios.
+    
+- `utilidades.py`: reúne funções auxiliares realmente compartilhadas.
+    
+- `tests/`: verifica os comportamentos sem depender desnecessariamente de serviços externos.
+    
+
+Tokens e senhas não devem ser armazenados diretamente no código-fonte ou no `pyproject.toml`. Para segredos, utilize mecanismos apropriados, como variáveis de ambiente ou um gerenciador de segredos.
+
+A estrutura deve refletir as responsabilidades reais do projeto, não uma lista obrigatória de arquivos.

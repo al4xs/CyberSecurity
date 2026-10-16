@@ -2925,3 +2925,531 @@ Isso pode significar que não existem registros que correspondam à consulta, qu
 - Utilize transações para manter operações relacionadas consistentes.
 
 ---
+## 7. Cadastro, login e áreas restritas
+
+Em uma aplicação web, nem todas as páginas devem estar disponíveis para qualquer visitante. Um sistema pode ter páginas públicas, uma área de usuário autenticado e funcionalidades restritas a determinados perfis.
+
+Para implementar isso corretamente, precisamos compreender três conceitos: identidade do usuário, autenticação e autorização.
+
+### 7.1. Autenticação e autorização
+
+**Autenticação** é o processo de verificar quem está tentando acessar a aplicação.
+
+Por exemplo, o usuário informa e-mail e senha, e o sistema verifica se as credenciais correspondem a uma conta existente.
+
+**Autorização** é o processo de verificar quais ações esse usuário pode realizar.
+
+Por exemplo, um usuário pode estar autenticado, mas não ter permissão para excluir contas ou acessar o painel administrativo.
+
+A diferença é importante:
+
+|Conceito|Pergunta respondida|Exemplo|
+|---|---|---|
+|Autenticação|Quem é você?|Validar as credenciais do login|
+|Autorização|O que você pode fazer?|Verificar se o usuário possui permissão administrativa|
+|Sessão|Como a aplicação mantém o estado de autenticação entre requisições?|Identificar o usuário em acessos posteriores|
+
+Estar autenticado não significa possuir todas as permissões.
+
+### 7.2. Como funciona um login web?
+
+O protocolo HTTP é, em sua essência, sem estado: cada requisição é independente. Para manter um usuário autenticado entre várias requisições, uma aplicação precisa de um mecanismo para reconhecer esse usuário.
+
+O fluxo típico de login é:
+
+1. O usuário acessa a página de login.
+    
+2. O navegador envia as credenciais por meio de um formulário.
+    
+3. O servidor procura a conta correspondente.
+    
+4. O servidor verifica a senha.
+    
+5. Se as credenciais forem válidas, a aplicação estabelece o estado de autenticação.
+    
+6. Nas próximas requisições, esse estado permite identificar o usuário.
+    
+7. As rotas protegidas verificam se a autenticação é necessária e, quando aplicável, se o usuário possui a autorização exigida.
+    
+
+A senha não deve ser armazenada em texto puro. O sistema deve guardar um hash de senha produzido por uma função apropriada para esse fim.
+
+### 7.3. Preparando o Flask-Login
+
+O Flask-Login é uma extensão externa que facilita o gerenciamento da autenticação de usuários em aplicações Flask.
+
+Ela fornece recursos para:
+
+- Identificar o usuário autenticado.
+    
+- Manter o estado de login por meio da sessão.
+    
+- Disponibilizar o usuário atual por meio de `current_user`.
+    
+- Proteger rotas com `@login_required`.
+    
+- Encerrar a autenticação com `logout_user()`.
+    
+
+O Flask-Login não cria automaticamente um banco de dados, um formulário de login, um sistema de cadastro ou regras completas de autorização. Essas partes precisam ser implementadas pela aplicação ou por outras extensões.
+
+Instale a dependência no ambiente virtual:
+
+```
+python -m pip install Flask-Login
+```
+
+Como o exemplo também utilizará Flask-SQLAlchemy, mantenha essa extensão instalada.
+
+### 7.4. Configurando a aplicação e o modelo de usuário
+
+O Flask-Login precisa de uma forma de identificar e carregar o usuário autenticado. Quando utilizamos um modelo de usuário próprio, esse modelo deve implementar a interface esperada pela extensão.
+
+Exemplo didático com Flask-SQLAlchemy:
+
+```
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = (
+    "substitua-por-um-segredo-forte"
+)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    "sqlite:///aplicacao.db"
+)
+
+db = SQLAlchemy(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+class Usuario(UserMixin, db.Model):
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    email = db.Column(
+        db.String(150),
+        unique=True,
+        nullable=False
+    )
+
+    senha_hash = db.Column(
+        db.String(256),
+        nullable=False
+    )
+```
+
+#### Entendendo o código
+
+`**SECRET_KEY**`
+
+É uma configuração utilizada pelo Flask para proteger dados assinados, incluindo os dados de sessão mantidos pelo mecanismo padrão de sessões.
+
+O valor acima é apenas um marcador didático. Em produção, utilize um segredo forte, gerado de forma segura e armazenado fora do código-fonte.
+
+`**LoginManager()**`
+
+Cria o gerenciador de login do Flask-Login.
+
+`**login_manager.init_app(app)**`
+
+Inicializa a extensão para a aplicação Flask.
+
+`**class Usuario(UserMixin, db.Model)**`
+
+Define o modelo de usuário e inclui `UserMixin`, que fornece implementações comuns dos métodos e atributos esperados pelo Flask-Login.
+
+`**id**`
+
+Representa a chave primária utilizada para identificar o usuário no banco.
+
+`**email**`
+
+Armazena o e-mail. A opção `unique=True` estabelece uma restrição de unicidade no banco de dados, impedindo que dois registros tenham o mesmo valor nessa coluna.
+
+`**senha_hash**`
+
+Armazena o hash da senha, não a senha original.
+
+A restrição `unique=True` no banco não substitui o tratamento de possíveis conflitos durante o cadastro. A aplicação deve tratar erros de integridade quando duas tentativas concorrentes tentarem cadastrar o mesmo e-mail.
+
+### 7.5. Carregando o usuário autenticado
+
+O Flask-Login precisa recuperar o usuário associado à sessão. Para isso, utilizamos o decorador `@login_manager.user_loader`.
+
+```
+@login_manager.user_loader
+def carregar_usuario(user_id):
+    try:
+        identificador = int(user_id)
+    except (TypeError, ValueError):
+        return None
+
+    return db.session.get(Usuario, identificador)
+```
+
+Analisando o exemplo:
+
+- `@login_manager.user_loader`: registra a função que carrega o usuário a partir do identificador salvo no estado de autenticação.
+    
+- `user_id`: recebe o identificador do usuário como uma string.
+    
+- `int(user_id)`: converte o identificador para inteiro, conforme o tipo da chave primária deste exemplo.
+    
+- `db.session.get(Usuario, identificador)`: procura o registro pela chave primária.
+    
+- `return None`: indica que o usuário não foi encontrado ou que o identificador não pôde ser convertido.
+    
+
+A conversão para inteiro é apropriada porque o modelo usa uma chave primária inteira. Se o modelo utilizar outro tipo de identificador, a função deverá ser adaptada.
+
+### 7.6. Criando um formulário de login
+
+O formulário envia o e-mail e a senha ao servidor. Para este exemplo, vamos utilizar um template HTML chamado `templates/login.html`.
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Entrar</h1>
+
+    <form method="POST">
+        <label for="email">E-mail:</label>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="username"
+            required
+        >
+
+        <label for="senha">Senha:</label>
+        <input
+            type="password"
+            id="senha"
+            name="senha"
+            autocomplete="current-password"
+            required
+        >
+
+        <button type="submit">Entrar</button>
+    </form>
+</body>
+</html>
+```
+
+O atributo `method="POST"` envia os campos no corpo da requisição. Os atributos `name="email"` e `name="senha"` permitem recuperar os dados com `request.form`.
+
+O tipo `password` mascara visualmente a entrada, mas não criptografa o dado enviado. Por isso, credenciais devem ser transmitidas por HTTPS em aplicações reais.
+
+### 7.7. Protegendo as senhas com hash
+
+Nunca armazene senhas em texto puro no banco de dados.
+
+O Werkzeug, utilizado pelo ecossistema Flask, oferece funções para gerar e verificar hashes de senha.
+
+```
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
+```
+
+Para gerar um hash:
+
+```
+senha_hash = generate_password_hash(senha)
+```
+
+Para verificar uma senha:
+
+```
+valida = check_password_hash(
+    usuario.senha_hash,
+    senha_informada
+)
+```
+
+A função `generate_password_hash()` recebe a senha original e produz um hash com os parâmetros e o método de derivação configurados pela biblioteca.
+
+A função `check_password_hash()` recebe o hash armazenado e a senha informada, retornando `True` quando a senha corresponde ao hash e `False` caso contrário.
+
+Não compare a senha informada diretamente com o hash: a função de verificação é responsável por realizar a comparação apropriada.
+
+### 7.8. Implementando a rota de login
+
+Agora podemos combinar o formulário, o modelo de usuário e o Flask-Login.
+
+```
+from flask import (
+    render_template,
+    request,
+    redirect,
+    url_for,
+)
+from flask_login import login_user
+from werkzeug.security import check_password_hash
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get(
+            "email", ""
+        ).strip().lower()
+
+        senha = request.form.get("senha", "")
+
+        usuario = db.session.execute(
+            db.select(Usuario).where(
+                Usuario.email == email
+            )
+        ).scalar_one_or_none()
+
+        if (
+            usuario is not None
+            and check_password_hash(
+                usuario.senha_hash,
+                senha
+            )
+        ):
+            login_user(usuario)
+
+            return redirect(
+                url_for("painel")
+            )
+
+        return "E-mail ou senha inválidos.", 401
+
+    return render_template("login.html")
+```
+
+#### Como funciona?
+
+1. A requisição `GET` exibe o formulário.
+    
+2. A requisição `POST` inicia o processamento das credenciais.
+    
+3. O e-mail é normalizado com `strip()` e `lower()`.
+    
+4. A consulta procura um usuário com o e-mail informado.
+    
+5. `scalar_one_or_none()` retorna o usuário encontrado, `None` se não houver resultado ou gera uma exceção se a consulta produzir múltiplos resultados.
+    
+6. `check_password_hash()` verifica a senha.
+    
+7. `login_user(usuario)` registra o usuário como autenticado na sessão.
+    
+8. `redirect(url_for("painel"))` redireciona o navegador para o endpoint `painel`.
+    
+9. Se as credenciais não forem válidas, a aplicação responde com uma mensagem genérica.
+    
+
+A mensagem genérica evita revelar diretamente se um e-mail está cadastrado. Em sistemas reais, também é importante aplicar limites de tentativas, monitoramento e outras medidas contra ataques automatizados.
+
+A normalização com `lower()` deve seguir a política de identidade adotada pela aplicação. O tratamento de endereços de e-mail exige cuidado para não criar inconsistências entre cadastro, autenticação e regras do banco.
+
+### 7.9. Protegendo uma rota com `@login_required`
+
+Depois de implementar o login, podemos proteger as páginas que exigem autenticação.
+
+```
+from flask import render_template
+from flask_login import login_required, current_user
+
+
+@app.route("/painel")
+@login_required
+def painel():
+    return render_template(
+        "painel.html",
+        usuario=current_user
+    )
+```
+
+O decorador `@login_required` verifica se o usuário está autenticado antes de permitir a execução normal da função.
+
+Se não estiver autenticado, o Flask-Login utiliza seu comportamento de redirecionamento para a página de login, quando ela foi configurada.
+
+Para indicar explicitamente o endpoint da página de login:
+
+```
+login_manager.login_view = "login"
+```
+
+Essa configuração informa ao Flask-Login qual endpoint utilizar quando uma pessoa não autenticada tenta acessar uma rota protegida.
+
+No template `templates/painel.html`:
+
+```
+<h1>Bem-vindo, {{ usuario.email }}</h1>
+<p>Esta página exige autenticação.</p>
+```
+
+O objeto `current_user` representa o usuário atual no contexto da requisição. Quando existe um usuário autenticado, podemos acessar seus atributos permitidos, como o e-mail.
+
+**Importante:** `@login_required` protege contra acesso anônimo, mas não verifica automaticamente se o usuário tem permissão para cada operação. Regras de autorização precisam ser implementadas separadamente.
+
+### 7.10. Encerrando a sessão de login
+
+Para permitir que o usuário saia da aplicação, utilizamos `logout_user()`.
+
+```
+from flask import redirect, url_for
+from flask_login import login_required, logout_user
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+```
+
+A função `logout_user()` encerra o estado de autenticação gerenciado pelo Flask-Login.
+
+Neste exemplo, a rota aceita apenas `POST`, pois sair da conta altera o estado da sessão. Em aplicações reais, o formulário de logout também deve possuir proteção contra CSRF.
+
+Um formulário HTML pode enviar a requisição:
+
+```
+<form action="{{ url_for('logout') }}" method="POST">
+    <button type="submit">Sair</button>
+</form>
+```
+
+O HTML acima ilustra o envio, mas ainda não inclui um token CSRF. Essa proteção será abordada com mais detalhes na parte dedicada a formulários e segurança.
+
+### 7.11. Cadastro de usuários
+
+O cadastro cria uma nova conta e precisa armazenar o hash da senha.
+
+Um exemplo simplificado de rota:
+
+```
+from flask import request, redirect, url_for
+from sqlalchemy.exc import IntegrityError
+from werkzeug.security import generate_password_hash
+
+
+@app.route("/cadastro", methods=["POST"])
+def cadastro():
+    email = request.form.get(
+        "email", ""
+    ).strip().lower()
+
+    senha = request.form.get("senha", "")
+
+    if not email or not senha:
+        return "E-mail e senha são obrigatórios.", 400
+
+    usuario = Usuario(
+        email=email,
+        senha_hash=generate_password_hash(senha)
+    )
+
+    try:
+        db.session.add(usuario)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return "Não foi possível cadastrar essa conta.", 409
+
+    return redirect(url_for("login"))
+```
+
+Esse exemplo pressupõe que o modelo `Usuario` já está definido e que a aplicação possui um contexto válido, como ocorre durante uma requisição Flask normal.
+
+O fluxo é:
+
+1. Receber os dados do formulário.
+    
+2. Validar os campos obrigatórios.
+    
+3. Gerar o hash da senha.
+    
+4. Criar o objeto de usuário.
+    
+5. Adicionar o objeto à sessão.
+    
+6. Confirmar a transação.
+    
+7. Tratar uma possível violação de integridade, como um e-mail duplicado.
+    
+8. Redirecionar para a página de login.
+    
+
+O exemplo não substitui uma implementação completa de cadastro. Uma aplicação real também precisa validar o formato do e-mail, definir uma política adequada para senhas, limitar tentativas abusivas, utilizar CSRF e tratar outros erros de maneira controlada.
+
+### 7.12. Autenticação não é autorização
+
+Considere uma aplicação com usuários comuns e administradores.
+
+Os dois tipos de usuário podem estar autenticados, mas apenas administradores devem conseguir acessar determinadas funcionalidades.
+
+Uma verificação simples poderia ser:
+
+```
+from flask import abort
+from flask_login import login_required, current_user
+
+
+@app.route("/admin")
+@login_required
+def admin():
+    if not current_user.is_admin:
+        abort(403)
+
+    return "Painel administrativo"
+```
+
+Esse exemplo pressupõe que o modelo `Usuario` possui um atributo `is_admin`, armazenado e controlado corretamente pela aplicação.
+
+O status administrativo não deve ser aceito diretamente de um formulário de cadastro público. Caso contrário, qualquer usuário poderia tentar atribuir privilégios a si mesmo.
+
+O código também demonstra a diferença entre dois resultados:
+
+- **401:** indica que a requisição não possui autenticação válida em contextos nos quais esse status é apropriado.
+    
+- **403:** indica que o acesso foi recusado por falta de autorização.
+    
+
+Em aplicações que utilizam redirecionamentos de login no navegador, o comportamento para usuários anônimos pode ser diferente do de uma API HTTP. A resposta adequada depende da interface e do contrato da aplicação.
+
+### 7.13. Limitações e cuidados de segurança
+
+O Flask-Login facilita o gerenciamento de autenticação, mas não resolve todos os aspectos de segurança de uma aplicação.
+
+- **Senhas:** armazene hashes produzidos por funções adequadas para senhas; nunca guarde senhas em texto puro.
+    
+- **HTTPS:** utilize HTTPS para proteger credenciais e cookies durante o transporte.
+    
+- **Cookies:** configure opções como `Secure`, `HttpOnly` e `SameSite` conforme a arquitetura e as necessidades da aplicação.
+    
+- **CSRF:** proteja operações que alteram estado quando a autenticação utiliza cookies.
+    
+- **Autorização:** valide permissões no servidor em cada operação protegida.
+    
+- **Tentativas de login:** implemente limites e monitoramento contra tentativas automatizadas.
+    
+- **Segredos:** mantenha `SECRET_KEY` e credenciais fora do código-fonte e não os publique em repositórios.
+    
+- **Validação:** valide os dados no servidor, independentemente da validação do navegador.
+    
+- **Mensagens de erro:** evite revelar se determinada conta existe durante a autenticação.
+    
+- **Sessões:** defina uma política adequada para expiração, encerramento de sessão e revogação de acesso quando necessário.
+    
+
+A implementação correta depende do tipo de aplicação. Uma API que utiliza tokens, por exemplo, pode exigir um mecanismo de autenticação diferente daquele empregado em um site tradicional baseado em sessões.

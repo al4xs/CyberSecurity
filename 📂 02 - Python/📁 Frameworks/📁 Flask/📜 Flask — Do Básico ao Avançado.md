@@ -3967,3 +3967,594 @@ Ferramentas de build podem não detectar classes montadas dinamicamente em strin
 - Lembre-se de que esconder elementos visualmente não substitui controles de autorização no servidor.
 
 ---
+## 9. Configuração, tratamento de erros e logging
+
+Uma aplicação Flask precisa lidar com diferentes ambientes, como desenvolvimento, testes e produção. Também precisa tratar erros sem mostrar informações internas aos usuários e registrar detalhes que ajudem o desenvolvedor a descobrir o que aconteceu.
+
+Essas responsabilidades são divididas em três áreas:
+
+- **Configuração:** define como a aplicação deve funcionar.
+    
+- **Tratamento de erros:** determina como a aplicação responde quando algo falha.
+    
+- **Logging:** registra informações importantes sobre o funcionamento da aplicação.
+    
+
+### 9.1. Configuração da aplicação
+
+A configuração controla valores utilizados pelo Flask e pelas extensões instaladas.
+
+Por exemplo, uma aplicação pode precisar de uma chave secreta para proteger os dados da sessão, de uma URI para acessar o banco de dados e de opções específicas para executar testes.
+
+O Flask disponibiliza o atributo `app.config`, que funciona como um dicionário de configurações.
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+app.config["DEBUG"] = False
+app.config["TESTING"] = False
+```
+
+Analisando:
+
+- `Flask(__name__)` cria a aplicação.
+    
+- `app.config` acessa as configurações.
+    
+- `app.config["DEBUG"] = False` desativa a opção de depuração nessa configuração.
+    
+- `app.config["TESTING"] = False` indica que a aplicação não está sendo configurada para testes.
+    
+
+Esses valores são exemplos. Em um projeto real, é preferível centralizar a configuração em vez de espalhar atribuições pelo código.
+
+### 9.2. Configurações importantes
+
+|Configuração|Finalidade|
+|---|---|
+|`DEBUG`|Ativa recursos de depuração durante o desenvolvimento.|
+|`TESTING`|Indica que a aplicação está executando em modo de testes.|
+|`SECRET_KEY`|Fornece a chave usada para assinar dados como os cookies de sessão do Flask.|
+|`SESSION_COOKIE_HTTPONLY`|Impede que JavaScript comum leia o cookie de sessão diretamente.|
+|`SESSION_COOKIE_SECURE`|Faz o navegador enviar o cookie apenas por HTTPS.|
+|`SESSION_COOKIE_SAMESITE`|Controla em quais contextos de navegação o navegador envia o cookie.|
+|`MAX_CONTENT_LENGTH`|Define um limite para o tamanho do corpo de uma requisição, ajudando a restringir uploads e outros conteúdos enviados.|
+
+Nem toda configuração precisa ser definida manualmente: várias possuem valores padrão. Consulte a documentação da versão do Flask utilizada para verificar os valores e comportamentos exatos.
+
+### 9.3. A importância da `SECRET_KEY`
+
+O Flask utiliza `SECRET_KEY` para assinar dados, incluindo os dados armazenados nos cookies de sessão.
+
+```
+app.config["SECRET_KEY"] = "minha-chave-secreta"
+```
+
+O exemplo demonstra onde a configuração é definida, mas essa chave literal **não deve ser usada em uma aplicação real**. Uma chave previsível ou exposta pode comprometer a segurança dos dados assinados.
+
+Uma opção melhor é carregar a chave de uma variável de ambiente:
+
+```
+import os
+
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
+```
+
+No terminal Linux, você pode definir uma chave para o ambiente atual:
+
+```
+export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+```
+
+Depois, execute a aplicação no mesmo terminal para que ela herde a variável.
+
+**Atenção:** esse comando gera uma chave nova. Para um ambiente persistente, configure uma chave estável e mantenha-a protegida. Se a chave mudar entre inicializações, as sessões existentes assinadas com a chave anterior poderão deixar de funcionar.
+
+Não armazene chaves reais, senhas ou tokens diretamente no repositório Git.
+
+### 9.4. Organizando a configuração em uma classe
+
+Em projetos maiores, podemos reunir as configurações em uma classe Python.
+
+```
+import os
+
+class Config:
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    DEBUG = False
+    TESTING = False
+```
+
+A aplicação pode carregar essa classe usando `from_object()`:
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+app.config.from_object(Config)
+```
+
+O método `from_object()` carrega as configurações disponíveis no objeto informado, incluindo atributos apropriados da classe.
+
+Isso ajuda a manter as configurações em um único local e facilita separar os ambientes.
+
+#### Principais maneiras de carregar configurações
+
+|Método|Comportamento|
+|---|---|
+|`app.config["CHAVE"] = valor`|Define uma configuração individual.|
+|`app.config.from_mapping(...)`|Carrega configurações a partir de um mapeamento, como argumentos nomeados ou um dicionário.|
+|`app.config.from_object(objeto)`|Carrega configurações de um objeto ou classe Python.|
+|`app.config.from_pyfile(caminho)`|Carrega configurações de um arquivo Python.|
+
+Exemplo com `from_mapping()`:
+
+```
+app.config.from_mapping(
+    DEBUG=False,
+    TESTING=False,
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024,
+)
+```
+
+Nesse exemplo, `MAX_CONTENT_LENGTH` limita o tamanho do conteúdo de uma requisição a 16 MiB.
+
+Esses métodos são recursos do Flask. Variáveis de ambiente, por sua vez, são fornecidas pelo sistema operacional ou pelo ambiente de execução.
+
+### 9.5. Configuração usando Application Factory
+
+No módulo de estrutura do projeto, vimos o padrão Application Factory: uma função que cria e configura a aplicação.
+
+Podemos utilizar esse padrão para centralizar as configurações e verificar se valores obrigatórios foram fornecidos.
+
+```
+import os
+
+from flask import Flask
+
+def create_app(testing=False):
+    app = Flask(__name__)
+
+    app.config.from_mapping(
+        SECRET_KEY=os.environ.get("SECRET_KEY"),
+        DEBUG=False,
+        TESTING=testing,
+    )
+
+    if not app.config["SECRET_KEY"]:
+        raise RuntimeError(
+            "A variável de ambiente SECRET_KEY não foi definida."
+        )
+
+    return app
+```
+
+Analisando o fluxo:
+
+1. A função `create_app()` cria uma instância do Flask.
+    
+2. `from_mapping()` carrega as configurações.
+    
+3. `testing` permite indicar se a aplicação está sendo criada para testes.
+    
+4. A verificação impede que a aplicação continue sem uma chave secreta configurada.
+    
+5. `return app` entrega a aplicação configurada.
+    
+
+O argumento `testing` possui um valor padrão de `False`. Assim, podemos chamar `create_app()` sem argumento ou usar `create_app(testing=True)` em um teste.
+
+A validação da chave acontece durante a criação da aplicação. Isso faz com que o erro de configuração seja identificado cedo, em vez de aparecer mais tarde durante uma requisição.
+
+Em testes automatizados, é possível fornecer uma chave específica para o ambiente de testes, sem reutilizar segredos de produção.
+
+### 9.6. Desenvolvimento, testes e produção
+
+Cada ambiente possui necessidades diferentes.
+
+**Desenvolvimento**
+
+- Facilita identificar erros durante a implementação.
+    
+- Permite testar mudanças rapidamente.
+    
+- Pode utilizar dados locais e configurações específicas do desenvolvedor.
+    
+
+**Testes**
+
+- Permite ativar comportamentos próprios do ambiente de testes.
+    
+- Pode utilizar um banco de dados separado.
+    
+- Deve evitar alterar dados reais de produção.
+    
+
+**Produção**
+
+- Não deve expor o depurador interativo.
+    
+- Deve utilizar uma chave secreta protegida.
+    
+- Precisa registrar erros sem revelar informações internas ao usuário.
+    
+- Deve utilizar HTTPS quando o sistema é disponibilizado pela internet.
+    
+
+A opção `DEBUG` da aplicação e as opções de depuração da CLI do Flask estão relacionadas, mas não são conceitos idênticos em todas as formas de execução. Verifique a configuração efetiva e o comando de inicialização utilizado.
+
+Nunca deixe o depurador interativo exposto publicamente em produção.
+
+### 9.7. O que é tratamento de erros?
+
+Uma aplicação web recebe requisições e tenta executar operações. Durante esse processo, algo pode dar errado:
+
+- O usuário solicita uma página inexistente.
+    
+- Um registro não é encontrado.
+    
+- O usuário não tem autorização para acessar um recurso.
+    
+- Uma operação no banco de dados falha.
+    
+- O código contém um erro inesperado.
+    
+
+Sem tratamento adequado, a aplicação pode responder com uma página genérica ou apresentar uma resposta que não representa corretamente o problema.
+
+O tratamento de erros permite definir respostas apropriadas para situações conhecidas.
+
+Os códigos HTTP ajudam a comunicar o resultado:
+
+|Código|Significado|
+|---|---|
+|`400`|Requisição inválida.|
+|`401`|Autenticação necessária ou inválida, conforme o contexto.|
+|`403`|Acesso proibido.|
+|`404`|Recurso não encontrado.|
+|`500`|Erro interno do servidor.|
+
+O código adequado depende do motivo da falha. Por exemplo, um recurso inexistente normalmente resulta em `404`, enquanto uma exceção inesperada no servidor normalmente resulta em `500`.
+
+### 9.8. Interrompendo uma requisição com `abort()`
+
+O Flask disponibiliza `abort()` para interromper o processamento e gerar um erro HTTP.
+
+```
+from flask import abort
+
+@app.route("/perfil/<int:user_id>")
+def perfil(user_id):
+    if user_id <= 0:
+        abort(404)
+
+    return f"Perfil do usuário {user_id}"
+```
+
+Nesse exemplo:
+
+- A rota recebe um identificador inteiro.
+    
+- Se o valor for menor ou igual a zero, a execução é interrompida.
+    
+- `abort(404)` provoca um erro HTTP `404`.
+    
+- Se a condição não for atendida, a função retorna o conteúdo normalmente.
+    
+
+O exemplo é ilustrativo: em uma aplicação real, o identificador deve ser utilizado para procurar o usuário no banco de dados. Se o registro não existir, `abort(404)` pode representar essa situação.
+
+`abort()` não é exclusivo de `404`. Ele também pode ser utilizado com outros códigos HTTP apropriados.
+
+### 9.9. Criando páginas de erro personalizadas
+
+Podemos utilizar `errorhandler()` para definir como a aplicação responde a um determinado código de erro.
+
+```
+from flask import render_template
+
+@app.errorhandler(404)
+def pagina_nao_encontrada(error):
+    return render_template("errors/404.html"), 404
+```
+
+O decorador `@app.errorhandler(404)` registra uma função para tratar erros `404` da aplicação.
+
+A função recebe o objeto de erro e retorna uma resposta HTTP. Neste exemplo, a resposta contém o template e o código de status `404`.
+
+O arquivo correspondente pode ficar em:
+
+```
+templates/
+└── errors/
+    └── 404.html
+```
+
+Um template simples:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Página não encontrada</title>
+</head>
+<body>
+    <h1>Página não encontrada</h1>
+    <p>O recurso solicitado não existe.</p>
+    <a href="/">Voltar ao início</a>
+</body>
+</html>
+```
+
+O HTML apresentado é independente do tratamento feito pelo Flask. O framework encontra e renderiza o arquivo por meio de `render_template()`.
+
+**Importante:** o código HTTP deve continuar correto. Se a página informa que um recurso não foi encontrado, retornar `200` pode confundir navegadores, mecanismos de busca, clientes de API e sistemas de monitoramento.
+
+### 9.10. Tratando erros internos com `500`
+
+Um erro `500` indica que ocorreu um problema interno ao processar a requisição.
+
+Podemos definir uma página de erro específica:
+
+```
+@app.errorhandler(500)
+def erro_interno(error):
+    return render_template("errors/500.html"), 500
+```
+
+O arquivo pode ficar em `templates/errors/500.html`.
+
+O usuário pode receber uma mensagem simples, como:
+
+```
+<h1>Algo deu errado</h1>
+<p>Não foi possível concluir sua solicitação.</p>
+```
+
+A resposta pública não deve incluir traceback, caminho de arquivos internos, variáveis de ambiente, credenciais ou detalhes sensíveis do banco de dados.
+
+Os detalhes técnicos devem ser investigados nos logs, com acesso restrito às pessoas responsáveis pelo sistema.
+
+O Flask normalmente transforma exceções não tratadas em respostas `500` durante o processamento de requisições. Um manipulador personalizado pode definir a apresentação dessa resposta, mas não corrige a causa original do problema.
+
+### 9.11. A diferença entre erro HTTP e exceção Python
+
+Nem todo erro é igual.
+
+Um `404` pode ocorrer porque uma rota não existe ou porque o código decidiu que um recurso não foi encontrado. Já uma exceção Python, como `TypeError`, pode indicar um problema inesperado na implementação.
+
+Por exemplo:
+
+```
+def dividir(a, b):
+    return a / b
+
+resultado = dividir(10, 0)
+```
+
+A divisão por zero gera `ZeroDivisionError`.
+
+Em uma rota Flask, uma exceção inesperada como essa pode resultar em uma resposta `500` se não for tratada.
+
+Não é recomendável converter todo erro em `404` ou `400` sem analisar sua causa. Os códigos HTTP devem representar a situação real.
+
+### 9.12. O que é logging?
+
+Logging é o registro de eventos que acontecem durante a execução de um programa.
+
+Em uma aplicação web, esses registros podem ajudar a responder perguntas como:
+
+- Qual operação falhou?
+    
+- Em qual parte da aplicação ocorreu o problema?
+    
+- A falha foi esperada ou inesperada?
+    
+- A aplicação está recebendo requisições anormais?
+    
+- Uma integração externa está apresentando problemas?
+    
+
+O Python já possui o módulo padrão `logging`. Não é necessário instalar uma biblioteca externa apenas para começar a registrar mensagens.
+
+O Flask também disponibiliza `app.logger`, um logger associado à aplicação.
+
+### 9.13. Níveis de log
+
+Os níveis indicam a gravidade ou a importância de cada registro.
+
+|Nível|Uso comum|
+|---|---|
+|`DEBUG`|Detalhes úteis durante o desenvolvimento.|
+|`INFO`|Eventos normais e relevantes da aplicação.|
+|`WARNING`|Situações inesperadas que não interromperam necessariamente a operação.|
+|`ERROR`|Falhas que impediram uma operação de funcionar corretamente.|
+|`CRITICAL`|Problemas graves que podem comprometer a continuidade do serviço.|
+
+Exemplo:
+
+```
+app.logger.debug("Iniciando processamento")
+app.logger.info("Operação concluída")
+app.logger.warning("Tentativa com parâmetro inesperado")
+app.logger.error("Não foi possível concluir a operação")
+```
+
+O nível apropriado depende do evento. Não registre toda requisição como `ERROR`, pois isso dificulta encontrar falhas reais.
+
+### 9.14. Registrando uma exceção com traceback
+
+Quando uma exceção é capturada, `app.logger.exception()` pode registrar uma mensagem junto com o traceback da exceção atual.
+
+```
+@app.route("/relatorio")
+def gerar_relatorio():
+    try:
+        resultado = calcular_relatorio()
+        return resultado
+    except Exception:
+        app.logger.exception("Falha ao gerar o relatório")
+        return "Não foi possível gerar o relatório.", 500
+```
+
+Nesse exemplo, `calcular_relatorio()` representa uma função hipotética da aplicação.
+
+O fluxo é:
+
+1. O código tenta gerar o relatório.
+    
+2. Se a operação terminar normalmente, retorna o resultado.
+    
+3. Se uma exceção for lançada, o bloco `except` será executado.
+    
+4. `app.logger.exception()` registra a mensagem e os detalhes da exceção atual.
+    
+5. O usuário recebe uma resposta genérica.
+    
+
+Esse exemplo mostra o mecanismo, mas capturar `Exception` indiscriminadamente pode esconder problemas que deveriam ser corrigidos ou propagados. Prefira capturar exceções específicas quando souber quais falhas são esperadas.
+
+Por exemplo, ao converter um texto em inteiro, pode fazer sentido tratar `ValueError`. Já um erro de programação inesperado pode precisar ser registrado e tratado por um mecanismo central de erros.
+
+Não retorne `str(error)` diretamente ao usuário: a mensagem pode revelar detalhes internos.
+
+### 9.15. `logger.error()` versus `logger.exception()`
+
+Os dois métodos servem para registrar falhas, mas não são intercambiáveis em todos os contextos.
+
+```
+app.logger.error("Não foi possível salvar o registro")
+```
+
+Registra a mensagem de erro.
+
+```
+try:
+    salvar_registro()
+except Exception:
+    app.logger.exception("Falha ao salvar o registro")
+```
+
+Registra a mensagem e as informações da exceção ativa, incluindo o traceback.
+
+Use `exception()` dentro de um bloco `except` quando precisar preservar o contexto técnico da falha. Fora desse contexto, o traceback da exceção atual pode não existir.
+
+### 9.16. Não registre informações sensíveis
+
+Logs podem ser úteis para diagnóstico, mas também podem se tornar um risco de segurança.
+
+Evite registrar:
+
+- Senhas.
+    
+- Tokens de autenticação.
+    
+- Chaves secretas.
+    
+- Cookies de sessão completos.
+    
+- Dados pessoais desnecessários.
+    
+- Conteúdo integral de requisições que possa conter credenciais.
+    
+
+Prefira mensagens que identifiquem a operação e o tipo de falha sem expor os dados utilizados.
+
+Por exemplo:
+
+```
+app.logger.warning(
+    "Falha na autenticação de uma tentativa de acesso"
+)
+```
+
+Essa mensagem é mais segura do que registrar a senha recebida ou o token utilizado na tentativa.
+
+Em aplicações maiores, também é importante controlar quem pode acessar os logs, por quanto tempo eles serão mantidos e como serão protegidos.
+
+### 9.17. Configuração, extensões e ordem de inicialização
+
+A ordem de inicialização importa. Algumas extensões precisam conhecer as configurações antes de serem inicializadas.
+
+Por exemplo, uma extensão de banco de dados pode precisar da URI de conexão antes de receber a aplicação.
+
+O padrão geral é:
+
+1. Criar a aplicação.
+    
+2. Carregar as configurações.
+    
+3. Validar as configurações obrigatórias.
+    
+4. Inicializar as extensões.
+    
+5. Registrar Blueprints e manipuladores de erro.
+    
+6. Retornar a aplicação configurada.
+    
+
+A ordem exata pode variar conforme a extensão, mas carregar as configurações antes de inicializar componentes que dependem delas evita problemas difíceis de diagnosticar.
+
+### 9.18. Erros comuns e como investigá-los
+
+**A aplicação informa que** `**SECRET_KEY**` **não foi definida**
+
+- Verifique se a variável de ambiente existe.
+    
+- Confirme que a aplicação está sendo executada no mesmo ambiente em que a variável foi definida.
+    
+- Confira se o nome utilizado no código corresponde ao nome da variável.
+    
+
+**As alterações de configuração parecem não ter efeito**
+
+- Verifique se a configuração foi carregada na instância correta.
+    
+- Confira se outro trecho do código está sobrescrevendo o valor.
+    
+- Verifique se a configuração foi definida antes da inicialização da extensão dependente dela.
+    
+
+**A página personalizada de erro não aparece**
+
+- Confirme que o manipulador foi registrado na aplicação correta.
+    
+- Verifique se o template existe no diretório esperado.
+    
+- Confira o código HTTP efetivamente retornado.
+    
+- Verifique se o erro ocorre durante o processamento de uma requisição e se o manipulador é aplicável a ele.
+    
+
+**O log não mostra o traceback esperado**
+
+- Confirme se a exceção está sendo capturada no bloco correto.
+    
+- Utilize `logger.exception()` dentro do `except` quando precisar do traceback.
+    
+- Verifique os níveis de log e o destino configurado para os registros.
+    
+
+**A aplicação funciona localmente, mas falha em produção**
+
+- Compare as variáveis de ambiente dos dois ambientes.
+    
+- Verifique as configurações de banco de dados e serviços externos.
+    
+- Examine os logs do servidor.
+    
+- Não habilite o depurador público como solução para investigar a falha.
+    
+
+**Um bloco** `**except**` **parece resolver tudo, mas os erros continuam**
+
+- Verifique se o código está capturando exceções demais.
+    
+- Capture os tipos de exceção que realmente espera.
+    
+- Registre o contexto necessário para diagnosticar a falha.
+    
+- Não transforme silenciosamente uma operação malsucedida em uma resposta de sucesso.

@@ -5075,3 +5075,617 @@ Antes de disponibilizar uma aplicação publicamente, verifique os seguintes pon
 Essas medidas reduzem riscos comuns, mas a segurança também depende da arquitetura, das permissões do banco de dados, da infraestrutura e das regras específicas de cada aplicação.
 
 ---
+## 11. Construção de APIs com Flask
+
+Uma API (_Application Programming Interface_) permite que diferentes aplicações se comuniquem por meio de uma interface definida.
+
+Em uma aplicação web tradicional, uma rota pode retornar HTML para ser exibido diretamente pelo navegador. Em uma API, uma rota frequentemente retorna dados estruturados, como JSON, que podem ser consumidos por um frontend, um aplicativo móvel, outro servidor ou um programa Python.
+
+O Flask permite construir APIs sem exigir uma biblioteca adicional para as funcionalidades básicas de roteamento e respostas JSON.
+
+### 11.1. Como funciona uma API HTTP
+
+Considere uma aplicação que gerencia usuários. Um cliente pode solicitar uma lista de usuários, criar um registro ou consultar um usuário específico.
+
+A comunicação normalmente segue este fluxo:
+
+1. O cliente envia uma requisição HTTP.
+    
+2. O Flask identifica a rota e o método HTTP.
+    
+3. A função associada à rota processa a requisição.
+    
+4. A aplicação valida os dados e executa a operação necessária.
+    
+5. O servidor devolve uma resposta HTTP com um código de status e, frequentemente, um corpo JSON.
+    
+
+Exemplo de uma requisição:
+
+```
+GET /api/usuarios HTTP/1.1
+Host: exemplo.com
+Accept: application/json
+```
+
+Uma resposta possível:
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+```
+
+```
+{
+  "usuarios": [
+    {
+      "id": 1,
+      "nome": "Ana"
+    },
+    {
+      "id": 2,
+      "nome": "Carlos"
+    }
+  ]
+}
+```
+
+O cliente não precisa receber uma página HTML completa. Ele pode interpretar os dados JSON e decidir como apresentá-los.
+
+### 11.2. O que é JSON?
+
+JSON (_JavaScript Object Notation_) é um formato textual para representar dados estruturados. Apesar de seu nome, é utilizado por aplicações escritas em diversas linguagens.
+
+Os principais tipos de dados JSON são:
+
+|Tipo JSON|Exemplo|
+|---|---|
+|Objeto|`{"nome": "Ana"}`|
+|Array|`["Python", "Flask"]`|
+|String|`"Olá"`|
+|Número|`42`|
+|Booleano|`true` ou `false`|
+|Nulo|`null`|
+
+Um objeto JSON se parece com um dicionário Python:
+
+```
+usuario = {
+    "id": 1,
+    "nome": "Ana",
+    "ativo": True,
+}
+```
+
+O Flask consegue converter estruturas Python compatíveis em uma resposta JSON.
+
+É importante observar que os valores booleanos e nulos possuem representações diferentes entre Python e JSON: `True` corresponde a `true`, `False` a `false` e `None` a `null`.
+
+### 11.3. Criando uma rota que retorna JSON
+
+O Flask disponibiliza `jsonify()` para criar respostas JSON.
+
+```
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+@app.route("/api/status")
+def status():
+    return jsonify({
+        "status": "online",
+        "versao": "1.0",
+    })
+```
+
+Analisando o código:
+
+- `Flask(__name__)` cria a aplicação.
+    
+- `@app.route("/api/status")` registra a rota.
+    
+- `status()` é a função executada quando a rota corresponde à requisição.
+    
+- `jsonify()` converte o dicionário em uma resposta JSON.
+    
+- O Flask define o tipo de conteúdo da resposta como JSON.
+    
+
+Ao acessar `/api/status`, o cliente recebe uma resposta semelhante a:
+
+```
+{
+  "status": "online",
+  "versao": "1.0"
+}
+```
+
+O valor `1.0` é uma string nesse exemplo porque foi definido entre aspas.
+
+### 11.4. `jsonify()` versus `json.dumps()`
+
+Essas ferramentas estão relacionadas, mas possuem finalidades diferentes.
+
+`**jsonify()**`
+
+É disponibilizado pelo Flask e constrói uma resposta HTTP JSON apropriada para uma rota.
+
+```
+return jsonify({"mensagem": "Olá"})
+```
+
+`**json.dumps()**`
+
+É disponibilizado pelo módulo padrão `json` do Python e converte um objeto Python compatível em uma string JSON.
+
+```
+import json
+
+texto_json = json.dumps({
+    "mensagem": "Olá"
+})
+```
+
+`json.dumps()` não cria, por si só, uma resposta Flask com os cabeçalhos HTTP apropriados. Para uma rota comum, `jsonify()` costuma ser a opção mais direta.
+
+### 11.5. Métodos HTTP e operações da API
+
+O método HTTP indica a intenção da requisição. Em APIs que seguem convenções REST, alguns métodos são associados a operações comuns.
+
+|Método|Uso habitual|
+|---|---|
+|`GET`|Consultar recursos.|
+|`POST`|Criar um recurso ou executar uma operação.|
+|`PUT`|Substituir completamente a representação de um recurso.|
+|`PATCH`|Atualizar parcialmente um recurso.|
+|`DELETE`|Excluir um recurso.|
+
+Essas convenções ajudam a tornar uma API previsível, mas o comportamento exato depende do contrato definido pela aplicação.
+
+Por padrão, uma rota Flask simples aceita `GET` e pode responder a `HEAD`. Para aceitar outros métodos, precisamos configurá-los.
+
+```
+@app.route("/api/usuarios", methods=["GET", "POST"])
+def usuarios():
+    ...
+```
+
+A rota acima permite tanto `GET` quanto `POST`. O tratamento deve diferenciar as operações para que cada método tenha o comportamento esperado.
+
+### 11.6. Construindo uma API com múltiplos métodos
+
+Vamos criar um exemplo didático com dados mantidos em memória.
+
+```
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+usuarios = [
+    {"id": 1, "nome": "Ana"},
+    {"id": 2, "nome": "Carlos"},
+]
+
+@app.route("/api/usuarios", methods=["GET"])
+def listar_usuarios():
+    return jsonify({"usuarios": usuarios})
+```
+
+A rota `GET /api/usuarios` retorna os usuários existentes.
+
+A estrutura é simples, mas há uma limitação importante: os dados estão em uma lista Python. Eles não são persistidos em um banco de dados e podem desaparecer quando o processo da aplicação for reiniciado.
+
+Esse modelo serve para aprender o funcionamento das rotas, não para armazenar dados de uma aplicação real.
+
+### 11.7. Recebendo JSON com `request.get_json()`
+
+Quando um cliente envia dados JSON, podemos utilizar `request.get_json()` para obter o conteúdo convertido em estruturas Python.
+
+Exemplo de requisição:
+
+```
+POST /api/usuarios
+Content-Type: application/json
+```
+
+```
+{
+  "nome": "Mariana"
+}
+```
+
+No Flask:
+
+```
+from flask import request
+
+@app.route("/api/exemplo", methods=["POST"])
+def exemplo():
+    dados = request.get_json()
+
+    return jsonify({
+        "recebido": dados
+    })
+```
+
+Se o cliente enviar um objeto JSON válido, `dados` normalmente será um dicionário Python.
+
+A chamada não garante que os dados tenham o formato esperado pela aplicação. É necessário validar os campos, seus tipos e seus valores.
+
+Nas versões atuais do Flask, `request.get_json()` pode produzir um erro HTTP `415 Unsupported Media Type` quando o tipo de conteúdo não indica JSON. Conteúdo JSON inválido também pode resultar em erro de requisição. O comportamento específico depende dos argumentos utilizados e da versão instalada.
+
+### 11.8. Validando dados recebidos
+
+Não devemos presumir que uma requisição contém todos os campos necessários.
+
+Uma rota que cria um usuário precisa verificar se o nome foi informado e se está no formato aceito.
+
+```
+from flask import request, jsonify
+
+@app.route("/api/usuarios", methods=["POST"])
+def criar_usuario():
+    dados = request.get_json()
+
+    if not isinstance(dados, dict):
+        return jsonify({
+            "erro": "O corpo deve ser um objeto JSON."
+        }), 400
+
+    nome = dados.get("nome")
+
+    if not isinstance(nome, str) or not nome.strip():
+        return jsonify({
+            "erro": "O campo 'nome' é obrigatório."
+        }), 400
+
+    return jsonify({
+        "mensagem": "Dados válidos.",
+        "nome": nome.strip(),
+    }), 201
+```
+
+Analisando:
+
+1. `request.get_json()` tenta interpretar o corpo da requisição como JSON.
+    
+2. `isinstance(dados, dict)` verifica se o resultado é um objeto representado por um dicionário Python.
+    
+3. `dados.get("nome")` procura o campo sem gerar `KeyError` caso ele não exista.
+    
+4. A validação verifica se o valor é uma string não vazia.
+    
+5. `strip()` remove espaços no início e no final.
+    
+6. O código `400` indica que os dados enviados são inválidos.
+    
+7. O código `201` indica que um recurso foi criado.
+    
+
+O exemplo valida os dados, mas ainda não salva um usuário. Uma API real precisa executar a operação de persistência e lidar com erros do banco de dados.
+
+### 11.9. Códigos de status HTTP
+
+Uma API deve retornar códigos de status coerentes com o resultado da operação.
+
+|Código|Significado comum em APIs|
+|---|---|
+|`200 OK`|A operação foi concluída com sucesso.|
+|`201 Created`|Um recurso foi criado.|
+|`204 No Content`|A operação teve sucesso e não há conteúdo a retornar.|
+|`400 Bad Request`|A requisição é inválida.|
+|`401 Unauthorized`|A autenticação está ausente ou é inválida.|
+|`403 Forbidden`|O cliente não tem permissão para executar a operação.|
+|`404 Not Found`|O recurso não foi encontrado.|
+|`405 Method Not Allowed`|O método não é permitido para aquela rota.|
+|`409 Conflict`|A operação conflita com o estado atual do recurso.|
+|`415 Unsupported Media Type`|O tipo de conteúdo enviado não é aceito.|
+|`422 Unprocessable Content`|O conteúdo foi entendido, mas não atende às regras de validação adotadas pela API.|
+|`500 Internal Server Error`|Ocorreu um erro inesperado no servidor.|
+
+O significado exato deve ser aplicado de acordo com o contexto e o contrato da API. Por exemplo, uma aplicação pode optar por utilizar `400` ou `422` para determinadas falhas de validação, desde que mantenha um comportamento coerente.
+
+### 11.10. Retornando status e cabeçalhos
+
+Uma função de rota Flask pode retornar o corpo e o código HTTP juntos:
+
+```
+return jsonify({"mensagem": "Criado"}), 201
+```
+
+Também podemos construir uma resposta e configurar seus cabeçalhos:
+
+```
+resposta = jsonify({
+    "mensagem": "Operação concluída"
+})
+
+resposta.headers["X-App-Version"] = "1.0"
+
+return resposta, 200
+```
+
+O cabeçalho `X-App-Version` é um exemplo ilustrativo. Cabeçalhos personalizados devem ter uma finalidade clara e não devem expor informações sensíveis.
+
+### 11.11. Consultando um recurso pelo identificador
+
+Em APIs, é comum utilizar um parâmetro na URL para identificar um recurso específico.
+
+```
+@app.route("/api/usuarios/<int:usuario_id>")
+def obter_usuario(usuario_id):
+    usuario = next(
+        (
+            item
+            for item in usuarios
+            if item["id"] == usuario_id
+        ),
+        None,
+    )
+
+    if usuario is None:
+        return jsonify({
+            "erro": "Usuário não encontrado."
+        }), 404
+
+    return jsonify(usuario), 200
+```
+
+O conversor `<int:usuario_id>` restringe o parâmetro da rota a um inteiro.
+
+A expressão `next(..., None)` procura o primeiro usuário cujo identificador corresponda ao recebido. Se não houver correspondência, o resultado será `None`.
+
+Se o usuário não existir, a API retorna `404`. Caso exista, retorna seus dados em JSON.
+
+Esse exemplo depende da lista `usuarios` definida anteriormente.
+
+Em uma aplicação real, a busca deve normalmente ocorrer no banco de dados. Além disso, o servidor precisa verificar se o cliente tem autorização para acessar aquele registro.
+
+### 11.12. Atualizando um recurso
+
+Uma API pode permitir atualização completa ou parcial.
+
+Exemplo de atualização parcial usando `PATCH`:
+
+```
+@app.route(
+    "/api/usuarios/<int:usuario_id>",
+    methods=["PATCH"],
+)
+def atualizar_usuario(usuario_id):
+    dados = request.get_json()
+
+    if not isinstance(dados, dict):
+        return jsonify({
+            "erro": "O corpo deve ser um objeto JSON."
+        }), 400
+
+    usuario = next(
+        (
+            item
+            for item in usuarios
+            if item["id"] == usuario_id
+        ),
+        None,
+    )
+
+    if usuario is None:
+        return jsonify({
+            "erro": "Usuário não encontrado."
+        }), 404
+
+    if "nome" in dados:
+        nome = dados["nome"]
+
+        if not isinstance(nome, str) or not nome.strip():
+            return jsonify({
+                "erro": "Nome inválido."
+            }), 400
+
+        usuario["nome"] = nome.strip()
+
+    return jsonify(usuario), 200
+```
+
+O exemplo altera apenas os campos fornecidos e reconhecidos. Neste caso, somente `nome` é aceito.
+
+Em uma API real, também é importante definir o que deve acontecer quando nenhum campo permitido é enviado, quando aparecem campos desconhecidos ou quando a atualização não altera nenhum valor.
+
+Para atualizações completas com `PUT`, defina quais campos precisam ser fornecidos e como a substituição deve funcionar. Não trate automaticamente `PUT` e `PATCH` como operações idênticas.
+
+### 11.13. Excluindo um recurso
+
+Uma rota `DELETE` pode remover um recurso existente:
+
+```
+@app.route(
+    "/api/usuarios/<int:usuario_id>",
+    methods=["DELETE"],
+)
+def excluir_usuario(usuario_id):
+    for indice, usuario in enumerate(usuarios):
+        if usuario["id"] == usuario_id:
+            usuarios.pop(indice)
+            return "", 204
+
+    return jsonify({
+        "erro": "Usuário não encontrado."
+    }), 404
+```
+
+O código percorre a lista até encontrar o identificador correspondente.
+
+Quando encontra o usuário, remove o item e retorna `204 No Content`, sem corpo de resposta. Caso não encontre, retorna `404`.
+
+Esse exemplo é apenas didático. Em sistemas reais, a exclusão precisa considerar autorização, regras de negócio, integridade dos relacionamentos e persistência no banco de dados.
+
+### 11.14. Organização de endpoints com Blueprints
+
+À medida que a API cresce, colocar todas as rotas no mesmo arquivo torna o código difícil de manter.
+
+Os Blueprints, estudados anteriormente, permitem agrupar rotas relacionadas.
+
+Exemplo de estrutura:
+
+```
+app/
+├── __init__.py
+└── routes/
+    ├── __init__.py
+    └── usuarios.py
+```
+
+No arquivo `app/routes/usuarios.py`:
+
+```
+from flask import Blueprint, jsonify
+
+usuarios_bp = Blueprint(
+    "usuarios",
+    __name__,
+    url_prefix="/api/usuarios",
+)
+
+@usuarios_bp.route("/", methods=["GET"])
+def listar():
+    return jsonify({"usuarios": []})
+```
+
+Na fábrica da aplicação:
+
+```
+from flask import Flask
+from app.routes.usuarios import usuarios_bp
+
+def create_app():
+    app = Flask(__name__)
+
+    app.register_blueprint(usuarios_bp)
+
+    return app
+```
+
+O `url_prefix` adiciona um prefixo às rotas registradas no Blueprint.
+
+Neste exemplo, a rota `"/"` do Blueprint corresponde ao caminho `/api/usuarios/`. Se a aplicação precisar aceitar também a forma sem a barra final, defina e teste esse comportamento explicitamente.
+
+Os Blueprints ajudam a separar responsabilidades, mas não implementam validação, autenticação ou autorização automaticamente.
+
+### 11.15. Autenticação e autorização em APIs
+
+Uma API pode exigir autenticação antes de permitir determinadas operações.
+
+Dependendo do tipo de cliente e da arquitetura, a autenticação pode utilizar cookies de sessão, tokens ou outros mecanismos.
+
+Independentemente do mecanismo escolhido, é necessário distinguir:
+
+- **Autenticação:** verificar a identidade do cliente.
+    
+- **Autorização:** verificar se essa identidade pode executar a operação solicitada.
+    
+
+Por exemplo, autenticar um usuário não significa que ele pode excluir qualquer outro usuário.
+
+Também é importante proteger endpoints de leitura quando os dados são privados, e não apenas endpoints que modificam informações.
+
+Evite criar mecanismos próprios de tokens ou criptografia sem necessidade. Escolha uma abordagem adequada ao projeto e utilize bibliotecas mantidas e documentadas.
+
+### 11.16. Tratamento de erros em APIs
+
+Páginas HTML personalizadas são úteis para interfaces web tradicionais, mas uma API geralmente precisa retornar erros estruturados.
+
+Exemplo:
+
+```
+return jsonify({
+    "erro": "Recurso não encontrado.",
+    "codigo": "USUARIO_NAO_ENCONTRADO",
+}), 404
+```
+
+Uma resposta estruturada permite que o cliente identifique a categoria do erro sem precisar interpretar uma página HTML.
+
+É útil manter um formato consistente entre os endpoints, incluindo mensagens claras e códigos de status adequados.
+
+Não inclua tracebacks, senhas, tokens ou detalhes internos do servidor no JSON de erro.
+
+Para aplicações maiores, os manipuladores de erro podem ser centralizados, desde que preservem o código HTTP e o formato de resposta apropriados.
+
+### 11.17. Testando uma API com o cliente de testes do Flask
+
+O Flask fornece um cliente de testes que permite executar requisições sem iniciar um servidor HTTP real.
+
+```
+def test_status_api(app):
+    client = app.test_client()
+
+    resposta = client.get("/api/status")
+
+    assert resposta.status_code == 200
+    assert resposta.json["status"] == "online"
+```
+
+O exemplo pressupõe que `app` seja uma aplicação Flask criada para o teste e que a rota `/api/status` esteja registrada.
+
+- `test_client()` cria um cliente para simular requisições.
+    
+- `client.get()` envia uma requisição de teste.
+    
+- `status_code` verifica o código HTTP retornado.
+    
+- `resposta.json` permite acessar os dados JSON quando a resposta contém JSON válido.
+    
+
+Esse teste pode ser executado por uma ferramenta como pytest, conforme será aprofundado no módulo de testes.
+
+Testar uma API envolve mais do que verificar o caminho de sucesso. Também é necessário testar dados inválidos, recursos inexistentes, falhas de autenticação, falta de permissão e outros cenários relevantes.
+
+### 11.18. Limitações do armazenamento em memória
+
+Os exemplos anteriores utilizam uma lista Python para manter os usuários.
+
+Essa abordagem possui limitações importantes:
+
+- Os dados podem desaparecer ao reiniciar a aplicação.
+    
+- Cada processo pode ter uma cópia diferente dos dados.
+    
+- Não existe persistência confiável.
+    
+- Não há controle adequado de concorrência para operações complexas.
+    
+- Não existem garantias de integridade próprias de um banco de dados.
+    
+
+Para aplicações reais, utilize uma camada de persistência apropriada, como a que foi estudada com Flask-SQLAlchemy.
+
+Além disso, evite armazenar informações privadas em respostas JSON sem necessidade e aplique as regras de autorização antes de devolver os dados.
+
+### 11.19. Boas práticas na construção de APIs
+
+- Utilize métodos HTTP de maneira coerente.
+    
+- Retorne códigos de status que representem corretamente o resultado.
+    
+- Valide o corpo, os parâmetros e os tipos dos dados recebidos.
+    
+- Mantenha um formato de erro consistente.
+    
+- Separe as rotas em Blueprints conforme a organização do projeto.
+    
+- Utilize um banco de dados para persistir os dados necessários.
+    
+- Verifique autenticação e autorização no servidor.
+    
+- Evite retornar campos internos ou sensíveis dos modelos.
+    
+- Não exponha exceções internas em respostas JSON.
+    
+- Teste os casos de sucesso e de falha.
+    
+- Documente os endpoints, os parâmetros, os códigos de resposta e os requisitos de autenticação.
+    
+
+Uma API bem estruturada não é apenas um conjunto de rotas que retornam JSON. Ela também precisa de um contrato previsível, validação rigorosa, tratamento de erros, persistência e controle de acesso.
+
+---

@@ -2474,3 +2474,486 @@ A melhor solução é aquela que reduz repetição sem tornar o comportamento di
     
 - Lembre-se de que gerar um botão ou link não garante que a ação correspondente esteja autorizada no servidor.
 ---
+## 17. Contexto, escopo e resolução de variáveis no Jinja
+
+O Jinja não acessa automaticamente todas as variáveis existentes no programa Python. Para que um template utilize determinado valor, esse valor precisa estar disponível no contexto de renderização ou por meio de recursos configurados no ambiente Jinja.
+
+Entender como esse contexto funciona ajuda a organizar templates, evitar dependências ocultas e identificar por que uma variável está disponível em uma página, mas não em outra.
+
+### 17.1. O que é o contexto de renderização?
+
+O **contexto** é o conjunto de nomes e valores que o Jinja pode consultar durante a renderização de um template.
+
+No Flask, a maneira mais comum de fornecer dados ao template é por meio de `render_template()`.
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    usuario = {
+        "nome": "Marcos",
+        "nivel": "iniciante"
+    }
+
+    return render_template(
+        "index.html",
+        usuario=usuario,
+        titulo="Página inicial"
+    )
+```
+
+No template `templates/index.html`:
+
+```
+<h1>{{ titulo }}</h1>
+
+<p>Usuário: {{ usuario.nome }}</p>
+<p>Nível: {{ usuario.nivel }}</p>
+```
+
+Nesse exemplo, `titulo` e `usuario` são nomes disponibilizados no contexto. O Jinja utiliza esses nomes para localizar os valores correspondentes.
+
+A variável local `usuario` da função Python não seria automaticamente acessível ao template se não fosse passada ou disponibilizada por outro mecanismo.
+
+### 17.2. Passando dados por meio de um dicionário
+
+Também é possível reunir os dados em um dicionário e expandi-lo como argumentos nomeados usando `**`.
+
+```
+dados = {
+    "titulo": "Painel",
+    "nome": "Marcos",
+    "notificacoes": 3
+}
+
+return render_template("painel.html", **dados)
+```
+
+O template recebe os nomes como variáveis independentes:
+
+```
+<h1>{{ titulo }}</h1>
+<p>Olá, {{ nome }}.</p>
+<p>Notificações: {{ notificacoes }}</p>
+```
+
+A expressão Python `**dados` expande as chaves do dicionário como argumentos nomeados. Nesse caso, equivale conceitualmente a escrever:
+
+```
+return render_template(
+    "painel.html",
+    titulo="Painel",
+    nome="Marcos",
+    notificacoes=3
+)
+```
+
+As chaves utilizadas como argumentos precisam ser nomes válidos para argumentos nomeados da função. O dicionário não é automaticamente transformado em uma variável chamada `dados`: suas entradas são disponibilizadas individualmente.
+
+Se você quiser acessar os valores por meio de um único objeto, passe o dicionário como um argumento:
+
+```
+return render_template("painel.html", dados=dados)
+```
+
+Então, no template:
+
+```
+<h1>{{ dados.titulo }}</h1>
+<p>{{ dados.nome }}</p>
+```
+
+### 17.3. Como o Jinja resolve variáveis e atributos
+
+O Jinja oferece duas formas comuns de acessar valores dentro de estruturas compostas:
+
+- Notação com ponto: `objeto.atributo`
+    
+- Notação com colchetes: `objeto["chave"]`
+    
+
+Embora sejam parecidas, essas formas têm regras de resolução diferentes.
+
+Considere:
+
+```
+dados = {
+    "nome": "Marcos",
+    "nivel": 3
+}
+```
+
+No template:
+
+```
+<p>{{ dados.nome }}</p>
+<p>{{ dados["nome"] }}</p>
+<p>{{ dados["nivel"] }}</p>
+```
+
+As três expressões permitem acessar os valores desse dicionário.
+
+A diferença fica importante quando um dicionário contém uma chave com o mesmo nome de um atributo ou método do objeto.
+
+|Expressão|Ordem de resolução|
+|---|---|
+|`objeto.nome`|Primeiro tenta encontrar um atributo; depois, uma chave de mesmo nome|
+|`objeto["nome"]`|Primeiro tenta encontrar uma chave; depois, um atributo de mesmo nome|
+
+Por exemplo, dicionários Python possuem um método chamado `items`. Se o dicionário também tiver uma chave chamada `items`, as expressões abaixo poderão produzir resultados diferentes:
+
+```
+dados = {
+    "items": "valor personalizado"
+}
+```
+
+```
+{{ dados.items }}
+{{ dados["items"] }}
+```
+
+Na primeira expressão, o Jinja pode resolver `items` como o método do dicionário. Na segunda, a chave é priorizada, retornando `"valor personalizado"`.
+
+**Boa prática:** quando a intenção for acessar uma chave específica de um dicionário, especialmente se ela puder coincidir com um atributo ou método, prefira a notação com colchetes.
+
+### 17.4. Variáveis em templates incluídos
+
+Por padrão, um template chamado por `include` recebe o contexto disponível no template que o incluiu.
+
+Arquivo `templates/partials/usuario.html`:
+
+```
+<p>Usuário: {{ nome }}</p>
+```
+
+Arquivo `templates/painel.html`:
+
+```
+{% set nome = "Marcos" %}
+
+{% include "partials/usuario.html" %}
+```
+
+O template incluído pode acessar `nome`, pois essa variável está disponível no contexto.
+
+Também é possível passar informações específicas para o componente incluído:
+
+```
+{% include "partials/usuario.html" with context %}
+```
+
+Ou fornecer variáveis adicionais diretamente:
+
+```
+{% include "partials/usuario.html" with context %}
+```
+
+Nesse último exemplo, o comportamento é o mesmo da forma padrão, pois `with context` é o padrão. Para fornecer dados locais adicionais, uma abordagem é usar um bloco `with`:
+
+```
+{% with nome="Ana" %}
+    {% include "partials/usuario.html" %}
+{% endwith %}
+```
+
+Durante essa renderização, o template incluído recebe o valor de `nome` definido no bloco `with`.
+
+Também é possível omitir o contexto herdado:
+
+```
+{% include "partials/usuario.html" without context %}
+```
+
+Nesse caso, o template incluído não recebe as variáveis locais do contexto chamador. Entretanto, isso não significa que todos os recursos globais e configurações do ambiente Jinja sejam removidos.
+
+Use `without context` quando quiser reduzir a dependência de um fragmento em relação aos dados da página que o utiliza. Lembre-se de que o fragmento precisará obter seus dados de outra maneira, ou poderá encontrar variáveis indefinidas.
+
+### 17.5. O que é um `context_processor` no Flask?
+
+Um _context processor_ é uma função que disponibiliza variáveis adicionais ao contexto dos templates do Flask.
+
+Ele é útil quando determinado valor precisa estar disponível em várias páginas, sem que cada rota tenha que passá-lo manualmente.
+
+Por exemplo, imagine que várias páginas precisem exibir o nome do sistema no rodapé.
+
+Sem um context processor, você poderia repetir o mesmo argumento em várias rotas:
+
+```
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        nome_sistema="Painel"
+    )
+
+@app.route("/sobre")
+def sobre():
+    return render_template(
+        "sobre.html",
+        nome_sistema="Painel"
+    )
+```
+
+Isso funciona, mas duplica a configuração.
+
+Com um context processor:
+
+```
+@app.context_processor
+def disponibilizar_dados_globais():
+    return {
+        "nome_sistema": "Painel"
+    }
+```
+
+Agora, os templates renderizados pelo Flask podem utilizar a variável:
+
+```
+<footer>
+    {{ nome_sistema }}
+</footer>
+```
+
+A função registrada com `@app.context_processor` retorna um dicionário. As chaves desse dicionário são adicionadas ao contexto dos templates.
+
+O mecanismo é executado durante a preparação do contexto de renderização, não como uma função chamada diretamente pelo template.
+
+#### Quando utilizar?
+
+Use um context processor para valores comuns a várias páginas, por exemplo:
+
+- Nome ou versão da aplicação.
+    
+- Informações necessárias para a navegação global.
+    
+- Dados compartilhados da interface.
+    
+- Estado de apresentação que precisa estar disponível em vários templates.
+    
+
+Não use esse mecanismo para despejar todos os dados da aplicação no contexto. Isso dificulta identificar de onde cada variável vem e pode provocar consultas desnecessárias ao banco de dados.
+
+### 17.6. Context processors e conflitos de nomes
+
+Imagine que um context processor disponibilize:
+
+```
+@app.context_processor
+def contexto_global():
+    return {
+        "nome": "Sistema"
+    }
+```
+
+Uma rota também pode passar um valor com esse nome:
+
+```
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        nome="Marcos"
+    )
+```
+
+No contexto final, os argumentos fornecidos explicitamente a `render_template()` têm precedência sobre os valores de context processors quando existe um conflito de chave.
+
+Assim, o template recebe `"Marcos"` para `nome` nessa renderização.
+
+Conflitos desse tipo podem tornar o comportamento difícil de entender. Evite nomes genéricos para variáveis globais e prefira nomes que expressem claramente sua finalidade, como `nome_sistema`, `menu_principal` ou `versao_app`.
+
+### 17.7. `app.context_processor` e `Blueprint.app_context_processor`
+
+Quando uma aplicação utiliza Blueprints, existe uma diferença importante entre registrar um context processor na aplicação e registrá-lo em um Blueprint.
+
+Na aplicação:
+
+```
+@app.context_processor
+def contexto_global():
+    return {
+        "nome_sistema": "Painel"
+    }
+```
+
+O objetivo é disponibilizar os dados globalmente aos templates renderizados pela aplicação.
+
+Em um Blueprint:
+
+```
+from flask import Blueprint
+
+admin = Blueprint("admin", __name__)
+
+@admin.app_context_processor
+def contexto_admin():
+    return {
+        "secao_atual": "Administração"
+    }
+```
+
+O método `Blueprint.app_context_processor` registra o processador para a aplicação associada ao Blueprint. Portanto, ele não deve ser tratado como exclusivo das páginas daquele Blueprint.
+
+Se o objetivo for adicionar variáveis apenas ao contexto das requisições atendidas por determinado Blueprint, utilize o mecanismo específico:
+
+```
+@admin.context_processor
+def contexto_local_admin():
+    return {
+        "secao_admin": True
+    }
+```
+
+Essa distinção é importante para evitar disponibilizar variáveis específicas de uma área em toda a aplicação.
+
+### 17.8. Globais do ambiente Jinja
+
+Além do contexto passado durante a renderização e dos context processors, o ambiente Jinja possui variáveis globais.
+
+Essas variáveis são disponibilizadas pelo próprio ambiente de templates, e não precisam ser passadas manualmente por cada rota.
+
+No Flask, é possível registrar uma variável global:
+
+```
+app.jinja_env.globals["nome_produto"] = "Painel"
+```
+
+Depois, o template pode utilizá-la:
+
+```
+<title>{{ nome_produto }}</title>
+```
+
+A diferença conceitual é:
+
+|Mecanismo|Finalidade|
+|---|---|
+|Argumentos de `render_template()`|Dados específicos de uma renderização|
+|`context_processor`|Valores adicionados ao contexto dos templates|
+|`app.jinja_env.globals`|Valores disponibilizados globalmente pelo ambiente Jinja|
+
+Use globais principalmente para valores estáveis e recursos realmente compartilhados. Para dados que variam por usuário, requisição ou página, prefira o contexto da renderização ou um context processor apropriado.
+
+Não coloque informações confidenciais em globais: elas ficam disponíveis aos templates que podem acessá-las.
+
+### 17.9. O escopo de variáveis definidas com `set`
+
+A instrução `set` permite criar ou atribuir uma variável dentro de um template:
+
+```
+{% set titulo = "Página inicial" %}
+
+<h1>{{ titulo }}</h1>
+```
+
+O valor pode ser utilizado nas expressões seguintes dentro do escopo em que estiver disponível.
+
+Entretanto, não se deve presumir que uma atribuição feita dentro de um laço `for` alterará uma variável externa de maneira persistente.
+
+Considere:
+
+```
+{% set total = 0 %}
+
+{% for numero in numeros %}
+    {% set total = total + numero %}
+{% endfor %}
+
+<p>Total: {{ total }}</p>
+```
+
+Esse código não é uma maneira confiável de acumular o total em `total`, porque as atribuições realizadas dentro de um bloco de laço possuem regras de escopo que impedem a atualização esperada da variável externa.
+
+Para calcular valores derivados dos dados, geralmente é mais claro realizar o cálculo em Python e passar o resultado ao template:
+
+```
+numeros = [10, 20, 30]
+
+total = sum(numeros)
+
+return render_template(
+    "numeros.html",
+    total=total
+)
+```
+
+No template:
+
+```
+<p>Total: {{ total }}</p>
+```
+
+Se for realmente necessário manter um estado mutável durante a renderização, o Jinja oferece `namespace`.
+
+```
+{% set estado = namespace(total=0) %}
+
+{% for numero in numeros %}
+    {% set estado.total = estado.total + numero %}
+{% endfor %}
+
+<p>Total: {{ estado.total }}</p>
+```
+
+O objeto criado com `namespace` permite alterar seus atributos dentro do laço, tornando o novo valor acessível depois dele.
+
+Apesar disso, cálculos de negócio, agregações e transformações complexas devem normalmente ficar em Python. O `namespace` é mais adequado para necessidades pequenas de apresentação.
+
+### 17.10. Valores indefinidos e `StrictUndefined`
+
+Quando o template tenta acessar uma variável que não foi disponibilizada, o Jinja utiliza o tipo de valor indefinido configurado no ambiente.
+
+No comportamento padrão, um valor indefinido pode aparecer como uma string vazia em algumas situações de renderização. Isso pode ocultar erros: uma variável digitada incorretamente talvez não provoque uma falha evidente.
+
+Por exemplo:
+
+```
+<h1>{{ titulo_pagina }}</h1>
+```
+
+Se a rota enviar `titulo` em vez de `titulo_pagina`, o resultado pode ser uma página sem título, em vez de um erro claramente identificável.
+
+Para tornar esses problemas mais visíveis durante o desenvolvimento, o Jinja oferece `StrictUndefined`.
+
+No Flask:
+
+```
+from jinja2 import StrictUndefined
+
+app.jinja_env.undefined = StrictUndefined
+```
+
+Com essa configuração, tentar imprimir, testar ou realizar operações incompatíveis com uma variável indefinida gera um erro, em vez de silenciosamente produzir um resultado vazio.
+
+Isso ajuda a detectar:
+
+- Nomes de variáveis digitados incorretamente.
+    
+- Dados que uma rota deixou de enviar.
+    
+- Dependências implícitas em templates incluídos.
+    
+- Campos que o template pressupõe existir, mas que não foram fornecidos.
+    
+
+A configuração deve ser testada com os templates da aplicação, pois ela pode revelar erros que antes passavam despercebidos. Não trate a configuração como substituta da validação dos dados nem como mecanismo de autorização.
+
+### 17.11. Como decidir onde disponibilizar uma variável
+
+|Situação|Local recomendado|
+|---|---|
+|Valor usado somente em uma página|Argumento de `render_template()`|
+|Dados de um objeto ou resultado consultado pela rota|Python, antes da renderização|
+|Valor comum a várias páginas|Context processor, se for apropriado|
+|Valor estável e global do ambiente de templates|Global do Jinja|
+|Componente reutilizável com entradas explícitas|Macro com parâmetros|
+|Fragmento HTML reutilizável que depende do contexto chamador|`include`, se essa dependência for intencional|
+|Cálculo complexo ou regra de negócio|Python, fora do template|
+
+A regra prática é manter explícita a origem dos dados. Quanto mais uma página depende de variáveis que surgem implicitamente, mais difícil fica entender e testar seu comportamento.
+
+---

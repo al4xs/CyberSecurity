@@ -1708,3 +1708,480 @@ Também verifique as regras de negócio que precisam ser aplicadas após a valid
 - Reutilize componentes Jinja quando vários formulários compartilharem a mesma estrutura visual.
 
 ---
+## 15. Componentes reutilizáveis com Jinja: `include`, macros e parâmetros
+
+Em aplicações Flask, várias páginas compartilham elementos visuais. Um sistema pode ter o mesmo menu de navegação, cabeçalho, rodapé, mensagens de alerta e estrutura de formulários em diferentes telas.
+
+Copiar o mesmo HTML para cada template funciona inicialmente, mas gera um problema de manutenção: quando um componente precisa ser alterado, é necessário localizar e modificar todas as cópias.
+
+O Jinja oferece mecanismos para reutilizar partes dos templates. Entre os principais estão:
+
+- `include`: incorpora o conteúdo renderizado de outro template.
+    
+- `macro`: define uma função reutilizável que produz conteúdo de template.
+    
+- Parâmetros: permitem fornecer valores a macros para que o mesmo componente seja utilizado em contextos diferentes.
+    
+
+Esses mecanismos têm finalidades relacionadas, mas não são equivalentes.
+
+### 15.1. A instrução `include`
+
+A instrução `include` permite incorporar outro template no ponto em que ela aparece.
+
+Sintaxe:
+
+```
+{% include "caminho/do_template.html" %}
+```
+
+O caminho é relativo ao diretório de templates configurado no Flask, seguindo o mesmo princípio utilizado por `render_template()`.
+
+Considere esta estrutura:
+
+```
+projeto/
+├── app.py
+└── templates/
+    ├── base.html
+    ├── painel.html
+    └── components/
+        ├── navbar.html
+        └── footer.html
+```
+
+O arquivo `components/navbar.html` pode conter a navegação:
+
+```
+<nav>
+    <a href="/">Início</a>
+    <a href="/perfil">Perfil</a>
+    <a href="/sobre">Sobre</a>
+</nav>
+```
+
+Em `painel.html`, podemos incorporar esse componente:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Painel</title>
+</head>
+<body>
+    {% include "components/navbar.html" %}
+
+    <main>
+        <h1>Painel do usuário</h1>
+        <p>Bem-vindo ao sistema.</p>
+    </main>
+
+    {% include "components/footer.html" %}
+</body>
+</html>
+```
+
+Quando o Jinja renderiza `painel.html`, ele também renderiza os templates incluídos e insere seus resultados na saída.
+
+O navegador recebe um documento HTML final. Ele não precisa conhecer a existência do `include`.
+
+### 15.2. O contexto disponível em um template incluído
+
+Por padrão, um template incluído tem acesso ao contexto disponível no ponto da inclusão.
+
+Considere a rota:
+
+```
+@app.route("/perfil")
+def perfil():
+    return render_template(
+        "perfil.html",
+        nome="Marcos",
+    )
+```
+
+O arquivo `components/saudacao.html` contém:
+
+```
+<p>Olá, {{ nome }}!</p>
+```
+
+O template principal pode incluir esse componente:
+
+```
+<h1>Perfil</h1>
+
+{% include "components/saudacao.html" %}
+```
+
+Como `nome` faz parte do contexto da renderização, o template incluído pode utilizá-lo. O resultado será:
+
+```
+<h1>Perfil</h1>
+<p>Olá, Marcos!</p>
+```
+
+Isso permite criar componentes que dependem de informações fornecidas pela rota sem precisar passar individualmente cada variável na instrução `include`.
+
+Entretanto, essa dependência do contexto pode dificultar a compreensão de um componente quando ele utiliza muitas variáveis sem deixar claro quais são necessárias.
+
+Quando a intenção é criar um componente com entradas explícitas e reutilizáveis, uma macro pode ser uma escolha melhor.
+
+### 15.3. A opção `with context` e `without context`
+
+O Jinja permite controlar se o template incluído recebe o contexto da renderização.
+
+Exemplo:
+
+```
+{% include "components/saudacao.html" with context %}
+```
+
+A opção `with context` explicita que o contexto deve estar disponível para o template incluído. Esse é o comportamento padrão de `include`.
+
+Também existe:
+
+```
+{% include "components/saudacao.html" without context %}
+```
+
+Nesse caso, o template incluído não recebe o contexto atual.
+
+Isso significa que variáveis fornecidas pela rota, como `nome`, não estarão disponíveis nele apenas por terem sido passadas ao template principal.
+
+Use `without context` quando a separação do contexto for intencional e o template puder funcionar sem os dados da página que o inclui.
+
+### 15.4. O comportamento de `ignore missing`
+
+Normalmente, se o Jinja não encontrar o template especificado em `include`, a renderização falhará com um erro semelhante a `TemplateNotFound`.
+
+Quando a ausência do componente é aceitável, pode-se utilizar `ignore missing`:
+
+```
+{% include "components/banner.html" ignore missing %}
+```
+
+Se `banner.html` não existir, o Jinja não interromperá a renderização apenas por causa dessa ausência.
+
+Essa opção também pode ser combinada com `with context` ou `without context`:
+
+```
+{% include "components/banner.html" ignore missing with context %}
+```
+
+Use essa possibilidade somente quando o componente for realmente opcional. Se um template obrigatório desaparecer por engano, ignorar a ausência pode esconder um problema de organização do projeto.
+
+O modificador `ignore missing` não substitui a verificação dos caminhos de templates nem resolve erros de sintaxe dentro de um arquivo que foi encontrado.
+
+### 15.5. Incluindo um template condicionalmente
+
+É possível controlar a inclusão usando uma condição:
+
+```
+{% if mostrar_banner %}
+    {% include "components/banner.html" %}
+{% endif %}
+```
+
+Nesse caso, o Jinja avalia `mostrar_banner`. Se a condição for verdadeira, incorpora o componente. Caso contrário, não o inclui.
+
+A variável precisa estar disponível no contexto. Por exemplo:
+
+```
+return render_template(
+    "painel.html",
+    mostrar_banner=True,
+)
+```
+
+Essa condição controla a apresentação. Ela não deve ser utilizada como mecanismo de autorização para operações protegidas.
+
+Se um botão de administração estiver escondido, por exemplo, a rota correspondente ainda precisa verificar se o usuário tem permissão para executar a operação.
+
+### 15.6. O que são macros?
+
+Uma macro é um recurso do Jinja que permite definir um bloco reutilizável com parâmetros.
+
+Ela se parece conceitualmente com uma função: recebe argumentos e produz uma saída de template.
+
+Sintaxe básica:
+
+```
+{% macro nome_do_componente(parametro) %}
+    Conteúdo do componente
+{% endmacro %}
+```
+
+A macro é definida no template e pode ser chamada em outros pontos após estar disponível no contexto da renderização.
+
+Por exemplo, o arquivo `components/macros.html` pode conter:
+
+```
+{% macro saudacao(nome) %}
+    <p>Olá, {{ nome }}!</p>
+{% endmacro %}
+```
+
+A macro recebe um parâmetro chamado `nome`. Dentro de seu corpo, o Jinja utiliza esse valor para produzir o parágrafo.
+
+Para reutilizá-la em `perfil.html`:
+
+```
+{% from "components/macros.html" import saudacao %}
+
+<h1>Perfil</h1>
+
+{{ saudacao("Marcos") }}
+{{ saudacao("Ana") }}
+```
+
+O resultado contém duas saudações:
+
+```
+<h1>Perfil</h1>
+<p>Olá, Marcos!</p>
+<p>Olá, Ana!</p>
+```
+
+Observe a diferença em relação a `include`: a macro recebe valores explícitos por meio dos argumentos da chamada. Isso facilita a reutilização de um componente em situações diferentes.
+
+### 15.7. Importando macros com `from`
+
+A instrução:
+
+```
+{% from "components/macros.html" import saudacao %}
+```
+
+importa a macro `saudacao` para que ela possa ser chamada diretamente:
+
+```
+{{ saudacao("Marcos") }}
+```
+
+A expressão `"components/macros.html"` indica o arquivo que contém a definição. O nome `saudacao` identifica o recurso que será importado.
+
+Se o arquivo tiver várias macros, é possível importar mais de uma:
+
+```
+{% from "components/macros.html" import saudacao, botao %}
+```
+
+A partir daí, ambas podem ser chamadas no template, desde que estejam definidas no arquivo importado.
+
+Também é possível importar todas as macros públicas de um arquivo para um namespace:
+
+```
+{% import "components/macros.html" as componentes %}
+```
+
+Nesse caso, a chamada precisa utilizar o nome do namespace:
+
+```
+{{ componentes.saudacao("Marcos") }}
+```
+
+O namespace ajuda a evitar conflitos entre nomes de macros, principalmente quando um projeto possui muitos componentes.
+
+### 15.8. Criando uma macro com vários parâmetros
+
+Uma macro pode receber vários argumentos:
+
+```
+{% macro botao(texto, url, classe="botao") %}
+    <a href="{{ url }}" class="{{ classe }}">
+        {{ texto }}
+    </a>
+{% endmacro %}
+```
+
+Essa macro recebe três parâmetros:
+
+|Parâmetro|Obrigatório na chamada?|Finalidade|
+|---|---|---|
+|`texto`|Sim|Conteúdo textual do link.|
+|`url`|Sim|Destino do link.|
+|`classe`|Não|Classe CSS; utiliza `"botao"` quando omitida.|
+
+O parâmetro `classe` tem um valor padrão. Por isso, a chamada pode fornecer somente os dois primeiros argumentos:
+
+```
+{{ componentes.botao("Acessar", "/painel") }}
+```
+
+Ou pode especificar uma classe diferente:
+
+```
+{{ componentes.botao("Excluir", "/excluir", "botao-perigo") }}
+```
+
+O valor padrão é utilizado quando a chamada não fornece um argumento para aquele parâmetro.
+
+Esse mecanismo é útil para componentes que compartilham a mesma estrutura, mas precisam variar em detalhes como texto, destino ou estilo.
+
+**Atenção à segurança:** os valores inseridos em atributos HTML precisam ser tratados de acordo com o contexto. O escapamento automático do Jinja ajuda a proteger valores inseridos em HTML, mas não substitui validação de URLs, controle de acesso ou outras medidas específicas. Não utilize `safe` para contornar o escapamento de conteúdo não confiável.
+
+### 15.9. Macros para campos de formulário
+
+Uma aplicação pode ter vários formulários com o mesmo padrão visual: rótulo, campo e mensagens de erro.
+
+Em vez de repetir o HTML, podemos definir uma macro que receba um campo WTForms.
+
+Arquivo `templates/components/forms.html`:
+
+```
+{% macro render_field(field) %}
+    <div class="form-group">
+        {{ field.label }}
+        {{ field() }}
+
+        {% for erro in field.errors %}
+            <p class="erro">{{ erro }}</p>
+        {% endfor %}
+    </div>
+{% endmacro %}
+```
+
+O parâmetro `field` representa o campo recebido na chamada.
+
+Dentro da macro:
+
+- `field.label` apresenta o rótulo.
+    
+- `field()` renderiza o controle HTML.
+    
+- `field.errors` fornece as mensagens de validação.
+    
+- O `for` apresenta cada mensagem existente.
+    
+
+No template de login:
+
+```
+{% from "components/forms.html" import render_field %}
+
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    {{ render_field(form.usuario) }}
+    {{ render_field(form.senha) }}
+
+    {{ form.enviar() }}
+</form>
+```
+
+A macro recebe primeiro o campo de usuário e depois o campo de senha. Em cada chamada, o parâmetro `field` representa o campo correspondente.
+
+Assim, o mesmo componente pode ser utilizado em vários formulários, mantendo a apresentação consistente.
+
+A macro não cria o campo WTForms e não executa sozinha a validação. Ela apenas recebe o campo já definido no Python e controla como ele será apresentado.
+
+### 15.10. Diferença entre `include`, macros e herança
+
+Os três recursos ajudam a evitar repetição, mas resolvem problemas diferentes.
+
+|Recurso|Uso principal|Exemplo|
+|---|---|---|
+|`include`|Incorporar um template reutilizável.|Menu, rodapé ou banner.|
+|`macro`|Criar um componente parametrizado que produz conteúdo.|Botão, campo de formulário ou mensagem.|
+|Herança (`extends`)|Definir uma estrutura-base com áreas que os templates filhos podem substituir.|Layout comum de várias páginas.|
+
+Um arquivo incluído normalmente contém um trecho de apresentação que será incorporado ao template atual.
+
+Uma macro é mais apropriada quando você deseja definir uma interface explícita de parâmetros e chamar o mesmo componente com valores diferentes.
+
+A herança, por sua vez, permite que um template filho aproveite a estrutura de outro template e substitua blocos definidos pelo template-base.
+
+Esses recursos podem ser combinados no mesmo projeto. Por exemplo, uma página pode herdar de `base.html`, incluir um menu e chamar macros para renderizar os campos de um formulário.
+
+### 15.11. Organização recomendada dos componentes
+
+Uma estrutura possível é:
+
+```
+templates/
+├── base.html
+├── painel.html
+├── login.html
+└── components/
+    ├── navbar.html
+    ├── footer.html
+    ├── banner.html
+    └── forms.html
+```
+
+Nesse exemplo:
+
+- `base.html` define a estrutura geral da página.
+    
+- `navbar.html` contém a navegação.
+    
+- `footer.html` contém o rodapé.
+    
+- `banner.html` contém um componente de apresentação opcional.
+    
+- `forms.html` reúne macros relacionadas a formulários.
+    
+
+A organização exata depende do tamanho do projeto. Não é necessário criar um arquivo para cada pequeno trecho de HTML. A separação deve facilitar a manutenção, sem tornar a estrutura excessivamente fragmentada.
+
+### 15.12. Erros comuns ao reutilizar componentes
+
+`**TemplateNotFound**` **em um** `**include**`
+
+Confira se o caminho informado corresponde à localização do template dentro do diretório configurado.
+
+```
+{% include "components/navbar.html" %}
+```
+
+**Macro indefinida**
+
+Se o template chama:
+
+```
+{{ render_field(form.usuario) }}
+```
+
+mas não importou `render_field`, o nome pode não estar disponível.
+
+Confira a importação:
+
+```
+{% from "components/forms.html" import render_field %}
+```
+
+**Quantidade incorreta de argumentos**
+
+Uma chamada que não fornece um parâmetro obrigatório pode gerar um erro de argumentos da macro.
+
+Confira a definição e a chamada. Parâmetros com valores padrão podem ser omitidos; os demais precisam receber os valores esperados.
+
+**Variável ausente no template incluído**
+
+Se um template incluído depende de uma variável do contexto, verifique se ela foi fornecida e se a inclusão não utiliza `without context`.
+
+**Componente aparece, mas os dados não são exibidos**
+
+Confira os parâmetros passados à macro e os nomes utilizados em seu corpo. O Jinja não adivinha qual variável deve ser associada a cada parâmetro.
+
+### 15.13. Boas práticas para componentes Jinja
+
+- Utilize `include` para incorporar trechos de templates que precisam ser reutilizados.
+    
+- Prefira macros quando o componente tiver parâmetros explícitos.
+    
+- Utilize namespaces ao importar conjuntos de macros com nomes potencialmente conflitantes.
+    
+- Mantenha a estrutura geral da página separada dos componentes menores.
+    
+- Evite dependências implícitas excessivas do contexto nos componentes reutilizáveis.
+    
+- Não utilize `ignore missing` para esconder a ausência de templates obrigatórios.
+    
+- Preserve o escapamento automático e trate valores de acordo com o contexto em que serão inseridos.
+    
+- Mantenha validação, autorização e regras de negócio no servidor, sem depender apenas da apresentação do template.
+
+---

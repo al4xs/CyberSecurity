@@ -7499,3 +7499,202 @@ Ao utilizar Jinja para produzir arquivos, considere os seguintes aspectos:
 A renderização é uma etapa de transformação de um template em conteúdo final. A maneira como esse conteúdo será armazenado, transmitido ou interpretado por outro sistema depende da aplicação que o utiliza.
 
 ---
+## 31. Extensões do Jinja e criação de funcionalidades personalizadas
+
+O Jinja permite ampliar sua sintaxe e seu comportamento por meio de extensões (_extensions_). Elas são componentes que podem adicionar funcionalidades ao mecanismo de templates, inclusive novas construções sintáticas.
+
+Na maioria das aplicações Flask, os recursos nativos do Jinja, combinados com filtros, testes, funções globais e macros, são suficientes. Extensões personalizadas são mais úteis quando existe uma necessidade recorrente que não pode ser resolvida adequadamente com esses mecanismos.
+
+### 31.1. O que é uma extensão do Jinja?
+
+Uma extensão é uma classe Python que herda de `jinja2.ext.Extension` e pode modificar o processo de análise dos templates.
+
+Ela pode, por exemplo:
+
+- Registrar novas construções sintáticas.
+    
+- Definir tags personalizadas.
+    
+- Participar da análise do código do template.
+    
+- Transformar construções próprias em nós da árvore de sintaxe abstrata do Jinja.
+    
+
+Isso é diferente de criar um filtro personalizado.
+
+Um filtro recebe um valor e transforma esse valor. Uma extensão pode modificar a própria linguagem de templates, introduzindo construções que não existem na sintaxe padrão.
+
+### 31.2. Diferença entre filtros, funções globais e extensões
+
+|Recurso|Finalidade|
+|---|---|
+|Filtro personalizado|Transformar valores usados em expressões|
+|Função global|Disponibilizar uma função para os templates|
+|Teste personalizado|Verificar uma condição com `is`|
+|Extensão|Ampliar a sintaxe ou o funcionamento do mecanismo de templates|
+
+Por exemplo, um filtro pode formatar um preço:
+
+```
+def formatar_preco(valor):
+    return f"R$ {valor:.2f}".replace(".", ",")
+```
+
+Registro no ambiente Jinja:
+
+```
+app.jinja_env.filters["preco"] = formatar_preco
+```
+
+Uso no template:
+
+```
+{{ 1250.5 | preco }}
+```
+
+Resultado:
+
+```
+R$ 1250,50
+```
+
+Não é necessário criar uma extensão para esse tipo de transformação.
+
+### 31.3. Entendendo a classe `Extension`
+
+Uma extensão normalmente herda da classe `Extension`, disponibilizada pelo módulo `jinja2.ext`.
+
+A estrutura básica é:
+
+```
+from jinja2.ext import Extension
+
+
+class MinhaExtensao(Extension):
+    tags = {"minha_tag"}
+```
+
+O atributo `tags` informa quais nomes de tags a extensão reconhece.
+
+Entretanto, declarar uma tag não implementa seu comportamento. Para que ela funcione, a extensão precisa participar da análise do template e produzir uma representação que o Jinja consiga compilar e executar.
+
+Essa implementação exige conhecimento sobre o parser, os nós da AST (_Abstract Syntax Tree_) e o processo de compilação do Jinja.
+
+Por isso, criar uma extensão é consideravelmente mais complexo do que registrar um filtro ou uma função global.
+
+### 31.4. Como uma extensão é registrada no Flask
+
+As extensões podem ser configuradas no ambiente Jinja da aplicação.
+
+Uma maneira de registrar uma extensão personalizada é:
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+app.jinja_env.add_extension(
+    "meu_projeto.jinja_extensoes.MinhaExtensao"
+)
+```
+
+Nesse exemplo, `meu_projeto.jinja_extensoes.MinhaExtensao` é um caminho de importação ilustrativo. Ele precisa corresponder ao módulo e à classe existentes no projeto.
+
+O registro deve ocorrer durante a configuração da aplicação, antes que os templates dependentes da extensão sejam carregados ou compilados.
+
+O método `add_extension()` recebe o caminho de importação ou a classe da extensão. O Jinja utiliza essa informação para instanciar e registrar a funcionalidade.
+
+### 31.5. O papel do parser
+
+Para criar uma tag personalizada, a extensão precisa interpretar a sintaxe que aparece no template.
+
+O parser do Jinja fornece métodos para consumir tokens, analisar expressões e construir nós que serão compilados posteriormente.
+
+O fluxo conceitual é:
+
+1. O Jinja encontra uma tag reconhecida pela extensão.
+    
+2. A extensão interpreta os tokens associados à tag.
+    
+3. A extensão constrói nós compatíveis com a AST do Jinja.
+    
+4. O compilador transforma esses nós em código executável.
+    
+5. Durante a renderização, o código produz o conteúdo correspondente.
+    
+
+Essa sequência explica por que uma extensão não funciona apenas por declarar um nome em `tags`: é necessário definir como a construção será interpretada e executada.
+
+### 31.6. Extensões nativas do Jinja
+
+O próprio Jinja inclui algumas extensões, como `jinja2.ext.do`, que habilita a instrução `do`.
+
+Ela permite avaliar uma expressão sem inserir diretamente seu resultado na saída renderizada.
+
+Exemplo:
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+app.jinja_env.add_extension("jinja2.ext.do")
+```
+
+Template:
+
+```
+{% set itens = [] %}
+{% do itens.append("Python") %}
+{% do itens.append("Jinja") %}
+
+<ul>
+    {% for item in itens %}
+        <li>{{ item }}</li>
+    {% endfor %}
+</ul>
+```
+
+Nesse caso, `do` permite chamar `append()` sem precisar exibir o retorno da chamada.
+
+Entretanto, esse exemplo é ilustrativo de uma capacidade da linguagem, não uma recomendação para modificar listas em templates. Em geral, é mais simples e previsível preparar os dados no Python e deixar o Jinja responsável pela apresentação.
+
+A disponibilidade de extensões deve ser verificada na versão do Jinja utilizada. Não se deve presumir que toda extensão mencionada em documentação antiga continue sendo necessária ou esteja disponível da mesma forma nas versões atuais.
+
+### 31.7. Quando criar uma extensão personalizada?
+
+Considere criar uma extensão quando:
+
+- Existe uma construção sintática específica que precisa ser reutilizada em muitos templates.
+    
+- Filtros, funções globais, macros e herança não atendem adequadamente à necessidade.
+    
+- A funcionalidade precisa participar diretamente da análise ou compilação dos templates.
+    
+- O custo de manter uma extensão é justificável pelo benefício obtido.
+    
+
+Por outro lado, evite criar extensões para tarefas simples, como formatar datas, converter valores, verificar condições ou montar componentes HTML reutilizáveis. Esses casos normalmente são resolvidos com os recursos convencionais do Jinja.
+
+### 31.8. Cuidados de manutenção e segurança
+
+Uma extensão personalizada passa a fazer parte da infraestrutura da aplicação. Alterações nela podem afetar diversos templates, e erros na análise ou na geração dos nós podem provocar falhas durante a compilação ou renderização.
+
+Algumas precauções importantes:
+
+- Teste a extensão com entradas válidas e inválidas.
+    
+- Documente a sintaxe personalizada.
+    
+- Evite criar uma linguagem excessivamente diferente da sintaxe padrão do Jinja.
+    
+- Verifique a compatibilidade com a versão instalada.
+    
+- Não trate dados externos como código confiável.
+    
+- Não confunda a criação de uma extensão com a sanitização de HTML.
+    
+
+Extensões ampliam a capacidade do Jinja, mas também aumentam a complexidade do ambiente. Sempre que uma solução convencional resolver o problema de maneira clara, prefira-a.
+
+---

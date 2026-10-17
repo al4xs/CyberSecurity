@@ -5834,3 +5834,289 @@ return {"ano_atual": ano_atual()}
 executa a função durante a criação do contexto e disponibiliza seu resultado.
 
 ---
+## 26. Variáveis indefinidas, `StrictUndefined` e tratamento de erros no Jinja
+
+### 26.1. O que acontece quando uma variável não existe?
+
+Um template Jinja pode tentar acessar uma variável que não foi enviada pelo Python, não foi definida por um context processor ou não está disponível no contexto atual.
+
+Considere o seguinte template:
+
+```
+<h1>Olá, {{ usuario.nome }}</h1>
+```
+
+Se a variável `usuario` não estiver disponível, o comportamento dependerá da configuração de indefinições do ambiente Jinja.
+
+Por padrão, o Jinja utiliza uma implementação chamada `Undefined`. Em muitas situações, ela permite que uma variável ausente seja representada por um valor indefinido, em vez de interromper imediatamente a renderização.
+
+Por exemplo:
+
+```
+<p>{{ variavel_inexistente }}</p>
+```
+
+Com a configuração padrão, uma expressão simples como essa normalmente produz uma saída vazia.
+
+Isso pode parecer conveniente, mas também pode esconder erros: o template pode ser renderizado sem mostrar um dado que deveria existir.
+
+O comportamento muda quando a variável é utilizada em operações que não são permitidas para o tipo de indefinição configurado. Acessar atributos de uma variável ausente, por exemplo, pode gerar um erro.
+
+### 26.2. Verificando se uma variável está definida
+
+O teste `defined` permite verificar se uma variável existe no contexto do Jinja.
+
+```
+{% if usuario is defined %}
+    <p>Usuário disponível.</p>
+{% else %}
+    <p>Usuário não informado.</p>
+{% endif %}
+```
+
+Para verificar uma variável específica:
+
+```
+{% if usuario.nome is defined %}
+    <p>{{ usuario.nome }}</p>
+{% endif %}
+```
+
+O segundo exemplo pressupõe que a expressão possa ser avaliada sem que uma operação anterior provoque um erro. Para estruturas potencialmente ausentes, é mais seguro verificar os níveis de acesso separadamente:
+
+```
+{% if usuario is defined and usuario.nome is defined %}
+    <p>{{ usuario.nome }}</p>
+{% endif %}
+```
+
+O operador `and` avalia as expressões da esquerda para a direita e interrompe a avaliação quando encontra uma condição falsa. Assim, a segunda condição não precisa ser avaliada se `usuario` não estiver definido.
+
+### 26.3. Diferença entre variável indefinida, `None` e valor vazio
+
+Esses estados não significam a mesma coisa.
+
+|Estado|Significado|
+|---|---|
+|Variável indefinida|O nome não foi disponibilizado no contexto ou não possui um valor definido|
+|`None`|A variável existe, mas seu valor Python é `None`|
+|String vazia (`""`)|A variável contém um texto sem caracteres|
+|Lista vazia (`[]`)|A variável contém uma lista sem elementos|
+|Zero (`0`)|A variável contém o número zero|
+|`False`|A variável contém o valor booleano falso|
+
+Por exemplo:
+
+```
+return render_template(
+    "perfil.html",
+    nome=None,
+    email="",
+    total=0,
+    ativo=False,
+)
+```
+
+No template, essas variáveis estão definidas, mesmo que seus valores sejam vazios ou falsos.
+
+É possível verificar se uma variável está definida:
+
+```
+{% if nome is defined %}
+    <p>A variável nome foi disponibilizada.</p>
+{% endif %}
+```
+
+Ou verificar especificamente se seu valor é `None`:
+
+```
+{% if nome is none %}
+    <p>O nome não possui valor.</p>
+{% endif %}
+```
+
+Também é possível testar se um valor é considerado falso em uma condição:
+
+```
+{% if not total %}
+    <p>Não há itens.</p>
+{% endif %}
+```
+
+Entretanto, essa última condição também será verdadeira para outros valores falsos, como `None`, `False`, `0`, `""` e coleções vazias. Se a intenção for verificar especificamente se o número é zero, compare explicitamente com `0`.
+
+### 26.4. O filtro `default`
+
+O filtro `default` permite fornecer um valor alternativo quando uma variável está indefinida.
+
+```
+<p>Usuário: {{ usuario | default("Visitante") }}</p>
+```
+
+Se `usuario` não estiver definido, o template utilizará `Visitante`.
+
+Por padrão, o filtro não substitui todos os valores falsos. Se a variável estiver definida como uma string vazia, por exemplo, essa string continuará sendo utilizada.
+
+Para substituir também valores considerados falsos, passe `true` como segundo argumento:
+
+```
+<p>Usuário: {{ usuario | default("Visitante", true) }}</p>
+```
+
+Nesse caso, valores como `None`, `False`, `0`, `""` e listas vazias também podem resultar no valor alternativo.
+
+Escolha a forma adequada conforme a regra desejada. Se zero for um valor legítimo, por exemplo, não utilize a segunda forma sem considerar suas consequências.
+
+### 26.5. O que é `StrictUndefined`?
+
+`StrictUndefined` é uma classe do Jinja que torna o tratamento de variáveis indefinidas mais rigoroso.
+
+Em vez de permitir que uma variável ausente seja silenciosamente utilizada em vários contextos, essa configuração faz com que operações sobre ela provoquem erros, inclusive a tentativa de convertê-la em string ou utilizá-la em condições booleanas.
+
+Isso ajuda a encontrar erros de digitação, variáveis esquecidas e dados que não foram enviados corretamente ao template.
+
+Exemplo:
+
+```
+<h1>Olá, {{ usario.nome }}</h1>
+```
+
+Suponha que o Python tenha enviado `usuario`, mas o template utilize incorretamente `usario`.
+
+Com o comportamento padrão, alguns usos de variáveis indefinidas podem passar despercebidos. Com `StrictUndefined`, a tentativa de utilizar a variável incorreta provoca uma exceção, tornando o problema mais fácil de identificar.
+
+### 26.6. Configurando `StrictUndefined` no Flask
+
+O Flask permite configurar o ambiente Jinja por meio de `app.jinja_env`.
+
+```
+from flask import Flask, render_template
+from jinja2 import StrictUndefined
+
+app = Flask(__name__)
+
+app.jinja_env.undefined = StrictUndefined
+
+
+@app.route("/")
+def inicio():
+    return render_template("index.html", usuario="Ana")
+```
+
+O ambiente deve ser configurado durante a inicialização da aplicação, antes que os templates sejam utilizados.
+
+Com essa configuração, variáveis ausentes serão tratadas de forma rigorosa.
+
+Por exemplo, este template:
+
+```
+<h1>Olá, {{ usario }}</h1>
+```
+
+vai gerar um erro porque `usario` não foi disponibilizado.
+
+**Atenção:** o erro pode ocorrer durante a renderização da página, e não necessariamente quando a aplicação é iniciada. Em desenvolvimento, isso é útil para descobrir problemas rapidamente. Em produção, é importante registrar o erro adequadamente e apresentar uma resposta de erro apropriada, sem expor detalhes internos ao usuário.
+
+### 26.7. Quando utilizar `StrictUndefined`
+
+Essa configuração é especialmente útil quando:
+
+- O projeto possui muitos templates e variáveis compartilhadas.
+    
+- Existem context processors que disponibilizam dados para várias páginas.
+    
+- Os templates exibem informações que não podem desaparecer silenciosamente.
+    
+- O projeto está em desenvolvimento e precisa identificar inconsistências rapidamente.
+    
+- Há erros recorrentes causados por nomes de variáveis incorretos.
+    
+
+Entretanto, nem toda variável ausente representa um erro. Algumas partes da interface podem ser opcionais.
+
+Nesses casos, é melhor declarar explicitamente a possibilidade de ausência e verificar a variável:
+
+```
+{% if mensagem is defined %}
+    <div class="mensagem">{{ mensagem }}</div>
+{% endif %}
+```
+
+O objetivo não é eliminar todas as situações opcionais, mas distinguir dados realmente obrigatórios de dados que podem faltar legitimamente.
+
+### 26.8. Diagnóstico de variáveis ausentes
+
+Quando um template apresenta uma variável vazia ou lança um erro, siga uma sequência de verificações.
+
+**1. Verifique a grafia do nome**
+
+```
+{{ usuario.nome }}
+```
+
+Confirme se o nome utilizado no template corresponde ao nome disponibilizado pelo Python.
+
+**2. Verifique a chamada de** `**render_template()**`
+
+```
+return render_template(
+    "perfil.html",
+    usuario=usuario,
+)
+```
+
+Confirme se o argumento foi realmente enviado.
+
+**3. Verifique os context processors**
+
+Se a variável deveria ser global, confirme se o context processor retorna a chave correta:
+
+```
+@app.context_processor
+def contexto():
+    return {"nome_aplicacao": "Painel"}
+```
+
+**4. Verifique o escopo da variável**
+
+Uma variável criada dentro de um bloco, macro ou estrutura específica pode não estar disponível onde você espera. Também é necessário considerar as regras de escopo do Jinja e a forma como a variável foi criada.
+
+**5. Utilize** `**StrictUndefined**` **durante o desenvolvimento**
+
+Essa configuração ajuda a transformar omissões silenciosas em erros identificáveis.
+
+**6. Examine o traceback**
+
+O traceback normalmente indica o template e a linha em que a falha ocorreu, embora a origem do problema possa estar na função Python que deveria fornecer os dados.
+
+### 26.9. Boas práticas
+
+- Utilize `is defined` para verificar variáveis opcionais.
+    
+- Utilize `is none` quando a intenção for verificar especificamente o valor `None`.
+    
+- Utilize `default` quando existir um valor alternativo apropriado.
+    
+- Considere `StrictUndefined` para encontrar erros durante o desenvolvimento.
+    
+- Não use valores padrão indiscriminadamente para esconder dados obrigatórios que não foram carregados.
+    
+- Não confunda uma variável ausente com uma string vazia, zero ou `False`.
+    
+- Não exponha tracebacks, caminhos internos ou informações sensíveis em páginas de erro públicas.
+    
+- Mantenha coerentes os nomes de variáveis enviados por rotas, context processors e macros.
+    
+
+### 26.10. Referência rápida
+
+|Recurso|Finalidade|
+|---|---|
+|`variavel is defined`|Verifica se a variável está definida|
+|`variavel is none`|Verifica se o valor é `None`|
+|`variavel \| default("valor")`|Define um valor alternativo para variável indefinida|
+|`variavel \| default("valor", true)`|Também substitui valores considerados falsos|
+|`StrictUndefined`|Faz operações sobre valores indefinidos provocarem erros|
+|`app.jinja_env.undefined = StrictUndefined`|Configura o ambiente Jinja do Flask para utilizar indefinições rigorosas|
+
+---

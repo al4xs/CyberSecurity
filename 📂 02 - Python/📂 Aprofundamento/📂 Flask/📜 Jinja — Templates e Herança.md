@@ -8244,3 +8244,295 @@ Ao organizar templates Jinja, considere:
 A arquitetura deve facilitar a evolução da aplicação, sem transformar a camada de templates em uma segunda implementação da lógica de negócio.
 
 ---
+## 34. Segurança avançada em templates Jinja
+
+O Jinja oferece mecanismos de segurança para reduzir riscos durante a geração de conteúdo dinâmico. Entretanto, o escapamento automático não elimina todas as vulnerabilidades possíveis.
+
+Para utilizar templates com segurança, é necessário compreender como o HTML é interpretado pelo navegador, quais valores são considerados confiáveis e em quais situações o contexto de saída exige um tratamento específico.
+
+### 34.1. XSS: Cross-Site Scripting
+
+XSS é uma vulnerabilidade na qual conteúdo controlado por um atacante consegue executar código no navegador de outra pessoa, geralmente por meio de JavaScript inserido em uma página.
+
+Considere uma aplicação que exibe uma mensagem fornecida pelo usuário:
+
+```
+@app.route("/mensagem")
+def mensagem():
+    texto = request.args.get("texto", "")
+
+    return render_template(
+        "mensagem.html",
+        texto=texto,
+    )
+```
+
+Template `templates/mensagem.html`:
+
+```
+<p>{{ texto }}</p>
+```
+
+Um atacante pode tentar fornecer uma entrada como:
+
+```
+<script>alert(1)</script>
+```
+
+Com o escapamento automático habilitado para esse template HTML, o Jinja transforma os caracteres especiais em entidades HTML. O navegador apresenta o conteúdo como texto, em vez de interpretar a sequência como uma tag `script`.
+
+O princípio fundamental é que **dados externos devem continuar sendo dados, não código executável**.
+
+### 34.2. Como funciona o escapamento automático
+
+O escapamento converte determinados caracteres em representações apropriadas para HTML.
+
+|Caractere|Representação comum|
+|---|---|
+|`&`|`&amp;`|
+|`<`|`&lt;`|
+|`>`|`&gt;`|
+|`"`|`&#34;` ou outra representação equivalente|
+|`'`|`&#39;` ou outra representação equivalente|
+
+As representações exatas podem variar conforme o mecanismo de escapamento. O objetivo é impedir que caracteres especiais sejam interpretados como parte da estrutura HTML.
+
+Por exemplo:
+
+```
+<p>{{ usuario }}</p>
+```
+
+Se `usuario` contiver:
+
+```
+<script>alert(1)</script>
+```
+
+O HTML renderizado conterá uma representação escapada do conteúdo.
+
+O escapamento automático do Flask normalmente é habilitado para templates HTML com extensões reconhecidas, como `.html`. A configuração também pode ser personalizada, portanto não se deve presumir que todo template, independentemente de seu formato, estará protegido da mesma maneira.
+
+### 34.3. O filtro `safe`
+
+O filtro `safe` informa ao Jinja que determinado valor deve ser tratado como conteúdo HTML seguro, evitando o escapamento automático desse valor.
+
+Exemplo:
+
+```
+<div>{{ conteudo | safe }}</div>
+```
+
+Se `conteudo` contiver uma tag HTML, ela poderá ser interpretada pelo navegador.
+
+Isso pode ser necessário para exibir HTML previamente sanitizado, mas é perigoso quando o conteúdo vem diretamente de usuários ou de fontes não confiáveis.
+
+Considere:
+
+```
+conteudo = '<img src=x onerror=alert(1)>'
+```
+
+Se esse valor for renderizado com `|safe`, o escapamento normal não protegerá a expressão. Dependendo do contexto e do navegador, o conteúdo poderá introduzir comportamento executável.
+
+Por isso, não utilize `safe` apenas para fazer uma página exibir HTML que aparentemente está correto.
+
+Quando a aplicação precisa aceitar HTML fornecido por usuários, utilize um sanitizador apropriado que permita apenas as tags, os atributos e os protocolos necessários.
+
+### 34.4. A classe `Markup`
+
+A classe `Markup`, fornecida pela biblioteca MarkupSafe, representa uma string marcada como segura para uso em HTML.
+
+```
+from markupsafe import Markup
+
+conteudo = Markup("<strong>Texto destacado</strong>")
+```
+
+Ao ser utilizada em um template HTML, essa marcação indica que o conteúdo não precisa passar pelo escapamento HTML convencional.
+
+Exemplo:
+
+```
+return render_template(
+    "pagina.html",
+    conteudo=conteudo,
+)
+```
+
+Template:
+
+```
+<div>{{ conteudo }}</div>
+```
+
+Nesse caso, o conteúdo pode ser renderizado como um elemento `<strong>`.
+
+A classe não verifica automaticamente se uma string é realmente segura. Marcar dados não confiáveis como `Markup` pode criar vulnerabilidades.
+
+Existe uma diferença importante entre construir marcação confiável e simplesmente declarar que uma string arbitrária é segura.
+
+### 34.5. Construindo HTML com `Markup` de maneira segura
+
+Quando for necessário construir HTML dinamicamente, `Markup` oferece operações que escapam argumentos não confiáveis.
+
+```
+from markupsafe import Markup
+
+nome = "<script>alert(1)</script>"
+
+html = Markup("<strong>{}</strong>").format(nome)
+```
+
+Nesse exemplo, o argumento `nome` é escapado durante a formatação da marcação.
+
+O resultado mantém a estrutura `<strong>` criada pela aplicação, mas representa o valor fornecido como texto, sem inserir a tag `script` como código HTML.
+
+Essa abordagem é diferente de marcar diretamente a entrada como segura:
+
+```
+# Perigoso se nome não for confiável.
+html = Markup(nome)
+```
+
+A regra é simples: construa a estrutura confiável e trate os valores externos como dados que precisam ser escapados.
+
+Mesmo assim, quando possível, prefira deixar o Jinja montar o HTML por meio de expressões e blocos convencionais.
+
+### 34.6. Escapamento HTML não protege todos os contextos
+
+O escapamento automático do Jinja é voltado principalmente para a segurança de conteúdo HTML. Ele não substitui o tratamento adequado para todos os outros contextos.
+
+Por exemplo, inserir valores diretamente em JavaScript pode ser perigoso:
+
+```
+<script>
+    const nome = "{{ nome }}";
+</script>
+```
+
+O escapamento HTML não equivale à codificação correta de uma string JavaScript. Um valor pode atravessar as regras de um contexto e ser interpretado de maneira inesperada em outro.
+
+Para disponibilizar dados Python ao JavaScript, uma abordagem apropriada no Flask é utilizar o filtro `tojson`:
+
+```
+<script>
+    const nome = {{ nome | tojson }};
+</script>
+```
+
+O filtro serializa o valor para uma representação JSON apropriada para inclusão nesse contexto. Isso é preferível a inserir uma string arbitrária entre aspas manualmente.
+
+Ainda assim, a saída deve ser utilizada no contexto previsto. Não trate `tojson` como um mecanismo universal para inserir dados em qualquer lugar do documento HTML.
+
+### 34.7. Segurança em atributos HTML
+
+Valores dinâmicos também podem aparecer em atributos HTML.
+
+Exemplo:
+
+```
+<input value="{{ nome }}">
+```
+
+Com o escapamento automático habilitado, os caracteres especiais são escapados para HTML, reduzindo o risco de quebras na estrutura do atributo.
+
+Entretanto, atributos que aceitam URLs exigem cuidados adicionais:
+
+```
+<a href="{{ destino }}">Abrir</a>
+```
+
+O escapamento HTML não impede, por si só, que um valor represente um protocolo perigoso, como `javascript:` em contextos nos quais ele seja interpretado como uma URL executável.
+
+Quando os usuários podem controlar destinos, valide o esquema e as regras permitidas pela aplicação. Se necessário, aceite apenas URLs relativas ou protocolos explicitamente autorizados.
+
+### 34.8. Segurança em CSS e outros contextos
+
+O mesmo princípio se aplica a CSS, atributos de eventos e outros locais nos quais o navegador interpreta conteúdo de acordo com regras específicas.
+
+Por exemplo, não é seguro inserir dados externos diretamente em um bloco de estilos e presumir que o escapamento HTML resolverá todos os riscos.
+
+A proteção depende do contexto:
+
+- **Texto HTML:** utilize o escapamento HTML apropriado.
+    
+- **Atributos HTML:** considere o escapamento e a validação semântica do atributo.
+    
+- **JavaScript:** utilize serialização apropriada, como `tojson`, e evite inserir dados em contextos executáveis desnecessários.
+    
+- **URLs:** valide os protocolos e destinos permitidos.
+    
+- **CSS:** evite incorporar dados não confiáveis diretamente em código CSS.
+    
+
+Uma estratégia robusta é reduzir a necessidade de inserir valores dinâmicos em contextos executáveis e manter a apresentação separada da lógica.
+
+### 34.9. Testando o escapamento em templates
+
+O comportamento de segurança pode ser verificado com testes automatizados.
+
+Considere uma rota que renderiza uma mensagem recebida por parâmetro:
+
+```
+from flask import request, render_template
+
+
+@app.route("/mensagem-de-teste")
+def mensagem_de_teste():
+    texto = request.args.get("texto", "")
+
+    return render_template(
+        "mensagem.html",
+        texto=texto,
+    )
+```
+
+Um teste com `pytest` pode verificar a resposta:
+
+```
+def test_escapamento_html():
+    client = app.test_client()
+
+    resposta = client.get(
+        "/mensagem-de-teste",
+        query_string={
+            "texto": "<script>alert(1)</script>"
+        },
+    )
+
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+```
+
+O teste pressupõe que `mensagem.html` exiba o valor em um contexto HTML normal, sem utilizar `safe` ou desativar o escapamento.
+
+Esse tipo de teste ajuda a detectar regressões, mas não substitui uma análise completa de segurança. Uma aplicação pode escapar corretamente o texto HTML e ainda conter vulnerabilidades em URLs, JavaScript, permissões ou outras partes do sistema.
+
+### 34.10. Princípios de segurança para templates
+
+Ao trabalhar com dados dinâmicos no Jinja:
+
+- Mantenha o escapamento automático habilitado sempre que apropriado.
+    
+- Evite utilizar `safe` em valores externos não sanitizados.
+    
+- Não considere `Markup` uma ferramenta de validação.
+    
+- Utilize mecanismos de serialização adequados para JavaScript e outros contextos.
+    
+- Valide URLs e outros valores de acordo com seu significado.
+    
+- Prefira construir estruturas HTML no template, em vez de concatenar strings arbitrárias.
+    
+- Teste os caminhos que recebem entradas controladas pelo usuário.
+    
+- Atualize Flask, Jinja e MarkupSafe para versões compatíveis e mantidas.
+    
+
+O escapamento é uma camada importante de proteção, mas a segurança depende de manter cada valor no contexto correto e de não transformar dados não confiáveis em código executável.
+
+---

@@ -5282,3 +5282,243 @@ Um link escondido no template não impede que alguém acesse diretamente a rota.
 |`url_for('usuarios.detalhe', id=42)`|Gera a URL de uma rota pertencente a um Blueprint|
 
 ---
+## 24. Requisições e contexto nos templates: `request`, `session`, `g` e `config`
+
+### 24.1. Como o Flask disponibiliza objetos ao Jinja
+
+Quando o Flask renderiza um template com `render_template()`, ele disponibiliza alguns objetos e funções de contexto que podem ser utilizados diretamente pelo Jinja.
+
+Entre os mais importantes estão:
+
+- `request`: informações sobre a requisição HTTP atual.
+    
+- `session`: dados associados à sessão do usuário.
+    
+- `g`: objeto para armazenar dados temporários durante o contexto de uma requisição ou tarefa.
+    
+- `config`: configuração da aplicação Flask.
+    
+
+Esses objetos não precisam ser passados individualmente em todas as chamadas de `render_template()` quando o contexto padrão do Flask está habilitado.
+
+Exemplo:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def inicio():
+    return render_template("index.html")
+```
+
+Mesmo sem receber esses objetos como argumentos explícitos, o template `index.html` pode acessar os objetos de contexto disponibilizados pelo Flask.
+
+### 24.2. Acessando `request`
+
+O objeto `request` representa a requisição HTTP atual. Nos templates, ele permite consultar informações como o método HTTP, o caminho acessado e os parâmetros enviados na URL.
+
+Exemplo:
+
+```
+<p>Método: {{ request.method }}</p>
+<p>Caminho: {{ request.path }}</p>
+<p>URL: {{ request.url }}</p>
+```
+
+Se o usuário acessar `/pesquisa?termo=python` por meio de uma requisição GET, os valores poderão ser semelhantes a:
+
+```
+Método: GET
+Caminho: /pesquisa
+URL: http://localhost/pesquisa?termo=python
+```
+
+A URL completa depende do endereço utilizado para acessar a aplicação.
+
+Para verificar parâmetros da query string:
+
+```
+{% if request.args.get('termo') %}
+    <p>Termo pesquisado: {{ request.args.get('termo') }}</p>
+{% endif %}
+```
+
+O método `get()` permite consultar um parâmetro sem gerar um erro caso ele não exista.
+
+Também é possível verificar o método HTTP para adaptar a apresentação:
+
+```
+{% if request.method == 'POST' %}
+    <p>Os dados foram enviados por POST.</p>
+{% else %}
+    <p>Você está utilizando outro método HTTP.</p>
+{% endif %}
+```
+
+**Atenção:** o template pode utilizar essas informações para apresentação, mas a validação e o processamento da requisição devem permanecer na aplicação. Não utilize condições no HTML como substituto para verificações de segurança no servidor.
+
+### 24.3. Acessando `session`
+
+O objeto `session` permite acessar dados associados à sessão do usuário.
+
+Em uma configuração padrão do Flask, a sessão é armazenada em um cookie assinado. Isso ajuda a detectar alterações não autorizadas, mas não significa que os dados sejam criptografados ou confidenciais.
+
+Exemplo de configuração e rota:
+
+```
+from flask import Flask, render_template, session
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "substitua-por-uma-chave-segura"
+
+
+@app.route("/")
+def inicio():
+    session["usuario"] = "João"
+    return render_template("index.html")
+```
+
+No template:
+
+```
+{% if session.get('usuario') %}
+    <p>Olá, {{ session.get('usuario') }}!</p>
+{% else %}
+    <p>Visitante</p>
+{% endif %}
+```
+
+O uso de `session.get('usuario')` permite verificar se a chave existe sem exigir que ela esteja definida.
+
+Em uma aplicação real, a chave secreta deve ser configurada de forma segura, normalmente por meio de uma variável de ambiente. Não utilize uma chave fixa e pública em produção.
+
+Também não armazene senhas, tokens secretos ou outros dados confidenciais diretamente na sessão padrão do Flask.
+
+### 24.4. Acessando `g`
+
+O objeto `g` serve para guardar dados temporários durante um contexto de aplicação, normalmente associados à requisição atual.
+
+Por exemplo, uma função de preparação pode carregar informações do usuário autenticado:
+
+```
+from flask import g, session
+
+
+@app.before_request
+def carregar_usuario():
+    g.usuario = session.get("usuario")
+```
+
+O template poderá consultar o valor:
+
+```
+{% if g.usuario %}
+    <p>Usuário atual: {{ g.usuario }}</p>
+{% endif %}
+```
+
+O objeto `g` não é um armazenamento permanente. Seus valores não são mantidos automaticamente entre requisições diferentes.
+
+Também é importante compreender que `g` não autentica o usuário por conta própria. O exemplo acima apenas recupera um valor da sessão. A validação da identidade e das permissões depende da lógica de autenticação da aplicação.
+
+Se for necessário carregar dados do banco de dados, essa operação normalmente deve ser realizada no código Python, evitando colocar consultas e regras de negócio diretamente no template.
+
+### 24.5. Acessando `config`
+
+O objeto `config` permite consultar a configuração da aplicação Flask durante a renderização.
+
+Exemplo em Python:
+
+```
+app.config["NOME_APLICACAO"] = "Painel Administrativo"
+```
+
+No template:
+
+```
+<title>{{ config['NOME_APLICACAO'] }}</title>
+```
+
+Também é possível verificar uma opção com um valor alternativo:
+
+```
+{% if config.get('MODO_MANUTENCAO', False) %}
+    <p>O sistema está em manutenção.</p>
+{% endif %}
+```
+
+Acessar a configuração pode ser útil para opções de apresentação, como o nome da aplicação ou a habilitação de uma funcionalidade visual.
+
+Entretanto, nem todas as configurações devem ser expostas ao usuário. Segredos, credenciais, chaves privadas e outros valores sensíveis não devem ser renderizados em HTML.
+
+### 24.6. Comparando os quatro objetos
+
+|Objeto|Finalidade|Duração típica|
+|---|---|---|
+|`request`|Consultar dados da requisição atual|Durante o contexto da requisição|
+|`session`|Acessar dados associados à sessão|Entre requisições, conforme a sessão e sua configuração|
+|`g`|Guardar dados temporários do contexto atual|Durante o contexto da requisição ou tarefa|
+|`config`|Consultar a configuração da aplicação|Enquanto a configuração estiver disponível na aplicação|
+
+Embora possam ser utilizados no Jinja, esses objetos possuem responsabilidades diferentes. Não são intercambiáveis.
+
+### 24.7. Quando passar dados explicitamente com `render_template()`
+
+Os objetos de contexto do Flask não eliminam a necessidade de passar dados específicos para o template.
+
+Por exemplo:
+
+```
+@app.route("/usuarios")
+def listar_usuarios():
+    usuarios = [
+        {"nome": "Ana"},
+        {"nome": "Carlos"},
+    ]
+
+    return render_template(
+        "usuarios.html",
+        usuarios=usuarios,
+        total=len(usuarios),
+    )
+```
+
+No template:
+
+```
+<h1>Usuários</h1>
+
+<p>Total: {{ total }}</p>
+
+<ul>
+    {% for usuario in usuarios %}
+        <li>{{ usuario.nome }}</li>
+    {% endfor %}
+</ul>
+```
+
+Nesse caso, `usuarios` e `total` são dados específicos da página, enviados explicitamente pela função Python.
+
+Essa abordagem torna mais clara a origem das informações e facilita a compreensão do template.
+
+### 24.8. Boas práticas
+
+- Utilize `request` para consultar informações da requisição, não para implementar toda a lógica de processamento no template.
+    
+- Utilize `session` apenas para dados apropriados à sessão e considere suas características de armazenamento e segurança.
+    
+- Utilize `g` para dados temporários que precisam ser compartilhados dentro do contexto atual.
+    
+- Utilize `config` somente para opções que podem ser acessadas com segurança pelo template.
+    
+- Passe explicitamente, por `render_template()`, os dados específicos de cada página.
+    
+- Não confunda esconder um elemento no HTML com impedir o acesso a uma funcionalidade.
+    
+- Evite realizar consultas ao banco de dados e operações complexas diretamente nos templates.
+    
+
+---

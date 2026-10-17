@@ -1,5 +1,3 @@
-# Parte 1 — Fundamentos do Jinja e Templates
-
 ## 1. O que é Jinja e qual problema ele resolve?
 
 O **Jinja** é um mecanismo de templates para Python. Ele permite criar um modelo de documento e preencher esse modelo com dados durante a execução da aplicação.

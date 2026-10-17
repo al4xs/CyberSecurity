@@ -6440,3 +6440,317 @@ Verifique caminhos relativos, diretório de trabalho, configuração de iniciali
     
 
 ---
+## 28. Internacionalização e localização nos templates Jinja
+
+### 28.1. O que são internacionalização e localização?
+
+Em uma aplicação web, pode ser necessário apresentar a interface em diferentes idiomas, formatos de data, moedas e convenções regionais.
+
+Dois conceitos ajudam a organizar esse trabalho:
+
+- **Internacionalização (i18n):** preparação da aplicação para suportar diferentes idiomas e convenções regionais.
+    
+- **Localização (l10n):** adaptação efetiva da interface e dos dados para um idioma ou região específica.
+    
+
+Por exemplo, uma aplicação pode apresentar a mesma página em português ou inglês, alterar o formato de datas e adaptar mensagens conforme o idioma selecionado.
+
+O Jinja não implementa sozinho todo o sistema de internacionalização de uma aplicação Flask. Ele oferece mecanismos para trabalhar com mensagens traduzíveis, enquanto extensões como Flask-Babel ajudam a integrar tradução, seleção de idioma e formatação regional.
+
+### 28.2. A função `_()` nos templates
+
+Em ambientes configurados para tradução, a função `_()` é frequentemente utilizada para marcar uma mensagem traduzível e recuperar sua tradução.
+
+Exemplo:
+
+```
+<h1>{{ _("Bem-vindo") }}</h1>
+<p>{{ _("Acesse sua conta para continuar.") }}</p>
+```
+
+O texto fornecido à função identifica a mensagem que será procurada no catálogo de traduções.
+
+Se houver uma tradução correspondente para o idioma ativo, a aplicação poderá exibi-la. Caso contrário, o resultado dependerá da configuração do sistema de tradução, sendo comum utilizar o texto original como alternativa.
+
+**Importante:** escrever `_()` no template não configura automaticamente a tradução. A função precisa estar disponível no ambiente Jinja e os catálogos de tradução precisam ser preparados e carregados pelo sistema utilizado.
+
+### 28.3. Por que não escrever todas as traduções diretamente no HTML?
+
+Uma abordagem simples seria verificar o idioma em cada template:
+
+```
+{% if idioma == "pt" %}
+    <h1>Bem-vindo</h1>
+{% elif idioma == "en" %}
+    <h1>Welcome</h1>
+{% endif %}
+```
+
+Isso funciona em exemplos pequenos, mas se torna difícil de manter quando existem muitas mensagens e idiomas.
+
+Com um sistema de tradução, o template pode manter uma mensagem de origem:
+
+```
+<h1>{{ _("Bem-vindo") }}</h1>
+```
+
+As traduções ficam organizadas em catálogos separados do HTML.
+
+Essa separação facilita adicionar idiomas, corrigir traduções e manter os templates mais legíveis.
+
+### 28.4. Utilizando Flask-Babel
+
+O Flask-Babel é uma extensão que integra recursos de internacionalização e localização ao Flask, incluindo seleção de idioma, traduções e formatação de datas e números.
+
+A instalação pode ser feita com:
+
+```
+python -m pip install Flask-Babel
+```
+
+Exemplo básico de configuração:
+
+```
+from flask import Flask
+from flask_babel import Babel
+
+app = Flask(__name__)
+
+app.config["BABEL_DEFAULT_LOCALE"] = "pt"
+app.config["BABEL_TRANSLATION_DIRECTORIES"] = "translations"
+
+babel = Babel(app)
+```
+
+Nesse exemplo:
+
+- `BABEL_DEFAULT_LOCALE` define o idioma ou localidade padrão.
+    
+- `BABEL_TRANSLATION_DIRECTORIES` indica onde os catálogos de tradução serão procurados.
+    
+- `Babel(app)` integra a extensão à aplicação Flask.
+    
+
+A configuração exata pode variar conforme a versão do Flask-Babel. Em versões atuais, a seleção dinâmica de idioma pode ser configurada por meio de um seletor de localidade, conforme a API da versão instalada.
+
+Uma aplicação que precise escolher o idioma com base na preferência do usuário deve implementar essa seleção de forma explícita e coerente.
+
+### 28.5. Selecionando o idioma da aplicação
+
+Uma aplicação pode escolher o idioma com base em critérios como:
+
+- Preferência salva para o usuário.
+    
+- Idioma informado no perfil.
+    
+- Cabeçalho HTTP `Accept-Language`.
+    
+- Configuração padrão da aplicação.
+    
+
+A preferência do navegador pode ser consultada por meio de `request.accept_languages`, disponibilizado pelo Flask.
+
+Com Flask-Babel, uma função seletora pode ser utilizada para determinar a localidade ativa. A forma de registro dessa função depende da versão da extensão.
+
+Em versões atuais que utilizam `locale_selector`, a configuração pode seguir este padrão:
+
+```
+from flask import Flask, request
+from flask_babel import Babel
+
+app = Flask(__name__)
+app.config["BABEL_DEFAULT_LOCALE"] = "pt"
+app.config["BABEL_TRANSLATION_DIRECTORIES"] = "translations"
+
+
+def selecionar_idioma():
+    return request.accept_languages.best_match(["pt", "en"])
+
+
+babel = Babel(app, locale_selector=selecionar_idioma)
+```
+
+A função procura a melhor correspondência entre os idiomas anunciados pelo navegador e os idiomas suportados pela aplicação.
+
+Se não houver correspondência, o sistema poderá utilizar o idioma padrão configurado.
+
+Em aplicações que possuem preferências de idioma salvas no perfil do usuário, essa preferência normalmente deve ser considerada antes de recorrer ao idioma do navegador.
+
+### 28.6. Traduções com pluralização: `ngettext`
+
+Algumas mensagens mudam conforme a quantidade de elementos.
+
+Por exemplo:
+
+- `1 arquivo encontrado`
+    
+- `5 arquivos encontrados`
+    
+
+A função `ngettext` permite definir formas singular e plural para uma mensagem traduzível.
+
+Em um template com a função disponível:
+
+```
+<p>
+    {{ ngettext(
+        "%(num)d arquivo encontrado",
+        "%(num)d arquivos encontrados",
+        total
+    ) % {"num": total} }}
+</p>
+```
+
+O terceiro argumento informa a quantidade utilizada para selecionar a forma apropriada conforme as regras de pluralização do idioma.
+
+As regras de plural não são universais: diferentes idiomas podem possuir regras distintas. Por isso, utilizar o sistema de tradução é preferível a implementar manualmente uma condição baseada apenas em `total == 1`.
+
+A função `ngettext` precisa estar disponível no ambiente de templates e os catálogos precisam conter as traduções correspondentes.
+
+### 28.7. Formatando datas e horários
+
+A forma de representar uma data pode variar conforme o idioma e a localidade.
+
+Uma data pode ser apresentada, por exemplo, como:
+
+```
+17/10/2026
+```
+
+Ou:
+
+```
+10/17/2026
+```
+
+Esses formatos representam a mesma data, mas seguem convenções diferentes.
+
+O Flask-Babel oferece funções de formatação de datas e horários, como `format_date()` e `format_datetime()`, que podem ser disponibilizadas nos templates conforme a integração da extensão.
+
+Exemplo:
+
+```
+<p>
+    Data: {{ format_date(data, format="short") }}
+</p>
+```
+
+Para data e horário:
+
+```
+<p>
+    Atualizado em:
+    {{ format_datetime(data_atualizacao, format="medium") }}
+</p>
+```
+
+O resultado depende da localidade ativa e das opções de formatação.
+
+A formatação de datas não substitui o tratamento correto de fusos horários. Para horários de eventos, registros e operações importantes, a aplicação deve definir claramente o fuso de origem e o fuso de apresentação.
+
+### 28.8. Formatando números
+
+A representação de números também varia conforme a localidade.
+
+Um valor decimal pode aparecer como:
+
+```
+1.234,56
+```
+
+Ou:
+
+```
+1,234.56
+```
+
+Com Flask-Babel, funções como `format_number()` e `format_decimal()` permitem formatar valores segundo as convenções regionais configuradas.
+
+Exemplo:
+
+```
+<p>
+    Valor: {{ format_decimal(valor) }}
+</p>
+```
+
+Para valores monetários, é importante utilizar uma função de formatação apropriada para moedas e informar a moeda correta. A simples formatação decimal não determina se um valor representa reais, dólares ou outra unidade monetária.
+
+Também não se deve utilizar a formatação visual como substituta do armazenamento numérico correto ou de cálculos realizados no Python.
+
+### 28.9. Organização dos catálogos de tradução
+
+Uma estrutura comum para projetos Flask com Flask-Babel é:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   ├── base.html
+│   └── index.html
+└── translations/
+    ├── en/
+    │   └── LC_MESSAGES/
+    │       ├── messages.po
+    │       └── messages.mo
+    └── pt/
+        └── LC_MESSAGES/
+            ├── messages.po
+            └── messages.mo
+```
+
+Os arquivos `.po` contêm mensagens de origem e traduções editáveis. Os arquivos `.mo` são catálogos compilados que podem ser carregados pelo sistema de tradução.
+
+A estrutura exata depende da configuração dos diretórios e domínios de tradução.
+
+Em um arquivo `.po`, uma entrada pode seguir este formato:
+
+```
+msgid "Bem-vindo"
+msgstr "Welcome"
+```
+
+Esse exemplo representa uma tradução de português para inglês se o texto original do catálogo for português.
+
+O idioma de origem e os idiomas de destino precisam ser definidos de maneira consistente no projeto.
+
+### 28.10. Extraindo mensagens dos templates
+
+Para manter os catálogos sincronizados com o código, é necessário identificar as mensagens traduzíveis presentes nos templates e no Python.
+
+No fluxo tradicional do Babel, a extração pode ser configurada com um arquivo `babel.cfg`:
+
+```
+[python: **.py]
+[jinja2: **/templates/**.html]
+extensions=jinja2.ext.i18n
+```
+
+A configuração informa quais arquivos devem ser examinados e qual extensão do Jinja habilita o reconhecimento de construções de internacionalização durante a extração.
+
+Em seguida, ferramentas do Babel podem gerar ou atualizar arquivos de catálogo, que devem ser revisados e traduzidos antes de serem compilados.
+
+O processo exato depende das ferramentas instaladas e da versão do Jinja utilizada. Não basta criar arquivos `.po`: eles precisam conter as entradas corretas e ser compilados para que o sistema de tradução os utilize.
+
+### 28.11. Boas práticas
+
+- Utilize mensagens traduzíveis em vez de duplicar toda a estrutura HTML para cada idioma.
+    
+- Mantenha o idioma padrão e os idiomas suportados claramente configurados.
+    
+- Considere as preferências salvas do usuário antes de utilizar o idioma do navegador.
+    
+- Utilize pluralização própria do sistema de tradução para mensagens dependentes de quantidade.
+    
+- Formate datas, horários e números de acordo com a localidade ativa.
+    
+- Diferencie formatação regional de conversão de moeda e de fuso horário.
+    
+- Mantenha os catálogos atualizados e compile-os após alterações.
+    
+- Não presuma que `_()`, `ngettext()` ou as funções de formatação estarão disponíveis sem a integração correspondente.
+    
+- Verifique a documentação da versão instalada do Flask-Babel antes de configurar seletores e funções de contexto.
+    
+
+---

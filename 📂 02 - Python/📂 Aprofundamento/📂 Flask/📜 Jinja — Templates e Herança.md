@@ -3332,3 +3332,503 @@ Para layouts simples, pode ser mais fácil definir uma variável e utilizá-la e
 | Reutilizar o conteúdo renderizado de um bloco                  | `self.nome_do_bloco()` |
 
 ---
+## 19. Ambiente Jinja, filtros personalizados, testes personalizados e funções globais
+
+O Jinja possui recursos nativos para manipular valores, verificar condições e disponibilizar informações aos templates. Entretanto, em aplicações Flask, pode surgir a necessidade de criar filtros próprios, testes específicos ou funções reutilizáveis que não existem na biblioteca padrão.
+
+Para isso, o Flask permite registrar recursos no ambiente Jinja.
+
+Antes de estudar cada mecanismo, é importante distinguir suas finalidades:
+
+|Recurso|Finalidade|Sintaxe no template|
+|---|---|---|
+|Filtro personalizado|Transformar ou formatar um valor|`{{ valor\|meu_filtro }}`|
+|Teste personalizado|Verificar se um valor satisfaz uma condição|`{% if valor is meu_teste %}`|
+|Função global|Executar uma função disponível no ambiente Jinja|`{{ minha_funcao(valor) }}`|
+|Variável global|Disponibilizar um valor global aos templates|`{{ nome_variavel }}`|
+
+Esses recursos são registrados no ambiente Jinja, mas cada um possui uma forma de utilização diferente.
+
+### 19.1. Criando um filtro personalizado
+
+Um filtro recebe um valor e produz um resultado. Ele é útil quando determinada transformação precisa ser aplicada diretamente na expressão do template.
+
+Imagine que uma aplicação precise apresentar identificadores de usuários em letras maiúsculas.
+
+O Python pode executar essa transformação antes de renderizar a página, mas, quando a operação é uma regra de apresentação reutilizável, um filtro pode deixar o template mais expressivo.
+
+No Flask:
+
+```
+@app.template_filter("maiusculas")
+def aplicar_maiusculas(valor):
+    return str(valor).upper()
+```
+
+No template:
+
+```
+<p>{{ nome|maiusculas }}</p>
+```
+
+Se `nome` contiver `"marcos"`, o resultado será:
+
+```
+<p>MARCOS</p>
+```
+
+O decorador `@app.template_filter("maiusculas")` registra a função no ambiente de templates usando o nome `maiusculas`.
+
+A função recebe o valor colocado antes do caractere `|`. O valor retornado pela função passa a ser o resultado daquela expressão.
+
+A transformação não altera automaticamente a variável original em Python.
+
+#### Registrando um filtro sem decorador
+
+O mesmo recurso pode ser registrado por meio do método `add_template_filter()`:
+
+```
+def aplicar_maiusculas(valor):
+    return str(valor).upper()
+
+app.add_template_filter(
+    aplicar_maiusculas,
+    name="maiusculas"
+)
+```
+
+As duas abordagens registram um filtro. O decorador costuma ser conveniente quando a função foi criada especificamente para esse propósito; o método permite registrar funções já existentes.
+
+### 19.2. Filtros com argumentos
+
+Um filtro também pode receber argumentos adicionais.
+
+Imagine que seja necessário limitar o tamanho de um texto e acrescentar um sufixo quando ele ultrapassar determinado comprimento.
+
+```
+@app.template_filter("limitar_texto")
+def limitar_texto(valor, limite=30, sufixo="..."):
+    texto = str(valor)
+
+    if len(texto) <= limite:
+        return texto
+
+    return texto[:limite] + sufixo
+```
+
+No template:
+
+```
+<p>{{ descricao|limitar_texto }}</p>
+
+<p>{{ descricao|limitar_texto(15) }}</p>
+
+<p>{{ descricao|limitar_texto(15, " […]") }}</p>
+```
+
+O primeiro exemplo utiliza os valores padrão: limite de 30 caracteres e sufixo `"..."`.
+
+O segundo define o limite como 15. O terceiro define tanto o limite quanto o sufixo.
+
+O Jinja passa o valor original como primeiro argumento e os argumentos escritos entre parênteses como argumentos adicionais da função.
+
+É possível utilizar argumentos nomeados:
+
+```
+{{ descricao|limitar_texto(limite=20, sufixo="...") }}
+```
+
+Isso facilita a leitura quando um filtro recebe vários parâmetros.
+
+**Atenção:** esse filtro é apenas um exemplo de apresentação. Ele corta o texto por quantidade de caracteres, não por palavras, e não trata necessariamente limites de caracteres Unicode compostos por múltiplos pontos de código como o usuário os percebe visualmente.
+
+### 19.3. Filtros que trabalham com datas e valores
+
+Filtros personalizados também podem encapsular regras de formatação.
+
+Por exemplo:
+
+```
+from datetime import datetime
+
+@app.template_filter("data_br")
+def data_br(valor):
+    if valor is None:
+        return "Não informada"
+
+    if not isinstance(valor, datetime):
+        return "Data inválida"
+
+    return valor.strftime("%d/%m/%Y")
+```
+
+No template:
+
+```
+<p>Cadastro: {{ usuario.criado_em|data_br }}</p>
+```
+
+A função verifica o tipo recebido antes de chamar `strftime()`. Isso evita tentar formatar como `datetime` um valor de tipo inesperado.
+
+Contudo, retornar `"Data inválida"` não substitui a validação dos dados na aplicação. Se uma data inválida indicar um problema de integridade, a lógica responsável por receber ou persistir esse dado deve tratar o problema adequadamente.
+
+Também é importante decidir se o filtro deve aceitar apenas `datetime`, aceitar `date` ou converter strings. A interface do filtro deve ter um contrato claro para que os templates não dependam de comportamentos ambíguos.
+
+### 19.4. Cuidados com o escapamento de HTML em filtros
+
+Por padrão, o Flask configura o Jinja para realizar escapamento automático em templates HTML.
+
+Considere um filtro que devolva conteúdo contendo tags:
+
+```
+@app.template_filter("mensagem_html")
+def mensagem_html(valor):
+    return f"<strong>{valor}</strong>"
+```
+
+No template:
+
+```
+{{ nome|mensagem_html }}
+```
+
+Como o resultado é uma string comum, o escapamento automático pode transformar os caracteres especiais em entidades HTML. Assim, as tags podem aparecer como texto, em vez de serem interpretadas como marcação.
+
+Esse comportamento ajuda a impedir que strings sejam interpretadas indevidamente como HTML.
+
+Não resolva o problema simplesmente marcando todo resultado como seguro. Se o valor recebido vier de um usuário, ele poderá conter conteúdo malicioso.
+
+Para gerar marcação HTML, prefira construir a estrutura no próprio template:
+
+```
+<strong>{{ nome }}</strong>
+```
+
+Se for realmente necessário produzir HTML dentro de um filtro, será preciso tratar cuidadosamente o escapamento dos valores e a confiança na marcação gerada. O uso de `Markup` ou do filtro `safe` exige atenção especial: ambos podem fazer com que conteúdo deixe de passar pelo escapamento automático.
+
+### 19.5. Criando um teste personalizado
+
+Enquanto um filtro transforma um valor, um teste verifica se ele satisfaz uma condição.
+
+Por exemplo, imagine que o sistema precise identificar se um usuário pertence ao grupo administrativo.
+
+```
+@app.template_test("administrador")
+def eh_administrador(usuario):
+    return (
+        usuario is not None
+        and getattr(usuario, "perfil", None) == "admin"
+    )
+```
+
+No template:
+
+```
+{% if usuario is administrador %}
+    <p>Área administrativa</p>
+{% endif %}
+```
+
+O Jinja chama o teste passando o valor que aparece antes de `is`. O resultado deve ser verdadeiro ou falso.
+
+O uso de `getattr()` permite verificar o atributo sem provocar um `AttributeError` quando o objeto não o possui. Isso não significa que o objeto seja válido para qualquer outra operação.
+
+#### Registrando o teste com `add_template_test()`
+
+A mesma função pode ser registrada explicitamente:
+
+```
+def eh_administrador(usuario):
+    return (
+        usuario is not None
+        and getattr(usuario, "perfil", None) == "admin"
+    )
+
+app.add_template_test(
+    eh_administrador,
+    name="administrador"
+)
+```
+
+O nome registrado é utilizado na expressão Jinja:
+
+```
+{% if usuario is administrador %}
+    ...
+{% endif %}
+```
+
+Um teste personalizado pode ser útil para condições recorrentes de apresentação, como verificar um estado de um objeto ou uma propriedade específica.
+
+### 19.6. Testes personalizados com argumentos
+
+Assim como filtros, testes podem receber argumentos.
+
+```
+@app.template_test("maior_que")
+def maior_que(valor, limite):
+    return valor is not None and valor > limite
+```
+
+No template:
+
+```
+{% if idade is maior_que(17) %}
+    <p>Idade acima de 17.</p>
+{% endif %}
+```
+
+O valor `idade` é passado como primeiro argumento e `17` como argumento adicional.
+
+O exemplo pressupõe que `idade`, quando não for `None`, possa ser comparada numericamente com `limite`. Se o valor for uma string ou outro tipo incompatível, a comparação poderá gerar um erro.
+
+Portanto, defina quais tipos o teste aceita e valide os dados antes da renderização quando necessário.
+
+### 19.7. Filtros e testes: qual escolher?
+
+Compare as expressões:
+
+```
+{{ preco|formatar_preco }}
+```
+
+```
+{% if preco is preco_valido %}
+    ...
+{% endif %}
+```
+
+A primeira expressão transforma ou formata um valor para apresentação. A segunda verifica uma propriedade e retorna um resultado booleano.
+
+|Necessidade|Recurso indicado|
+|---|---|
+|Converter um texto para maiúsculas|Filtro|
+|Formatar uma data para exibição|Filtro|
+|Limitar o comprimento de um texto|Filtro|
+|Verificar se um valor está dentro de uma condição|Teste|
+|Verificar se um objeto possui determinada característica|Teste|
+|Escolher entre duas apresentações|Teste combinado com `if`|
+
+Embora seja possível escrever uma função que faça mais de uma dessas coisas, manter cada recurso com uma responsabilidade clara torna os templates mais fáceis de ler.
+
+### 19.8. Registrando funções globais
+
+Uma função global é uma função que pode ser chamada diretamente no template sem precisar ser passada explicitamente em cada chamada de `render_template()`.
+
+Por exemplo:
+
+```
+def nome_exibicao(usuario):
+    if usuario is None:
+        return "Visitante"
+
+    return getattr(usuario, "nome", "Usuário")
+
+app.add_template_global(
+    nome_exibicao,
+    name="nome_exibicao"
+)
+```
+
+No template:
+
+```
+<p>Olá, {{ nome_exibicao(usuario) }}.</p>
+```
+
+A expressão chama a função registrada no ambiente Jinja.
+
+A diferença em relação a um filtro é a forma de invocação:
+
+```
+{{ valor|meu_filtro }}
+```
+
+```
+{{ minha_funcao(valor) }}
+```
+
+Um filtro é especialmente adequado a transformações encadeadas. Uma função global é mais apropriada quando a operação é naturalmente expressa como uma chamada de função.
+
+### 19.9. Funções globais com decorador
+
+O Flask também oferece o decorador `@app.template_global()`:
+
+```
+@app.template_global("versao_formatada")
+def versao_formatada(major, minor):
+    return f"{major}.{minor}"
+```
+
+No template:
+
+```
+<footer>
+    Versão {{ versao_formatada(2, 5) }}
+</footer>
+```
+
+O resultado será:
+
+```
+<footer>
+    Versão 2.5
+</footer>
+```
+
+O decorador registra a função com o nome informado. Se o nome não for especificado, o Flask utiliza o nome da função.
+
+Use funções globais para operações pequenas, previsíveis e adequadas à camada de apresentação. Funções que executam operações de negócio complexas devem permanecer na camada Python responsável por essas regras.
+
+### 19.10. Variáveis globais e funções globais não são a mesma coisa
+
+O ambiente Jinja permite disponibilizar tanto valores quanto funções.
+
+Uma variável global:
+
+```
+app.add_template_global("2.5", name="versao_app")
+```
+
+Uma função global:
+
+```
+app.add_template_global(
+    lambda major, minor: f"{major}.{minor}",
+    name="formatar_versao"
+)
+```
+
+No template:
+
+```
+<p>Versão atual: {{ versao_app }}</p>
+
+<p>Versão formatada: {{ formatar_versao(2, 5) }}</p>
+```
+
+A primeira expressão lê um valor. A segunda executa uma função.
+
+Embora ambas sejam registradas como globais, elas têm contratos diferentes.
+
+Para valores que mudam de acordo com a requisição, o usuário ou a página, não utilize uma variável global como substituto automático do contexto. Considere os mecanismos de passagem de dados e os context processors explicados na seção anterior.
+
+### 19.11. O ambiente Jinja e o registro direto de recursos
+
+O Flask expõe o ambiente Jinja por meio de `app.jinja_env`.
+
+É possível registrar filtros, testes e funções diretamente nas coleções do ambiente:
+
+```
+app.jinja_env.filters["maiusculas"] = aplicar_maiusculas
+app.jinja_env.tests["administrador"] = eh_administrador
+app.jinja_env.globals["nome_exibicao"] = nome_exibicao
+```
+
+Essas atribuições registram os recursos nos respectivos espaços de nomes do ambiente.
+
+Entretanto, nas aplicações Flask, os métodos e decoradores da aplicação costumam ser mais claros:
+
+- `@app.template_filter()` ou `app.add_template_filter()`
+    
+- `@app.template_test()` ou `app.add_template_test()`
+    
+- `@app.template_global()` ou `app.add_template_global()`
+    
+
+Esses mecanismos tornam a intenção do código explícita e ajudam a manter o registro dos recursos organizado.
+
+**Importante:** configure o ambiente antes de começar a renderizar templates. Alterar configurações e registros do ambiente depois que a aplicação já começou a processar requisições pode gerar comportamentos difíceis de controlar em ambientes concorrentes.
+
+### 19.12. Boas práticas para recursos personalizados
+
+- **Use nomes descritivos:** `data_br`, `maior_que` e `nome_exibicao` deixam a intenção mais clara do que nomes genéricos.
+    
+- **Defina o contrato de entrada:** documente os tipos aceitos e o comportamento diante de `None` ou valores inesperados.
+    
+- **Mantenha as funções previsíveis:** prefira operações que retornem resultados sem alterar estado global.
+    
+- **Evite consultas ao banco dentro de filtros e funções globais:** isso pode ocultar operações caras durante a renderização e provocar consultas repetidas.
+    
+- **Não confunda apresentação com autorização:** um teste Jinja pode ocultar ou mostrar elementos da interface, mas não impede que alguém acesse diretamente uma rota protegida.
+    
+- **Preserve o escapamento automático:** não marque strings arbitrárias como HTML seguro.
+    
+- **Registre recursos uma única vez:** centralize os registros na inicialização da aplicação ou em uma função de configuração apropriada.
+    
+- **Teste os casos de borda:** valores ausentes, tipos incorretos, textos vazios e entradas inesperadas devem ter comportamentos definidos.
+    
+
+### 19.13. Exemplo integrado
+
+O exemplo a seguir reúne um filtro, um teste e uma função global em uma aplicação Flask pequena.
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.template_filter("maiusculas")
+def maiusculas(valor):
+    return str(valor).upper()
+
+
+@app.template_test("ativo")
+def ativo(usuario):
+    return (
+        usuario is not None
+        and getattr(usuario, "ativo", False) is True
+    )
+
+
+@app.template_global("saudacao")
+def saudacao(nome):
+    return f"Olá, {nome}!"
+
+
+@app.route("/")
+def index():
+    usuario = {
+        "nome": "Marcos",
+        "ativo": True
+    }
+
+    return render_template(
+        "index.html",
+        usuario=usuario
+    )
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+Arquivo `templates/index.html`:
+
+```
+<h1>{{ saudacao(usuario.nome) }}</h1>
+
+<p>Nome: {{ usuario.nome|maiusculas }}</p>
+
+{% if usuario is ativo %}
+    <p>O usuário está ativo.</p>
+{% else %}
+    <p>O usuário está inativo.</p>
+{% endif %}
+```
+
+Nesse exemplo:
+
+1. `maiusculas` transforma o nome em letras maiúsculas.
+    
+2. `ativo` verifica a condição do usuário e retorna um booleano.
+    
+3. `saudacao` constrói uma mensagem a partir do nome.
+    
+4. `render_template()` fornece o objeto `usuario` ao contexto da renderização.
+    
+
+Os recursos personalizados não substituem a necessidade de organizar corretamente as responsabilidades da aplicação. Eles ampliam a expressividade do template e devem ser utilizados quando tornam a apresentação mais clara, não para transferir toda a lógica Python para o Jinja.
+
+---

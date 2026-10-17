@@ -4908,3 +4908,377 @@ Filtros como `upper`, `trim` e `replace` transformam conteúdo, mas não garante
 |`{% filter trim \| upper %}...{% endfilter %}`|Encadeia filtros sobre o conteúdo do bloco|
 
 ---
+## 23. Geração de URLs com `url_for()` nos templates Jinja
+
+### 23.1. Por que gerar URLs dinamicamente?
+
+Em aplicações Flask, os templates frequentemente precisam gerar links para outras páginas, enviar formulários ou carregar arquivos estáticos, como CSS, JavaScript e imagens.
+
+Uma possibilidade seria escrever os caminhos diretamente no HTML:
+
+```
+<a href="/usuarios">Usuários</a>
+```
+
+Entretanto, esse caminho fica vinculado à estrutura atual da aplicação. Se a rota mudar, os templates que utilizam esse caminho também poderão precisar de alterações.
+
+O Flask disponibiliza a função `url_for()` no contexto dos templates Jinja. Ela gera uma URL a partir do nome de um endpoint e dos parâmetros necessários.
+
+Exemplo em Python:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/usuarios")
+def listar_usuarios():
+    return render_template("usuarios.html")
+```
+
+No template:
+
+```
+<a href="{{ url_for('listar_usuarios') }}">
+    Listar usuários
+</a>
+```
+
+O Flask identifica o endpoint `listar_usuarios` e gera o caminho correspondente.
+
+A principal vantagem é que o template não precisa conhecer diretamente o caminho definido na rota.
+
+### 23.2. O que é um endpoint no Flask?
+
+Um endpoint é o identificador utilizado pelo Flask para localizar uma função ou um destino de rota.
+
+Por padrão, quando uma rota é associada a uma função de visualização, o nome da função é utilizado como endpoint.
+
+```
+@app.route("/perfil")
+def perfil():
+    return render_template("perfil.html")
+```
+
+Nesse exemplo:
+
+- Caminho: `/perfil`
+    
+- Função Python: `perfil`
+    
+- Endpoint padrão: `perfil`
+    
+
+O template pode gerar a URL usando:
+
+```
+<a href="{{ url_for('perfil') }}">Meu perfil</a>
+```
+
+O argumento passado para `url_for()` é o nome do endpoint, não necessariamente o caminho da URL.
+
+Isso significa que o seguinte uso está incorreto, considerando a rota anterior:
+
+```
+{{ url_for('/perfil') }}
+```
+
+O Flask procuraria um endpoint com esse nome e normalmente lançaria um `BuildError` caso ele não existisse.
+
+### 23.3. Passando parâmetros para `url_for()`
+
+Quando uma rota contém parâmetros dinâmicos, eles podem ser enviados como argumentos nomeados.
+
+Considere:
+
+```
+@app.route("/usuarios/<int:id>")
+def visualizar_usuario(id):
+    return render_template("usuario.html", usuario_id=id)
+```
+
+A rota exige um parâmetro inteiro chamado `id`.
+
+No template:
+
+```
+<a href="{{ url_for('visualizar_usuario', id=42) }}">
+    Visualizar usuário
+</a>
+```
+
+A URL gerada será:
+
+```
+/usuarios/42
+```
+
+O nome do argumento precisa corresponder ao parâmetro esperado pela rota.
+
+Também é possível utilizar uma variável do contexto Jinja:
+
+```
+<a href="{{ url_for('visualizar_usuario', id=usuario.id) }}">
+    {{ usuario.nome }}
+</a>
+```
+
+Nesse caso, o valor de `usuario.id` é utilizado para construir a URL.
+
+Se o template precisar gerar links para vários registros, isso pode ser feito dentro de um laço:
+
+```
+{% for usuario in usuarios %}
+    <a href="{{ url_for('visualizar_usuario', id=usuario.id) }}">
+        {{ usuario.nome }}
+    </a>
+{% endfor %}
+```
+
+Cada link recebe o identificador do respectivo usuário.
+
+### 23.4. Parâmetros de consulta (_query string_)
+
+Nem todo parâmetro precisa fazer parte do caminho da rota. Valores adicionais enviados para `url_for()` que não correspondem a variáveis da rota normalmente são incluídos na query string.
+
+Exemplo:
+
+```
+@app.route("/pesquisa")
+def pesquisar():
+    return render_template("pesquisa.html")
+```
+
+No template:
+
+```
+<a href="{{ url_for('pesquisar', termo='python', pagina=2) }}">
+    Continuar pesquisa
+</a>
+```
+
+A URL gerada será semelhante a:
+
+```
+/pesquisa?termo=python&pagina=2
+```
+
+A ordem dos parâmetros da query string pode variar.
+
+Esse mecanismo é útil para filtros, paginação, pesquisas e outras informações que não precisam compor o caminho principal da rota.
+
+Para obter esses valores na aplicação, o Flask permite consultar `request.args`:
+
+```
+from flask import request
+
+
+@app.route("/pesquisa")
+def pesquisar():
+    termo = request.args.get("termo", "")
+    pagina = request.args.get("pagina", default=1, type=int)
+
+    return render_template(
+        "pesquisa.html",
+        termo=termo,
+        pagina=pagina,
+    )
+```
+
+O uso de `type=int` permite solicitar a conversão do parâmetro para inteiro. Se o valor não puder ser convertido, o resultado será o valor padrão informado.
+
+### 23.5. Gerando URLs para arquivos estáticos
+
+O Flask normalmente disponibiliza arquivos estáticos a partir do diretório `static` da aplicação.
+
+Uma estrutura comum é:
+
+```
+meu_projeto/
+├── app.py
+├── static/
+│   ├── css/
+│   │   └── style.css
+│   ├── js/
+│   │   └── app.js
+│   └── img/
+│       └── logo.png
+└── templates/
+    └── index.html
+```
+
+Em vez de escrever manualmente o caminho dos arquivos, utilize `url_for()` com o endpoint `static`.
+
+Para carregar um CSS:
+
+```
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}"
+>
+```
+
+Para carregar um arquivo JavaScript:
+
+```
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+```
+
+Para exibir uma imagem:
+
+```
+<img
+    src="{{ url_for('static', filename='img/logo.png') }}"
+    alt="Logotipo"
+>
+```
+
+O argumento `filename` identifica o caminho relativo ao diretório de arquivos estáticos.
+
+Esse padrão permite que o Flask gere a URL apropriada conforme a configuração da aplicação.
+
+### 23.6. Enviando formulários para uma rota
+
+O atributo `action` de um formulário HTML define para onde os dados serão enviados.
+
+Com Jinja, é possível gerar esse destino dinamicamente:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    ...
+```
+
+No template:
+
+```
+<form method="post" action="{{ url_for('login') }}">
+    <label for="email">E-mail</label>
+    <input id="email" name="email" type="email" required>
+
+    <label for="senha">Senha</label>
+    <input id="senha" name="senha" type="password" required>
+
+    <button type="submit">Entrar</button>
+</form>
+```
+
+O Flask recebe a requisição na rota `login`, desde que o método HTTP seja permitido e a aplicação implemente o tratamento correspondente.
+
+**Importante:** `url_for()` apenas gera a URL. Ele não implementa autenticação, validação dos dados nem proteção contra CSRF. Essas responsabilidades precisam ser tratadas pela aplicação e, quando aplicável, por mecanismos próprios, como os fornecidos pelo Flask-WTF.
+
+### 23.7. URLs externas e o parâmetro `external`
+
+Por padrão, `url_for()` geralmente gera um caminho relativo à aplicação, como `/perfil`.
+
+Quando é necessário gerar uma URL absoluta, pode-se utilizar `external=True`:
+
+```
+{{ url_for('perfil', external=True) }}
+```
+
+O resultado será semelhante a:
+
+```
+https://exemplo.com/perfil
+```
+
+O domínio e o esquema utilizados dependem do contexto da requisição e da configuração do Flask.
+
+Isso pode ser útil para gerar links absolutos em e-mails, notificações ou outros conteúdos consumidos fora da página atual.
+
+Não confunda `external=True` com a validação de um destino externo. O parâmetro não transforma uma URL fornecida pelo usuário em um destino confiável.
+
+### 23.8. Rotas dentro de Blueprints
+
+Quando uma rota pertence a um Blueprint, seu endpoint normalmente inclui o nome do Blueprint como prefixo, separado por um ponto.
+
+Exemplo:
+
+```
+from flask import Blueprint, render_template
+
+usuarios_bp = Blueprint("usuarios", __name__)
+
+
+@usuarios_bp.route("/<int:id>")
+def detalhe(id):
+    return render_template("usuarios/detalhe.html", usuario_id=id)
+```
+
+Depois de registrar o Blueprint na aplicação, o endpoint da rota será:
+
+```
+usuarios.detalhe
+```
+
+No template:
+
+```
+<a href="{{ url_for('usuarios.detalhe', id=usuario.id) }}">
+    Abrir perfil
+</a>
+```
+
+O nome usado em `url_for()` precisa corresponder ao endpoint registrado. Se o nome do Blueprint mudar, os endpoints prefixados também poderão mudar.
+
+Esse mecanismo ajuda a organizar aplicações maiores em módulos, mantendo os templates desacoplados dos caminhos concretos.
+
+### 23.9. Erros comuns ao utilizar `url_for()`
+
+**Endpoint inexistente**
+
+```
+{{ url_for('usuario_detalhe') }}
+```
+
+Se não existir um endpoint com esse nome, o Flask normalmente lançará um `BuildError`.
+
+Verifique o nome da função, o nome explícito do endpoint, quando configurado, e o prefixo de Blueprint.
+
+**Parâmetro obrigatório ausente**
+
+Se uma rota exige um parâmetro como `id`, a chamada precisa fornecer esse valor:
+
+```
+{{ url_for('visualizar_usuario') }}
+```
+
+A chamada anterior não é suficiente para uma rota que exige `id`.
+
+**Nome de parâmetro incorreto**
+
+Se a rota espera `id`, passar `usuario_id` não preencherá automaticamente esse parâmetro.
+
+```
+{{ url_for('visualizar_usuario', usuario_id=42) }}
+```
+
+Como `usuario_id` não corresponde ao parâmetro obrigatório `id`, a construção da URL poderá falhar.
+
+**Caminho de arquivo estático incorreto**
+
+```
+{{ url_for('static', filename='style.css') }}
+```
+
+Essa chamada procura o arquivo na raiz do diretório estático. Se o arquivo estiver em `static/css/style.css`, o argumento precisa incluir `css/`.
+
+**Confundir geração de URL com autorização**
+
+Um link escondido no template não impede que alguém acesse diretamente a rota. A aplicação precisa verificar permissões no servidor sempre que a rota for acessada.
+
+### 23.10. Referência rápida
+
+|Expressão|Finalidade|
+|---|---|
+|`url_for('perfil')`|Gera a URL do endpoint `perfil`|
+|`url_for('visualizar_usuario', id=42)`|Gera uma URL com parâmetro de rota|
+|`url_for('pesquisar', pagina=2)`|Acrescenta um parâmetro à query string, se `pagina` não for parâmetro do caminho|
+|`url_for('static', filename='css/style.css')`|Gera a URL de um arquivo estático|
+|`url_for('login')`|Pode ser usado no atributo `action` de um formulário|
+|`url_for('perfil', external=True)`|Solicita uma URL absoluta|
+|`url_for('usuarios.detalhe', id=42)`|Gera a URL de uma rota pertencente a um Blueprint|
+
+---

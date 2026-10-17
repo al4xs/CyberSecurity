@@ -5522,3 +5522,315 @@ Essa abordagem torna mais clara a origem das informações e facilita a compreen
     
 
 ---
+## 25. Context processors: disponibilizando dados globalmente nos templates
+
+### 25.1. O problema de repetir dados em vários templates
+
+Em aplicações Flask, diferentes páginas podem precisar acessar as mesmas informações, como o nome da aplicação, os dados do usuário autenticado ou opções de apresentação.
+
+Uma abordagem é passar esses dados individualmente em cada chamada de `render_template()`:
+
+```
+@app.route("/")
+def inicio():
+    return render_template(
+        "index.html",
+        nome_aplicacao="Painel",
+    )
+
+
+@app.route("/perfil")
+def perfil():
+    return render_template(
+        "perfil.html",
+        nome_aplicacao="Painel",
+    )
+```
+
+Embora funcione, essa repetição pode se tornar inconveniente quando muitos templates precisam dos mesmos valores.
+
+O Flask oferece os **context processors**, mecanismos que adicionam variáveis ao contexto utilizado na renderização dos templates.
+
+Com eles, é possível disponibilizar informações comuns sem precisar passá-las manualmente em cada chamada de `render_template()`.
+
+### 25.2. Criando um context processor
+
+Um context processor é uma função Python registrada com o decorador `app.context_processor`.
+
+A função deve retornar um dicionário cujas chaves serão os nomes das variáveis disponibilizadas aos templates.
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.context_processor
+def disponibilizar_dados():
+    return {
+        "nome_aplicacao": "Painel Administrativo",
+        "versao_aplicacao": "1.0",
+    }
+
+
+@app.route("/")
+def inicio():
+    return render_template("index.html")
+```
+
+No template `index.html`:
+
+```
+<title>{{ nome_aplicacao }}</title>
+
+<p>Versão: {{ versao_aplicacao }}</p>
+```
+
+As variáveis estarão disponíveis durante a renderização, mesmo que a rota não as tenha enviado explicitamente.
+
+O context processor não precisa gerar HTML. Sua responsabilidade é fornecer dados ao contexto do template.
+
+### 25.3. Como o dicionário retornado é utilizado
+
+Considere:
+
+```
+@app.context_processor
+def fornecer_contexto():
+    return {
+        "ambiente": "desenvolvimento",
+        "mostrar_rodape": True,
+    }
+```
+
+O Flask disponibiliza essas chaves como variáveis Jinja:
+
+```
+{% if mostrar_rodape %}
+    <footer>
+        Ambiente: {{ ambiente }}
+    </footer>
+{% endif %}
+```
+
+O nome da chave no dicionário corresponde ao nome utilizado no template.
+
+Por exemplo, a chave `"ambiente"` disponibiliza a variável `ambiente`.
+
+É possível retornar vários valores no mesmo dicionário. Também é possível registrar mais de um context processor, embora seja importante evitar duplicações desnecessárias.
+
+### 25.4. Disponibilizando informações para um template-base
+
+O context processor é particularmente útil quando a aplicação utiliza herança de templates.
+
+Considere uma estrutura:
+
+```
+templates/
+├── base.html
+├── index.html
+└── perfil.html
+```
+
+O arquivo `base.html` pode conter elementos compartilhados:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ nome_aplicacao }}</title>
+</head>
+<body>
+    <header>
+        <h1>{{ nome_aplicacao }}</h1>
+    </header>
+
+    <main>
+        {% block conteudo %}{% endblock %}
+    </main>
+
+    {% if mostrar_rodape %}
+        <footer>Versão {{ versao_aplicacao }}</footer>
+    {% endif %}
+</body>
+</html>
+```
+
+O context processor pode fornecer os valores usados pelo template-base:
+
+```
+@app.context_processor
+def contexto_global():
+    return {
+        "nome_aplicacao": "Painel Administrativo",
+        "versao_aplicacao": "1.0",
+        "mostrar_rodape": True,
+    }
+```
+
+Um template que herda de `base.html` poderá utilizar essas variáveis durante sua renderização.
+
+```
+{% extends "base.html" %}
+
+{% block conteudo %}
+    <h2>Página inicial</h2>
+{% endblock %}
+```
+
+Assim, não é necessário repetir os mesmos argumentos em todas as rotas que renderizam páginas baseadas nesse layout.
+
+### 25.5. Disponibilizando funções para o Jinja
+
+Um context processor também pode retornar referências para funções Python, além de valores simples.
+
+```
+from datetime import datetime
+
+
+@app.context_processor
+def fornecer_funcoes():
+    def ano_atual():
+        return datetime.now().year
+
+    return {
+        "ano_atual": ano_atual,
+    }
+```
+
+No template:
+
+```
+<footer>
+    © {{ ano_atual() }}
+</footer>
+```
+
+Nesse caso, `ano_atual` é uma função disponível no contexto Jinja e pode ser chamada com parênteses.
+
+Entretanto, funções disponibilizadas dessa maneira devem ter uma finalidade clara e previsível. Não é recomendável usar o template como local para executar operações complexas, consultas desnecessárias ao banco de dados ou alterações de estado.
+
+Para funções utilitárias gerais, filtros personalizados, testes personalizados ou funções globais do ambiente Jinja podem ser alternativas mais apropriadas, dependendo da finalidade.
+
+### 25.6. Disponibilizando o usuário atual
+
+Uma aplicação pode precisar exibir informações do usuário autenticado em várias páginas.
+
+Se a aplicação utiliza Flask-Login, por exemplo, a extensão disponibiliza `current_user` no contexto dos templates quando está corretamente configurada.
+
+Nesse cenário, normalmente não é necessário criar um context processor próprio apenas para repassar `current_user`.
+
+Se a aplicação possui um mecanismo de autenticação próprio, é possível criar um context processor para disponibilizar um objeto ou valor que já tenha sido obtido e validado pela lógica de autenticação.
+
+Exemplo genérico:
+
+```
+@app.context_processor
+def contexto_usuario():
+    return {
+        "nome_exibicao": obter_nome_usuario_atual(),
+    }
+```
+
+`obter_nome_usuario_atual()` representa uma função da aplicação e precisa existir e estar corretamente implementada.
+
+O ponto importante é que o context processor disponibiliza o resultado da função. Ele não realiza autenticação automaticamente nem substitui as verificações de permissão exigidas pelas rotas.
+
+### 25.7. Context processors e argumentos de `render_template()`
+
+Um template pode receber variáveis tanto de um context processor quanto da chamada de `render_template()`.
+
+```
+@app.context_processor
+def contexto_global():
+    return {
+        "nome_aplicacao": "Painel",
+    }
+
+
+@app.route("/")
+def inicio():
+    return render_template(
+        "index.html",
+        titulo_pagina="Página inicial",
+    )
+```
+
+O template terá acesso às variáveis `nome_aplicacao` e `titulo_pagina`.
+
+É importante conhecer uma particularidade: quando a mesma chave é fornecida por diferentes fontes de contexto, podem existir conflitos de nomes. Em particular, os valores explícitos fornecidos à renderização podem prevalecer sobre os valores adicionados por context processors.
+
+Por isso, evite reutilizar o mesmo nome para dados com significados diferentes.
+
+### 25.8. Diferença entre context processors e `app.context`
+
+Os dois mecanismos estão relacionados à disponibilização de dados, mas não têm a mesma finalidade.
+
+|Mecanismo|Finalidade|
+|---|---|
+|`app.context_processor`|Adiciona variáveis ao contexto de templates renderizados|
+|`render_template(..., chave=valor)`|Passa dados específicos para uma renderização|
+|`app.jinja_env.globals`|Registra valores ou funções globais no ambiente Jinja|
+|`app.template_global()`|Registra uma função como global do ambiente de templates|
+
+Utilize context processors quando os valores dependem do contexto da aplicação ou da requisição e precisam estar disponíveis de forma recorrente nos templates.
+
+Utilize argumentos de `render_template()` para dados específicos de uma página.
+
+Utilize globais do ambiente para funções ou valores gerais que façam sentido em vários templates e que não dependam necessariamente da requisição atual.
+
+### 25.9. Desempenho e cuidados
+
+Context processors são executados durante a preparação do contexto de renderização. Dependendo da implementação, isso pode acontecer repetidamente em várias páginas.
+
+Por isso:
+
+- Evite consultas caras ao banco de dados em context processors executados com frequência.
+    
+- Não carregue coleções grandes se os templates não precisarem delas.
+    
+- Evite executar operações com efeitos colaterais durante a preparação do contexto.
+    
+- Não disponibilize senhas, tokens privados ou configurações secretas aos templates.
+    
+- Utilize nomes claros e específicos para evitar conflitos entre variáveis.
+    
+- Prefira passar dados específicos por `render_template()` quando não houver necessidade de disponibilizá-los globalmente.
+    
+- Em aplicações modulares, registre os context processors no local apropriado e mantenha suas responsabilidades bem definidas.
+    
+
+### 25.10. Diagnóstico de problemas
+
+**A variável não aparece no template**
+
+Verifique se a função está registrada com `@app.context_processor` e se retorna um dicionário com a chave esperada.
+
+**O template apresenta um valor inesperado**
+
+Verifique se existe outra variável com o mesmo nome sendo passada por `render_template()` ou fornecida por outro mecanismo de contexto.
+
+**A página ficou lenta após adicionar um context processor**
+
+Verifique se a função executa consultas ao banco de dados, chamadas externas ou cálculos repetidos durante cada renderização.
+
+**Uma função não pode ser chamada no template**
+
+Confirme se o context processor está retornando a referência da função, e não apenas o resultado de sua execução, caso a intenção seja disponibilizar uma função chamável.
+
+Por exemplo:
+
+```
+return {"ano_atual": ano_atual}
+```
+
+Disponibiliza a função, enquanto:
+
+```
+return {"ano_atual": ano_atual()}
+```
+
+executa a função durante a criação do contexto e disponibiliza seu resultado.
+
+---

@@ -6120,3 +6120,323 @@ O traceback normalmente indica o template e a linha em que a falha ocorreu, embo
 |`app.jinja_env.undefined = StrictUndefined`|Configura o ambiente Jinja do Flask para utilizar indefinições rigorosas|
 
 ---
+## 27. Carregamento de templates, loaders e cache no Jinja
+
+### 27.1. Como o Jinja encontra um template
+
+Quando o Flask executa:
+
+```
+return render_template("usuarios/perfil.html")
+```
+
+o nome `usuarios/perfil.html` identifica o template que deve ser carregado. O Jinja não procura esse arquivo aleatoriamente em todo o sistema de arquivos. Ele utiliza um mecanismo de carregamento chamado _loader_.
+
+Em uma aplicação Flask convencional, o carregador padrão procura templates no diretório `templates` associado à aplicação e, conforme a organização do projeto, também pode considerar os diretórios de templates de Blueprints registrados.
+
+Estrutura de exemplo:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   ├── base.html
+│   └── usuarios/
+│       └── perfil.html
+└── static/
+    └── css/
+        └── style.css
+```
+
+Para carregar o template `perfil.html`:
+
+```
+return render_template("usuarios/perfil.html")
+```
+
+O caminho informado é relativo ao diretório de templates, não ao diretório atual do terminal.
+
+Isso permite que o código Python referencie templates por seus nomes lógicos, sem precisar montar caminhos absolutos manualmente.
+
+### 27.2. O que é um loader
+
+Um _loader_ é o componente responsável por localizar e fornecer o código-fonte dos templates ao ambiente Jinja.
+
+O Jinja possui diferentes tipos de loaders para diferentes formas de armazenamento.
+
+|Loader|Finalidade|
+|---|---|
+|`FileSystemLoader`|Carrega templates a partir de diretórios do sistema de arquivos|
+|`PackageLoader`|Carrega templates incluídos em um pacote Python|
+|`DictLoader`|Carrega templates de um dicionário em memória|
+|`FunctionLoader`|Obtém templates por meio de uma função fornecida pela aplicação|
+|`ChoiceLoader`|Tenta vários loaders em uma ordem definida|
+|`PrefixLoader`|Seleciona um loader conforme um prefixo no nome do template|
+
+Esses mecanismos são úteis quando os templates não estão todos em um único diretório convencional ou quando a aplicação precisa controlar como os arquivos são encontrados.
+
+### 27.3. Utilizando `FileSystemLoader`
+
+O `FileSystemLoader` carrega templates a partir de diretórios do sistema de arquivos.
+
+Exemplo independente do Flask:
+
+```
+from jinja2 import Environment, FileSystemLoader
+
+env = Environment(
+    loader=FileSystemLoader("templates")
+)
+
+template = env.get_template("perfil.html")
+
+html = template.render(
+    nome="Ana",
+)
+```
+
+Nesse exemplo, o Jinja procura `perfil.html` dentro do diretório `templates`.
+
+O método `get_template()` obtém o template pelo nome. O método `render()` renderiza o template com os valores fornecidos.
+
+O caminho relativo usado pelo loader depende do diretório de trabalho do processo Python. Para aplicações reais, caminhos configurados de forma previsível são preferíveis a depender acidentalmente do diretório em que o comando foi executado.
+
+Em uma aplicação Flask comum, não é necessário criar manualmente esse ambiente para utilizar `render_template()`, pois o Flask já configura um ambiente Jinja para a aplicação.
+
+### 27.4. Utilizando `DictLoader`
+
+O `DictLoader` permite carregar templates armazenados em um dicionário Python.
+
+```
+from jinja2 import Environment, DictLoader
+
+templates = {
+    "saudacao.html": "Olá, {{ nome }}!",
+    "rodape.html": "Versão {{ versao }}",
+}
+
+env = Environment(
+    loader=DictLoader(templates)
+)
+
+template = env.get_template("saudacao.html")
+
+print(template.render(nome="Ana"))
+```
+
+Saída:
+
+```
+Olá, Ana!
+```
+
+Esse loader é útil para testes, exemplos isolados e situações em que o código dos templates já está disponível em memória.
+
+Como os templates não precisam existir como arquivos físicos, ele também pode facilitar testes automatizados de comportamento específico do Jinja.
+
+### 27.5. Utilizando `ChoiceLoader`
+
+O `ChoiceLoader` tenta localizar o template utilizando vários loaders, na ordem em que foram configurados.
+
+```
+from jinja2 import Environment, ChoiceLoader, DictLoader, FileSystemLoader
+
+env = Environment(
+    loader=ChoiceLoader([
+        DictLoader({
+            "aviso.html": "Aviso fornecido em memória",
+        }),
+        FileSystemLoader("templates"),
+    ])
+)
+
+template = env.get_template("aviso.html")
+
+print(template.render())
+```
+
+Nesse exemplo, o Jinja encontra `aviso.html` no `DictLoader` antes de consultar o diretório `templates`.
+
+A ordem importa: se mais de um loader conseguir fornecer um template com o mesmo nome, o primeiro que o encontrar será utilizado.
+
+Esse comportamento pode ser útil para implementar substituições controladas de templates, mas também pode causar confusão se houver nomes duplicados.
+
+### 27.6. Carregamento de templates em Blueprints
+
+Em aplicações Flask organizadas em módulos, um Blueprint pode possuir seus próprios templates.
+
+Estrutura ilustrativa:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   └── base.html
+└── usuarios/
+    ├── __init__.py
+    └── templates/
+        └── usuarios/
+            └── perfil.html
+```
+
+Exemplo de Blueprint:
+
+```
+from flask import Blueprint, render_template
+
+usuarios_bp = Blueprint(
+    "usuarios",
+    __name__,
+    template_folder="templates",
+)
+
+
+@usuarios_bp.route("/perfil")
+def perfil():
+    return render_template("usuarios/perfil.html")
+```
+
+Ao registrar o Blueprint na aplicação, o Flask pode considerar o diretório de templates associado a ele.
+
+O prefixo `usuarios/` no caminho do template é uma convenção útil para evitar conflitos com templates de outros módulos. Ele não é uma exigência universal do Jinja, mas ajuda a manter a organização clara.
+
+Se a aplicação possuir vários templates com o mesmo nome, a resolução dependerá da configuração e da ordem dos diretórios e loaders envolvidos. Evite depender de nomes duplicados para controlar qual template será escolhido.
+
+### 27.7. O que é o cache de templates
+
+Carregar e analisar o código de um template a cada renderização seria um trabalho desnecessário.
+
+Por isso, o ambiente Jinja pode manter templates carregados em cache. Depois que um template é encontrado e compilado, o ambiente pode reutilizar o objeto correspondente em renderizações posteriores.
+
+Exemplo:
+
+```
+template = env.get_template("perfil.html")
+
+html_1 = template.render(nome="Ana")
+html_2 = template.render(nome="Carlos")
+```
+
+As duas chamadas utilizam o mesmo objeto de template, mas geram resultados diferentes conforme os dados fornecidos.
+
+O cache do template não significa que o HTML final seja armazenado como uma página fixa. A renderização continua utilizando o contexto passado em cada chamada.
+
+### 27.8. Configurando o cache de templates
+
+O ambiente Jinja possui a opção `cache_size`, que controla o tamanho do cache interno de templates.
+
+Exemplo de configuração de um ambiente independente:
+
+```
+from jinja2 import Environment, FileSystemLoader
+
+env = Environment(
+    loader=FileSystemLoader("templates"),
+    cache_size=400,
+)
+```
+
+O valor `400` indica o limite de entradas do cache interno, não a quantidade de páginas HTML prontas armazenadas.
+
+Um valor negativo desativa o limite de tamanho do cache. O valor `0` desativa o cache interno de templates.
+
+Em uma aplicação Flask, a configuração correspondente pode ser ajustada no ambiente Jinja:
+
+```
+app.jinja_env.cache = {}
+```
+
+Essa atribuição substitui o cache atual por um dicionário vazio. Ela não é a forma preferida de configurar um limite de tamanho para o cache e pode não representar a política desejada em aplicações com vários templates.
+
+Se a intenção for configurar `cache_size`, faça isso ao criar ou configurar o ambiente, antes de os templates começarem a ser utilizados. Evite modificar estruturas internas de cache durante o funcionamento normal da aplicação sem uma necessidade específica.
+
+### 27.9. `auto_reload` e alterações nos arquivos
+
+O Jinja possui a opção `auto_reload`, que controla se ele deve verificar se o código-fonte de um template foi alterado antes de reutilizar a versão em cache.
+
+Em um ambiente de desenvolvimento, detectar alterações automaticamente é útil porque permite editar um template e visualizar o resultado sem reiniciar a aplicação em todas as situações.
+
+Exemplo de ambiente independente:
+
+```
+env = Environment(
+    loader=FileSystemLoader("templates"),
+    auto_reload=True,
+)
+```
+
+Quando `auto_reload` está habilitado, o Jinja pode verificar a atualização do template por meio do loader.
+
+Quando está desabilitado, o ambiente pode continuar utilizando a versão carregada em cache, mesmo depois de o arquivo original ter sido alterado.
+
+A verificação depende do loader e de sua capacidade de detectar atualizações.
+
+No Flask, o comportamento efetivo depende da configuração do ambiente e das opções de desenvolvimento. Não é necessário alterar `auto_reload` manualmente em toda aplicação: primeiro verifique se o modo de desenvolvimento e a configuração atual já fornecem o comportamento desejado.
+
+### 27.10. Diferença entre cache de templates e cache de respostas
+
+Esses mecanismos resolvem problemas diferentes.
+
+|Tipo de cache|O que é armazenado|
+|---|---|
+|Cache de templates Jinja|Objetos de template carregados e compilados|
+|Cache de respostas HTTP|Respostas ou conteúdos gerados, conforme a estratégia de cache|
+|Cache de dados|Resultados de consultas, cálculos ou operações da aplicação|
+
+O cache de templates reduz o trabalho de localizar e compilar os templates.
+
+Ele não garante que consultas ao banco de dados deixem de ser executadas, nem impede que a função da rota seja chamada novamente.
+
+Da mesma forma, o cache de templates não substitui estratégias HTTP, como cabeçalhos `Cache-Control`, nem sistemas externos de cache.
+
+### 27.11. Diagnóstico de problemas de carregamento
+
+`**TemplateNotFound**`
+
+O Jinja não conseguiu encontrar um template com o nome solicitado.
+
+Verifique:
+
+- Se o arquivo realmente existe.
+    
+- Se o nome e a extensão estão corretos.
+    
+- Se o caminho é relativo ao diretório de templates esperado.
+    
+- Se o diretório do Blueprint foi configurado corretamente.
+    
+- Se o template está disponível no loader utilizado.
+    
+
+**Alterações no template não aparecem**
+
+Verifique se o ambiente está detectando alterações, se o cache está configurado como esperado e se o processo está carregando o arquivo correto.
+
+**Um template inesperado é carregado**
+
+Investigue nomes duplicados, ordem dos loaders e diretórios de templates associados à aplicação e aos Blueprints.
+
+**O comportamento varia conforme a forma de executar a aplicação**
+
+Verifique caminhos relativos, diretório de trabalho, configuração de inicialização e diferenças entre ambientes de desenvolvimento e produção.
+
+### 27.12. Boas práticas
+
+- Utilize `render_template()` no Flask para o carregamento convencional de templates.
+    
+- Organize templates em diretórios coerentes com os módulos da aplicação.
+    
+- Evite nomes duplicados quando a resolução depender da ordem dos loaders.
+    
+- Utilize loaders alternativos somente quando houver uma necessidade clara.
+    
+- Configure o cache de acordo com o ambiente e o volume de templates.
+    
+- Não confunda o cache de templates com o cache de dados ou de respostas HTTP.
+    
+- Em produção, prefira uma configuração previsível e teste o comportamento após alterações de implantação.
+    
+- Em desenvolvimento, mantenha um fluxo que facilite detectar mudanças nos templates.
+    
+
+---

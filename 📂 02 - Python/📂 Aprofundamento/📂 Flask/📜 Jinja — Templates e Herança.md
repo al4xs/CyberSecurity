@@ -4170,3 +4170,432 @@ O template deve receber os dados necessários e controlar principalmente como el
 |Variáveis de context processors|Registradas na aplicação ou no Blueprint|Compartilhar valores no contexto dos templates|
 
 ---
+## 21. Depuração de templates, rastreamento de erros e organização do ambiente Jinja
+
+Quando uma aplicação Flask cresce, os templates passam a envolver herança, macros, includes, filtros personalizados, context processors e dados recebidos de diferentes rotas.
+
+Nesse cenário, um erro visual nem sempre está no arquivo HTML que apresenta o problema. Ele pode ter origem na rota, em um template pai, em uma macro importada ou em uma variável que não foi disponibilizada corretamente.
+
+Esta seção aborda como identificar a origem desses problemas e organizar o ambiente Jinja para facilitar a manutenção.
+
+### 21.1. Como o Jinja identifica os templates
+
+Por padrão, o Flask procura templates no diretório `templates` associado à aplicação.
+
+Uma estrutura possível:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── painel.html
+│   ├── partials/
+│   │   └── navbar.html
+│   └── macros/
+│       └── formularios.html
+└── static/
+    ├── css/
+    └── js/
+```
+
+A chamada:
+
+```
+return render_template("painel.html")
+```
+
+procura `painel.html` na estrutura de templates configurada.
+
+Para um arquivo dentro de uma subpasta:
+
+```
+return render_template("partials/navbar.html")
+```
+
+O caminho é relativo ao diretório de templates.
+
+O mesmo princípio se aplica a `include` e `extends`:
+
+```
+{% extends "base.html" %}
+{% include "partials/navbar.html" %}
+```
+
+Os caminhos precisam corresponder à organização real dos arquivos e ao carregador de templates utilizado.
+
+### 21.2. Erro `TemplateNotFound`
+
+Um dos erros mais comuns é:
+
+```
+jinja2.exceptions.TemplateNotFound: painel.html
+```
+
+Isso indica que o carregador de templates não encontrou o template solicitado.
+
+Possíveis causas:
+
+- O nome do arquivo está incorreto.
+    
+- O arquivo está em outra pasta.
+    
+- O caminho passado para `render_template()` não corresponde à estrutura real.
+    
+- O diretório de templates foi configurado incorretamente.
+    
+- O arquivo não está presente no ambiente em que a aplicação está sendo executada.
+    
+
+Por exemplo, esta estrutura:
+
+```
+templates/
+└── admin/
+    └── painel.html
+```
+
+exige:
+
+```
+return render_template("admin/painel.html")
+```
+
+e não:
+
+```
+return render_template("painel.html")
+```
+
+A exceção também pode ocorrer dentro de um `include` ou `extends`. Nesse caso, o template principal pode existir, mas algum arquivo referenciado por ele não foi encontrado.
+
+Para investigar, confira primeiro o nome e o caminho do arquivo indicado no erro. Depois, examine os templates que o incluem ou estendem.
+
+### 21.3. Erro `UndefinedError`
+
+Outro erro frequente ocorre quando o template tenta acessar um valor indefinido de maneira incompatível com o comportamento configurado no Jinja.
+
+Exemplo:
+
+```
+<p>{{ usuario.nome }}</p>
+```
+
+Se `usuario` não estiver disponível, a renderização pode produzir um erro semelhante a:
+
+```
+jinja2.exceptions.UndefinedError
+```
+
+A causa pode ser uma variável não enviada pela rota:
+
+```
+return render_template("perfil.html")
+```
+
+quando o template espera receber `usuario`.
+
+A correção é disponibilizar o dado quando ele for necessário:
+
+```
+return render_template(
+    "perfil.html",
+    usuario=usuario
+)
+```
+
+Se o dado for opcional, o template e a aplicação devem definir explicitamente como lidar com sua ausência.
+
+Por exemplo:
+
+```
+{% if usuario is defined %}
+    <p>{{ usuario.nome }}</p>
+{% else %}
+    <p>Usuário não disponível.</p>
+{% endif %}
+```
+
+Esse teste verifica se a variável existe no contexto. Ele não garante que `usuario` tenha todos os atributos esperados ou que os dados sejam válidos.
+
+### 21.4. Erros de sintaxe Jinja
+
+Os templates também podem falhar por delimitadores ausentes, instruções incompletas ou blocos malformados.
+
+Exemplo incorreto:
+
+```
+{% if usuario.is_authenticated %}
+    <p>Bem-vindo.</p>
+```
+
+O bloco `if` não foi encerrado com `endif`.
+
+Forma corrigida:
+
+```
+{% if usuario.is_authenticated %}
+    <p>Bem-vindo.</p>
+{% endif %}
+```
+
+Outro exemplo:
+
+```
+{{ usuario.nome
+```
+
+A expressão está incompleta porque não possui o delimitador de fechamento `}}`.
+
+Ao investigar erros de sintaxe, procure a primeira linha indicada pelo traceback e confira também as linhas próximas. Dependendo da estrutura do template, a origem real pode estar em um bloco aberto anteriormente.
+
+### 21.5. Entendendo o traceback do Flask e do Jinja
+
+O traceback é o registro da sequência de chamadas que levou a uma exceção.
+
+Em um erro de renderização, ele pode mostrar chamadas de funções do Flask, do Jinja e do código da aplicação.
+
+A estratégia mais útil é identificar:
+
+1. O tipo da exceção.
+    
+2. A mensagem principal.
+    
+3. O arquivo de template envolvido, quando indicado.
+    
+4. A linha associada ao erro.
+    
+5. A rota ou função Python que iniciou a renderização.
+    
+
+Por exemplo, se o traceback indicar um erro em `templates/painel.html`, examine a expressão daquela linha e os valores que a rota forneceu ao template.
+
+Se o erro surgir durante uma macro, confira também os argumentos recebidos por ela.
+
+Se aparecer dentro de um template incluído, investigue o arquivo incluído e a forma como o contexto está sendo transmitido.
+
+Não presuma que toda exceção durante a renderização seja causada pelo HTML. Um filtro personalizado pode lançar uma exceção Python, assim como uma propriedade de um objeto pode executar código e falhar quando acessada.
+
+### 21.6. Modo de depuração do Flask
+
+Durante o desenvolvimento, o modo de depuração pode facilitar a investigação de erros.
+
+```
+app.run(debug=True)
+```
+
+O modo de depuração fornece informações adicionais sobre exceções e, no servidor de desenvolvimento, permite o recarregamento automático em situações apropriadas.
+
+Entretanto, ele não deve ser habilitado em produção. A apresentação de informações internas de erros pode expor detalhes da aplicação e comprometer sua segurança.
+
+O servidor de desenvolvimento também não deve ser tratado como servidor de produção.
+
+### 21.7. Utilizando `StrictUndefined` para detectar erros
+
+Como visto na seção sobre contexto, o comportamento padrão de variáveis indefinidas pode permitir que determinados erros passem despercebidos.
+
+Durante o desenvolvimento, é possível configurar:
+
+```
+from jinja2 import StrictUndefined
+
+app.jinja_env.undefined = StrictUndefined
+```
+
+Assim, referências indevidas a variáveis indefinidas tendem a provocar exceções explícitas.
+
+Isso ajuda a identificar situações como:
+
+```
+<h1>{{ titulo_pagina }}</h1>
+```
+
+quando a rota enviou somente:
+
+```
+return render_template(
+    "index.html",
+    titulo="Início"
+)
+```
+
+O nome `titulo_pagina` não corresponde ao nome disponibilizado pela rota.
+
+A configuração estrita pode revelar problemas existentes em templates antigos, por isso deve ser validada antes de ser adotada em uma aplicação que já possui muitos templates.
+
+### 21.8. Inspecionando os templates carregados
+
+O ambiente Jinja do Flask pode ser acessado por meio de `app.jinja_env`.
+
+É possível inspecionar um template utilizando o carregador configurado:
+
+```
+with app.app_context():
+    template = app.jinja_env.get_template("painel.html")
+    print(template.name)
+```
+
+O contexto de aplicação é utilizado porque a operação ocorre fora do processamento normal de uma requisição.
+
+O método `get_template()` retorna um objeto de template quando o arquivo pode ser localizado e carregado. Se o template não existir, poderá ocorrer `TemplateNotFound`.
+
+Esse recurso pode ajudar em scripts de diagnóstico e testes. Normalmente, não é necessário chamar `get_template()` manualmente em todas as rotas, pois `render_template()` já realiza esse trabalho.
+
+### 21.9. Verificando quais variáveis um template utiliza
+
+O Jinja possui ferramentas de análise que podem identificar nomes utilizados por um template.
+
+Por exemplo:
+
+```
+from jinja2 import meta
+
+with app.app_context():
+    ambiente = app.jinja_env
+    codigo = ambiente.loader.get_source(
+        ambiente,
+        "painel.html"
+    )[0]
+
+    arvore = ambiente.parse(codigo)
+    variaveis = meta.find_undeclared_variables(arvore)
+
+    print(variaveis)
+```
+
+O exemplo utiliza o carregador para obter o código-fonte, analisa esse código e identifica nomes não declarados explicitamente no template.
+
+O resultado não deve ser interpretado como uma lista perfeita de todos os dados obrigatórios que a rota precisa fornecer. Alguns nomes podem vir de globais, context processors, recursos de extensões ou outros mecanismos. Também existem limitações inerentes à análise estática.
+
+Esse recurso é mais útil como auxílio de diagnóstico do que como substituto da execução de testes.
+
+### 21.10. Organizando filtros, testes e funções globais
+
+Em uma aplicação pequena, é possível registrar todos os recursos diretamente em `app.py`.
+
+Em aplicações maiores, essa organização pode dificultar a manutenção. Uma alternativa é separar os recursos personalizados em um módulo.
+
+Exemplo de estrutura:
+
+```
+meu_projeto/
+├── app.py
+├── template_helpers.py
+└── templates/
+    └── index.html
+```
+
+No arquivo `template_helpers.py`:
+
+```
+def maiusculas(valor):
+    return str(valor).upper()
+
+
+def registrar_recursos(app):
+    app.add_template_filter(
+        maiusculas,
+        name="maiusculas"
+    )
+```
+
+No arquivo de inicialização:
+
+```
+from flask import Flask
+from template_helpers import registrar_recursos
+
+app = Flask(__name__)
+
+registrar_recursos(app)
+```
+
+A função `registrar_recursos()` recebe a aplicação e registra os filtros nela.
+
+Essa organização separa a definição dos auxiliares da inicialização da aplicação, sem exigir que cada filtro seja declarado no arquivo principal.
+
+Em aplicações que utilizam o padrão _application factory_, a mesma função pode receber a instância criada dentro de `create_app()`.
+
+### 21.11. Organização com application factory
+
+O padrão _application factory_ consiste em criar a aplicação por meio de uma função, em vez de depender exclusivamente de uma instância global criada na importação do módulo.
+
+Exemplo:
+
+```
+from flask import Flask
+from template_helpers import registrar_recursos
+
+
+def create_app():
+    app = Flask(__name__)
+
+    registrar_recursos(app)
+
+    return app
+```
+
+O ponto importante para o Jinja é que os filtros, testes, funções globais e outras configurações sejam registrados na instância correta da aplicação.
+
+Se o registro ocorrer em uma instância diferente daquela que está atendendo às requisições, os recursos esperados poderão não estar disponíveis.
+
+Esse padrão também facilita criar aplicações com configurações diferentes em testes e outros ambientes.
+
+### 21.12. Testando a renderização de templates
+
+O Flask fornece um cliente de testes que permite simular requisições sem precisar iniciar um servidor acessível externamente.
+
+Exemplo:
+
+```
+def test_pagina_inicial(app):
+    cliente = app.test_client()
+
+    resposta = cliente.get("/")
+
+    assert resposta.status_code == 200
+    assert b"Página inicial" in resposta.data
+```
+
+O exemplo pressupõe que `app` seja uma instância Flask fornecida pelo ambiente de testes.
+
+A primeira verificação confirma que a rota respondeu com o código HTTP esperado. A segunda verifica se determinado texto está presente no corpo da resposta.
+
+Essas verificações podem detectar:
+
+- Templates ausentes.
+    
+- Erros durante a renderização.
+    
+- Variáveis que não aparecem como esperado.
+    
+- Alterações involuntárias no HTML gerado.
+    
+- Problemas na integração entre rotas e templates.
+    
+
+Para aplicações que utilizam macros e herança, também é útil testar as páginas que efetivamente usam esses recursos, e não apenas verificar se os arquivos existem.
+
+### 21.13. Boas práticas de diagnóstico
+
+- Leia a mensagem principal da exceção antes de alterar o template.
+    
+- Confira o caminho do template indicado no erro.
+    
+- Compare os nomes usados no template com os dados enviados pela rota.
+    
+- Verifique os argumentos recebidos por macros e filtros personalizados.
+    
+- Utilize `StrictUndefined` durante o desenvolvimento quando apropriado.
+    
+- Não exponha o depurador interativo em produção.
+    
+- Centralize os registros de recursos personalizados.
+    
+- Teste a renderização das páginas mais importantes.
+    
+- Não confunda um template que renderiza sem erro com uma página segura ou uma operação autorizada.
+    
+
+---

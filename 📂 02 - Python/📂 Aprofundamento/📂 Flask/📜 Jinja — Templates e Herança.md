@@ -3832,3 +3832,341 @@ Nesse exemplo:
 Os recursos personalizados não substituem a necessidade de organizar corretamente as responsabilidades da aplicação. Eles ampliam a expressividade do template e devem ser utilizados quando tornam a apresentação mais clara, não para transferir toda a lógica Python para o Jinja.
 
 ---
+## 20. Variáveis e funções disponibilizadas pelo Flask nos templates
+
+O Flask integra o Jinja ao sistema de requisições da aplicação. Por isso, além das variáveis que você passa por `render_template()` e dos recursos personalizados registrados no ambiente, determinados objetos e funções ficam disponíveis automaticamente nos templates.
+
+Esses recursos permitem acessar informações da requisição atual, gerar URLs, trabalhar com mensagens temporárias e consultar configurações da aplicação sem precisar passar cada elemento manualmente em todas as rotas.
+
+### 20.1. `request`: informações da requisição atual
+
+O objeto `request`, disponibilizado pelo Flask nos templates, representa a requisição HTTP que está sendo processada.
+
+Por exemplo, em uma rota:
+
+```
+from flask import render_template
+
+@app.route("/perfil")
+def perfil():
+    return render_template("perfil.html")
+```
+
+No template `templates/perfil.html`:
+
+```
+<p>Método HTTP: {{ request.method }}</p>
+<p>Caminho: {{ request.path }}</p>
+```
+
+Se o navegador acessar `/perfil` por meio de uma requisição GET, o template poderá apresentar o método `GET` e o caminho `/perfil`.
+
+Alguns atributos e propriedades úteis:
+
+|Atributo|Significado|
+|---|---|
+|`request.method`|Método HTTP utilizado, como `GET` ou `POST`|
+|`request.path`|Caminho da URL, sem a query string|
+|`request.args`|Parâmetros enviados na query string|
+|`request.form`|Dados de formulário enviados no corpo de uma requisição apropriada|
+|`request.is_json`|Indica se a requisição é identificada como JSON|
+|`request.endpoint`|Nome do endpoint associado à requisição, quando disponível|
+
+Por exemplo, para a URL `/busca?q=python`:
+
+```
+<p>Termo pesquisado: {{ request.args.get("q", "") }}</p>
+```
+
+A expressão acessa o parâmetro `q`. O segundo argumento de `get()` define um valor alternativo quando o parâmetro não existe.
+
+**Atenção:** o conteúdo de `request.args` e `request.form` vem da requisição e deve ser tratado como entrada não confiável. Não utilize esses valores como prova de identidade, autorização ou validade de uma operação.
+
+Além disso, embora seja possível realizar verificações com `request` dentro do template, regras importantes sobre métodos HTTP, validação e permissões devem ficar na aplicação Python.
+
+### 20.2. `session`: dados da sessão do usuário
+
+O objeto `session` permite consultar os dados armazenados na sessão da requisição atual.
+
+No Flask, a sessão padrão utiliza um cookie assinado para proteger a integridade dos dados. Isso não significa que o conteúdo seja criptografado ou que deva ser tratado como um armazenamento secreto.
+
+Exemplo de uma rota:
+
+```
+from flask import session, render_template
+
+@app.route("/painel")
+def painel():
+    return render_template("painel.html")
+```
+
+No template:
+
+```
+{% if session.get("usuario_id") %}
+    <p>Existe um identificador de usuário na sessão.</p>
+{% else %}
+    <p>Nenhum identificador de usuário foi encontrado.</p>
+{% endif %}
+```
+
+A expressão `session.get("usuario_id")` consulta a chave sem provocar um erro apenas porque ela não existe.
+
+Entretanto, a presença de uma chave na sessão não deve ser utilizada, por si só, como mecanismo de autorização. A aplicação deve verificar a identidade e as permissões de acordo com seu sistema de autenticação.
+
+Também evite expor no template valores de sessão que não precisem ser apresentados ao usuário.
+
+### 20.3. `g`: dados associados ao contexto da requisição
+
+O objeto `g` é utilizado pelo Flask para armazenar dados temporários associados ao contexto da aplicação durante uma requisição.
+
+Ele pode ser preenchido por funções executadas antes da renderização, como uma função registrada com `before_request`.
+
+```
+from flask import g, render_template
+
+@app.before_request
+def preparar_contexto():
+    g.nome_aplicacao = "Painel"
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+```
+
+No template:
+
+```
+<footer>
+    {{ g.nome_aplicacao }}
+</footer>
+```
+
+Nesse exemplo, a função `preparar_contexto()` atribui um valor a `g.nome_aplicacao`, e o template consegue consultá-lo.
+
+O objeto `g` não é um armazenamento permanente entre requisições. Ele existe para manter dados associados ao contexto atual e é descartado quando esse contexto termina.
+
+É comum utilizá-lo para dados que precisam ser compartilhados durante o processamento de uma requisição. Para dados persistentes, utilize o mecanismo apropriado, como um banco de dados.
+
+### 20.4. `config`: configurações da aplicação
+
+O Flask disponibiliza o objeto `config` nos templates. Ele permite consultar valores de configuração da aplicação.
+
+Por exemplo, durante a configuração:
+
+```
+app.config["NOME_APLICACAO"] = "Painel"
+```
+
+No template:
+
+```
+<title>{{ config["NOME_APLICACAO"] }}</title>
+```
+
+O uso de colchetes permite consultar explicitamente a chave do dicionário de configuração.
+
+Esse mecanismo pode ser útil para valores de apresentação que realmente precisem estar disponíveis no template. Entretanto, não é recomendável expor indiscriminadamente as configurações da aplicação.
+
+**Nunca exiba a configuração inteira no HTML.** Ela pode conter chaves secretas, credenciais e outras informações internas. Disponibilize apenas os valores necessários e apropriados para apresentação.
+
+### 20.5. `url_for()`: geração de URLs
+
+A função `url_for()` é uma das ferramentas mais importantes disponíveis nos templates Flask.
+
+Ela gera uma URL a partir do nome de um endpoint, em vez de exigir que você escreva o caminho diretamente no HTML.
+
+Considere:
+
+```
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/perfil")
+def perfil():
+    return render_template("perfil.html")
+```
+
+No template:
+
+```
+<a href="{{ url_for('index') }}">Início</a>
+<a href="{{ url_for('perfil') }}">Perfil</a>
+```
+
+O Flask resolve os nomes dos endpoints e gera os caminhos correspondentes.
+
+Essa abordagem evita depender de caminhos escritos manualmente. Se o caminho de uma rota mudar, os templates que utilizam `url_for()` poderão continuar funcionando sem alterações, desde que os nomes dos endpoints permaneçam corretos.
+
+#### Passando parâmetros para um endpoint
+
+Considere uma rota dinâmica:
+
+```
+@app.route("/usuarios/<int:usuario_id>")
+def detalhe_usuario(usuario_id):
+    return render_template(
+        "usuario.html",
+        usuario_id=usuario_id
+    )
+```
+
+No template:
+
+```
+<a href="{{ url_for('detalhe_usuario', usuario_id=42) }}">
+    Ver usuário
+</a>
+```
+
+O Flask utiliza `usuario_id=42` para preencher o parâmetro da rota.
+
+Argumentos que não correspondem aos parâmetros da rota normalmente são acrescentados à query string:
+
+```
+<a href="{{ url_for('index', origem='menu') }}">
+    Início
+</a>
+```
+
+Isso gera uma URL com o parâmetro `origem`, desde que a geração da URL seja válida para o endpoint.
+
+#### URLs de arquivos estáticos
+
+O Flask também utiliza `url_for()` para gerar URLs de arquivos estáticos.
+
+Por exemplo:
+
+```
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}"
+>
+```
+
+O endpoint `static` é utilizado para localizar o arquivo dentro do diretório de arquivos estáticos configurado na aplicação.
+
+Essa forma é preferível a escrever manualmente `/static/css/style.css`, pois respeita a configuração da aplicação e facilita a manutenção.
+
+### 20.6. `get_flashed_messages()`: recuperação de mensagens temporárias
+
+O Flask possui um mecanismo chamado _flash messages_, utilizado para disponibilizar mensagens temporárias, geralmente após uma operação realizada pelo usuário.
+
+Uma rota pode registrar uma mensagem:
+
+```
+from flask import flash, redirect, url_for
+
+@app.route("/salvar")
+def salvar():
+    flash("Operação realizada com sucesso.", "success")
+    return redirect(url_for("index"))
+```
+
+No template, `get_flashed_messages()` recupera as mensagens registradas:
+
+```
+{% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% if mensagens %}
+        {% for categoria, mensagem in mensagens %}
+            <div class="alert alert-{{ categoria }}">
+                {{ mensagem }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+```
+
+Quando `with_categories=true` é utilizado, cada item retornado contém a categoria e a mensagem.
+
+No exemplo da rota, a categoria é `success`. Ela pode ser usada para escolher a aparência da notificação.
+
+O bloco `with` limita o escopo da variável `mensagens` ao trecho em que ela é utilizada.
+
+#### Sem categorias
+
+Se você não precisar das categorias, pode utilizar:
+
+```
+{% for mensagem in get_flashed_messages() %}
+    <p>{{ mensagem }}</p>
+{% endfor %}
+```
+
+Por padrão, as mensagens recuperadas são removidas da fila de mensagens flash da sessão. Isso significa que, depois de recuperadas, normalmente não ficam disponíveis para serem exibidas novamente em outra renderização.
+
+**Atenção:** as categorias retornadas por `flash()` são valores usados para apresentação. Não as utilize como prova de que uma operação foi autorizada ou concluída corretamente.
+
+### 20.7. `current_user` e Flask-Login
+
+Ao utilizar Flask-Login, a integração disponibiliza `current_user` nos templates por meio de seu context processor.
+
+Exemplo:
+
+```
+{% if current_user.is_authenticated %}
+    <p>Olá, {{ current_user.nome }}.</p>
+{% else %}
+    <p>Você não está autenticado.</p>
+{% endif %}
+```
+
+O atributo `is_authenticated` indica se o objeto atual representa um usuário autenticado segundo o Flask-Login.
+
+O atributo `nome`, por outro lado, depende de como o modelo de usuário foi definido. Se o seu modelo utilizar `username`, `name` ou outro campo, será necessário usar o atributo correspondente.
+
+Também é importante distinguir a apresentação da autorização: esconder um botão no template não impede que alguém tente acessar diretamente a rota correspondente. As permissões devem ser verificadas no servidor.
+
+Sem Flask-Login ou outro mecanismo que disponibilize essa variável, não presuma que `current_user` estará presente automaticamente.
+
+### 20.8. O contexto de requisição e o contexto de aplicação
+
+Alguns objetos do Flask dependem de contextos ativos durante o processamento da requisição.
+
+Os dois contextos mais importantes são:
+
+|Contexto|Finalidade|
+|---|---|
+|Contexto de requisição|Disponibiliza informações da requisição HTTP atual|
+|Contexto de aplicação|Disponibiliza informações associadas à aplicação Flask atual|
+
+O objeto `request` depende do contexto de requisição. Já `current_app` representa a aplicação ativa no contexto de aplicação, e `g` está associado ao contexto de aplicação, sendo normalmente utilizado durante a requisição.
+
+O Flask prepara os contextos necessários ao processar uma requisição HTTP. Por isso, os recursos apropriados ficam disponíveis durante a renderização de templates.
+
+Entretanto, tentar acessar esses objetos fora de um contexto apropriado pode provocar erros como `RuntimeError: Working outside of request context` ou `RuntimeError: Working outside of application context`.
+
+Esses erros não indicam necessariamente um problema no template. Podem indicar que o código Python está tentando acessar um recurso contextual fora do ciclo de vida esperado pelo Flask.
+
+### 20.9. Evitando lógica excessiva nos templates
+
+Embora o Jinja permita acessar informações da requisição, da sessão e da aplicação, isso não significa que toda decisão deva ser implementada no template.
+
+Por exemplo, é aceitável utilizar:
+
+```
+{% if current_user.is_authenticated %}
+    <p>Bem-vindo.</p>
+{% endif %}
+```
+
+Entretanto, decisões de autorização, validações de negócio e operações que modificam dados devem ser executadas e verificadas no lado Python.
+
+O template deve receber os dados necessários e controlar principalmente como eles serão apresentados.
+
+### 20.10. Referência rápida
+
+|Nome|Disponibilidade|Uso típico|
+|---|---|---|
+|`request`|Integração padrão do Flask|Consultar informações da requisição|
+|`session`|Integração padrão do Flask|Consultar dados da sessão|
+|`g`|Integração padrão do Flask|Acessar dados temporários do contexto|
+|`config`|Integração padrão do Flask|Consultar configurações selecionadas|
+|`url_for()`|Integração padrão do Flask|Gerar URLs de endpoints|
+|`get_flashed_messages()`|Integração padrão do Flask|Recuperar mensagens temporárias|
+|`current_user`|Disponibilizado pelo Flask-Login quando integrado|Consultar o usuário atual|
+|Variáveis de `render_template()`|Passadas pela rota|Disponibilizar dados específicos da página|
+|Variáveis de context processors|Registradas na aplicação ou no Blueprint|Compartilhar valores no contexto dos templates|
+
+---

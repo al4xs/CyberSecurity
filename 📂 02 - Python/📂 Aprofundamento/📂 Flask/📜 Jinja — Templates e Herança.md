@@ -7908,3 +7908,339 @@ Ao otimizar uma aplicação Flask que utiliza Jinja:
 O objetivo é reduzir trabalho repetido sem comprometer a correção dos dados renderizados, a previsibilidade do ambiente ou a facilidade de manutenção do projeto.
 
 ---
+## 33. Arquitetura e organização de projetos com Jinja
+
+Em aplicações Flask maiores, a organização dos templates influencia a manutenção, a reutilização de componentes e a facilidade de evolução do sistema.
+
+O objetivo não é apenas separar arquivos HTML, mas definir responsabilidades claras entre a lógica Python, a estrutura visual e os componentes reutilizáveis.
+
+### 33.1. Separação de responsabilidades
+
+Uma aplicação Flask com Jinja normalmente envolve três responsabilidades principais:
+
+- **Python:** processa dados, aplica regras de negócio e prepara o contexto.
+    
+- **Jinja:** combina os dados recebidos com a estrutura de apresentação.
+    
+- **HTML e CSS:** definem a estrutura e a aparência da interface.
+    
+
+Considere uma página que exibe uma lista de usuários.
+
+A função Python pode buscar os dados e preparar a resposta:
+
+```
+@app.route("/usuarios")
+def listar_usuarios():
+    usuarios = [
+        {"nome": "Ana", "ativo": True},
+        {"nome": "Carlos", "ativo": False},
+    ]
+
+    return render_template(
+        "usuarios/lista.html",
+        usuarios=usuarios,
+    )
+```
+
+O template fica responsável por apresentar os dados:
+
+```
+<h1>Usuários</h1>
+
+<ul>
+    {% for usuario in usuarios %}
+        <li>
+            {{ usuario.nome }}
+
+            {% if usuario.ativo %}
+                <span>Ativo</span>
+            {% else %}
+                <span>Inativo</span>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
+```
+
+O template não precisa saber como os usuários foram consultados, se vieram de um banco de dados ou de uma API. Ele recebe os dados e os apresenta.
+
+Em aplicações reais, regras de negócio mais complexas devem permanecer em funções ou serviços Python, em vez de serem reproduzidas nos templates.
+
+### 33.2. Organizando a pasta `templates`
+
+Uma aplicação pequena pode utilizar uma estrutura simples:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── usuarios/
+│   │   ├── lista.html
+│   │   └── detalhe.html
+│   ├── componentes/
+│   │   ├── navbar.html
+│   │   └── mensagens.html
+│   └── emails/
+│       ├── boas_vindas.html
+│       └── boas_vindas.txt
+└── static/
+    ├── css/
+    ├── js/
+    └── imagens/
+```
+
+Essa estrutura separa os templates por finalidade:
+
+- `base.html`: estrutura visual compartilhada.
+    
+- `usuarios/`: páginas relacionadas aos usuários.
+    
+- `componentes/`: fragmentos reutilizáveis.
+    
+- `emails/`: conteúdo destinado a mensagens.
+    
+- `static/`: arquivos estáticos, que não são templates Jinja por padrão.
+    
+
+Essa organização é uma convenção, não uma exigência do Jinja. O importante é manter uma estrutura consistente e fácil de localizar.
+
+### 33.3. Herança com `base.html`
+
+A herança evita repetir a estrutura comum de várias páginas.
+
+Template `templates/base.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block titulo %}Aplicação{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <h1>Minha aplicação</h1>
+    </header>
+
+    <main>
+        {% block conteudo %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>Rodapé da aplicação</p>
+    </footer>
+</body>
+</html>
+```
+
+Template `templates/index.html`:
+
+```
+{% extends "base.html" %}
+
+{% block titulo %}
+Página inicial
+{% endblock %}
+
+{% block conteudo %}
+<h2>Bem-vindo</h2>
+<p>Esta é a página inicial.</p>
+{% endblock %}
+```
+
+A página filha fornece o conteúdo dos blocos definidos pela estrutura base.
+
+A herança é indicada para layouts compartilhados entre páginas inteiras, enquanto `include` e macros atendem a outras necessidades de reutilização.
+
+### 33.4. Reutilizando fragmentos com `include`
+
+O `include` permite inserir o conteúdo de outro template dentro do template atual.
+
+Por exemplo, `templates/componentes/navbar.html`:
+
+```
+<nav>
+    <a href="/">Início</a>
+    <a href="/usuarios">Usuários</a>
+</nav>
+```
+
+O template base pode incluí-lo:
+
+```
+<body>
+    {% include "componentes/navbar.html" %}
+
+    <main>
+        {% block conteudo %}{% endblock %}
+    </main>
+</body>
+```
+
+O fragmento incluído pode acessar as variáveis disponíveis no contexto, salvo quando opções de contexto ou outras condições alterarem esse comportamento.
+
+O `include` é útil para partes visuais que precisam ser compartilhadas sem exigir uma interface de parâmetros tão explícita quanto a de uma macro.
+
+### 33.5. Componentes parametrizados com macros
+
+Quando um componente precisa receber parâmetros definidos claramente, uma macro pode ser mais apropriada.
+
+Por exemplo, `templates/componentes/alerta.html`:
+
+```
+{% macro alerta(mensagem, tipo="info") %}
+    <div class="alerta alerta-{{ tipo }}">
+        {{ mensagem }}
+    </div>
+{% endmacro %}
+```
+
+Para utilizar a macro:
+
+```
+{% from "componentes/alerta.html" import alerta %}
+
+{{ alerta("Usuário cadastrado com sucesso", "sucesso") }}
+{{ alerta("Verifique os campos obrigatórios", "aviso") }}
+```
+
+A macro funciona como uma função de apresentação: recebe argumentos e produz conteúdo renderizado.
+
+Os valores continuam sujeitos às regras de escapamento aplicáveis ao contexto. Não se deve utilizar `safe` indiscriminadamente nos parâmetros de componentes.
+
+### 33.6. Escolhendo entre herança, `include` e macros
+
+|Recurso|Uso principal|
+|---|---|
+|`{% extends %}`|Compartilhar uma estrutura de página e sobrescrever blocos|
+|`{% include %}`|Inserir o conteúdo de um fragmento reutilizável|
+|`{% macro %}`|Criar componentes com parâmetros e lógica de apresentação encapsulada|
+
+Os recursos podem coexistir no mesmo projeto.
+
+Uma aplicação pode utilizar `base.html` como layout principal, incluir a navegação por meio de `include` e gerar alertas com macros.
+
+A escolha deve considerar a função de cada componente, evitando abstrações desnecessárias.
+
+### 33.7. Blueprints e organização de templates
+
+Em aplicações Flask maiores, os blueprints permitem organizar rotas e recursos relacionados em módulos separados.
+
+Uma estrutura possível:
+
+```
+meu_projeto/
+├── app/
+│   ├── __init__.py
+│   ├── templates/
+│   │   ├── base.html
+│   │   └── compartilhado.html
+│   ├── usuarios/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── templates/
+│   │       └── usuarios/
+│   │           ├── lista.html
+│   │           └── detalhe.html
+│   └── static/
+└── tests/
+```
+
+Um blueprint pode ser configurado com uma pasta própria de templates:
+
+```
+from flask import Blueprint
+
+usuarios_bp = Blueprint(
+    "usuarios",
+    __name__,
+    template_folder="templates",
+)
+```
+
+A pasta indicada é relativa ao local do módulo que define o blueprint.
+
+No exemplo, o diretório `app/usuarios/templates/` pode conter templates específicos desse módulo. O Flask os disponibiliza por meio do sistema de carregamento de templates da aplicação.
+
+O uso de caminhos como `usuarios/lista.html` ajuda a evitar ambiguidades quando existem templates com nomes semelhantes em diferentes módulos.
+
+### 33.8. Evitando conflitos de nomes
+
+Imagine que dois módulos tenham um arquivo chamado `lista.html`.
+
+```
+usuarios/templates/lista.html
+produtos/templates/lista.html
+```
+
+Se ambos forem carregados por uma estrutura de templates compartilhada sem uma convenção de nomes, poderá haver ambiguidade sobre qual arquivo será encontrado.
+
+Uma abordagem mais explícita é organizar os caminhos:
+
+```
+templates/
+├── usuarios/
+│   └── lista.html
+└── produtos/
+    └── lista.html
+```
+
+E carregar os templates pelos respectivos caminhos:
+
+```
+render_template("usuarios/lista.html")
+render_template("produtos/lista.html")
+```
+
+Essa convenção torna as dependências mais claras e reduz a possibilidade de carregar o template errado.
+
+### 33.9. O que não deve ficar nos templates
+
+Templates não são o local ideal para executar regras de negócio complexas, acessar diretamente o banco de dados ou realizar operações externas.
+
+Evite concentrar neles:
+
+- Consultas ao banco de dados.
+    
+- Autorização complexa.
+    
+- Chamadas a APIs externas.
+    
+- Processamento pesado de dados.
+    
+- Alterações de estado da aplicação.
+    
+- Regras de negócio que precisam ser reutilizadas fora da apresentação.
+    
+
+Em vez disso, prepare os dados no Python e forneça ao template apenas o que ele precisa para renderizar a interface.
+
+Isso melhora a testabilidade, a legibilidade e a separação de responsabilidades.
+
+### 33.10. Critérios para uma arquitetura sustentável
+
+Ao organizar templates Jinja, considere:
+
+- Usar herança para layouts compartilhados.
+    
+- Usar `include` para fragmentos reutilizáveis.
+    
+- Usar macros para componentes parametrizados.
+    
+- Agrupar templates por domínio ou finalidade.
+    
+- Manter nomes explícitos e consistentes.
+    
+- Separar regras de negócio da apresentação.
+    
+- Evitar abstrações que acrescentem complexidade sem benefício real.
+    
+- Testar tanto os componentes isolados quanto as rotas que os utilizam.
+    
+
+A arquitetura deve facilitar a evolução da aplicação, sem transformar a camada de templates em uma segunda implementação da lógica de negócio.
+
+---

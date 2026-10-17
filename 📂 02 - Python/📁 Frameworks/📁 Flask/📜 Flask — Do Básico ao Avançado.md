@@ -7871,3 +7871,1611 @@ Cada camada possui uma responsabilidade específica:
 Essa separação torna a aplicação mais fácil de entender, testar, manter e ampliar.
 
 ---
+# Parte 1 — Fundamentos do Jinja e Templates
+
+## 1. O que é Jinja e qual problema ele resolve?
+
+O **Jinja** é um mecanismo de templates para Python. Ele permite gerar conteúdos dinamicamente a partir de um modelo que recebe dados e utiliza expressões, condições, laços e outras estruturas.
+
+No desenvolvimento web com Flask, o Jinja é utilizado principalmente para gerar páginas HTML no servidor.
+
+Imagine que você queira exibir uma página com uma mensagem personalizada para cada usuário.
+
+Sem um template, você poderia construir o HTML diretamente no Python:
+
+```
+nome = "Marcos"
+
+html = f"""
+<h1>Olá, {nome}!</h1>
+"""
+```
+
+### Entendendo cada linha
+
+**Linha 1:**
+
+```
+nome = "Marcos"
+```
+
+- `nome` é uma variável Python.
+    
+- `=` é o operador de atribuição: associa o valor à variável.
+    
+- `"Marcos"` é uma string, ou seja, uma sequência de caracteres.
+    
+
+Essa variável guarda o nome que queremos exibir na página.
+
+**Linha 2:**
+
+```
+html = f"""
+```
+
+- `html` é a variável que receberá o texto HTML.
+    
+- `=` atribui o valor à variável.
+    
+- `f` indica que estamos utilizando uma _f-string_, um recurso do Python que permite inserir expressões dentro de uma string.
+    
+- `"""` abre uma string delimitada por aspas triplas, permitindo escrever texto em várias linhas.
+    
+
+**Linha 3:**
+
+```
+<h1>Olá, {nome}!</h1>
+```
+
+- `<h1>` abre um elemento HTML de título de nível 1.
+    
+- `Olá,` é o texto exibido.
+    
+- `{nome}` é uma expressão da f-string. O Python substitui essa expressão pelo valor da variável `nome`.
+    
+- `!</h1>` acrescenta a exclamação e fecha o elemento HTML.
+    
+
+**Linha 4:**
+
+```
+"""
+```
+
+Fecha a string delimitada por aspas triplas.
+
+O resultado armazenado em `html` será:
+
+```
+<h1>Olá, Marcos!</h1>
+```
+
+Essa abordagem funciona. Entretanto, quando uma página possui muitos campos, condições, tabelas, listas e componentes, misturar Python e HTML dessa maneira dificulta a manutenção.
+
+O Jinja resolve esse problema separando os dados e a lógica da aplicação da estrutura HTML.
+
+## 2. Criando a primeira aplicação Flask com Jinja
+
+Considere o seguinte arquivo `app.py`:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        nome="Marcos",
+    )
+```
+
+Vamos analisar o código linha por linha.
+
+### Linha 1 — Importando as ferramentas
+
+```
+from flask import Flask, render_template
+```
+
+Essa linha importa dois objetos do pacote Flask.
+
+- `from flask`: indica o módulo de origem.
+    
+- `import`: importa os nomes especificados.
+    
+- `Flask`: classe utilizada para criar a aplicação web.
+    
+- `render_template`: função que localiza um template, renderiza seu conteúdo e devolve o resultado.
+    
+
+A importação é necessária porque utilizaremos esses nomes no restante do arquivo.
+
+Se você esquecer a importação e tentar executar `Flask(...)`, poderá receber:
+
+```
+NameError: name 'Flask' is not defined
+```
+
+Se o Flask não estiver instalado no ambiente Python utilizado, o erro poderá ser:
+
+```
+ModuleNotFoundError: No module named 'flask'
+```
+
+Nesse segundo caso, instale a dependência no ambiente virtual correto:
+
+```
+python -m pip install Flask
+```
+
+O comando `python -m pip` ajuda a executar o `pip` associado ao interpretador Python chamado por `python`.
+
+### Linha 2 — Criando a aplicação
+
+```
+app = Flask(__name__)
+```
+
+Vamos separar os componentes.
+
+- `app`: variável que guardará a aplicação Flask.
+    
+- `=`: operador de atribuição.
+    
+- `Flask(...)`: chamada ao construtor da classe Flask.
+    
+- `__name__`: variável especial do Python que indica o nome do módulo atual.
+    
+
+O argumento `__name__` ajuda o Flask a identificar a localização do módulo e a resolver recursos relacionados à aplicação, como templates e arquivos estáticos.
+
+Nesse caso, ele é passado como argumento para o construtor da classe.
+
+**É obrigatório?**
+
+Para o padrão habitual de criação de uma aplicação Flask, esse argumento é fornecido ao construtor. Não é um argumento que você normalmente deve remover ou substituir por um nome arbitrário.
+
+**E se a variável se chamasse** `**application**`**?**
+
+Isso também funcionaria:
+
+```
+application = Flask(__name__)
+```
+
+O nome `app` não é obrigatório. É uma convenção muito utilizada, inclusive em exemplos de documentação e configurações de servidores WSGI.
+
+O que importa é utilizar consistentemente o nome escolhido.
+
+### Linha 3 — Separando o código da rota
+
+```
+
+```
+
+A linha vazia não executa nenhuma operação. Ela apenas melhora a legibilidade, separando a inicialização da aplicação da definição das rotas.
+
+### Linha 4 — Registrando uma rota
+
+```
+@app.route("/")
+```
+
+Essa linha utiliza um decorador Python.
+
+- `@`: indica a aplicação de um decorador à definição que vem logo abaixo.
+    
+- `app.route(...)`: método utilizado para registrar uma rota na aplicação.
+    
+- `"/"`: caminho da URL que será associado à função.
+    
+
+A barra `/` representa a raiz da aplicação.
+
+Se a aplicação estiver acessível em `http://127.0.0.1:5000`, o endereço correspondente será:
+
+```
+http://127.0.0.1:5000/
+```
+
+O decorador registra a função associada a esse caminho.
+
+**O que é obrigatório?**
+
+Para criar essa rota, precisamos definir um caminho e associar uma função de visualização (_view function_). O decorador `@app.route("/")` é a forma convencional de registrar essa associação.
+
+**E se eu esquecer o decorador?**
+
+A função ainda poderá existir no Python, mas o Flask não terá registrado automaticamente essa função como uma rota.
+
+Ao acessar `/`, o resultado mais provável será uma resposta HTTP `404 Not Found`, caso nenhuma outra rota corresponda ao caminho.
+
+### Linha 5 — Definindo a função
+
+```
+def index():
+```
+
+- `def`: palavra-chave Python usada para definir uma função.
+    
+- `index`: nome escolhido para a função.
+    
+- `()`: contém os parâmetros da função; nesse caso, não há parâmetros explícitos.
+    
+- `:`: inicia o bloco de instruções da função.
+    
+
+O nome `index` é uma convenção comum para funções associadas à página inicial, mas não é obrigatório.
+
+Poderíamos escrever:
+
+```
+@app.route("/")
+def pagina_inicial():
+    ...
+```
+
+O nome da função muda, mas a rota continua associada ao caminho `/`.
+
+**Por que não passamos o nome do usuário como parâmetro da função?**
+
+Porque, nesse exemplo, o nome está definido diretamente na chamada de `render_template()`.
+
+Em uma aplicação real, esse valor poderia vir do banco de dados, da sessão, de um formulário validado ou de outra fonte de dados.
+
+### Linha 6 — Renderizando o template
+
+```
+return render_template(
+```
+
+- `return`: devolve um resultado ao código que chamou a função.
+    
+- `render_template`: função importada do Flask.
+    
+- `(`: inicia a lista de argumentos da chamada.
+    
+
+Quando uma view function retorna uma string ou uma resposta HTML válida, o Flask transforma esse resultado em uma resposta HTTP.
+
+Nesse caso, `render_template()` gera o HTML que será devolvido ao navegador.
+
+### Linha 7 — Informando o arquivo HTML
+
+```
+    "index.html",
+```
+
+Essa string informa o nome do template que queremos renderizar.
+
+Por padrão, o Flask procura o arquivo dentro do diretório `templates` associado à aplicação.
+
+Estrutura esperada:
+
+```
+projeto/
+├── app.py
+└── templates/
+    └── index.html
+```
+
+O nome `"index.html"` não é obrigatório em si. É necessário, porém, informar um template válido na chamada de `render_template()`.
+
+Poderíamos utilizar:
+
+```
+return render_template("perfil.html")
+```
+
+desde que `perfil.html` estivesse disponível no diretório de templates correspondente.
+
+Se o arquivo não for encontrado, poderá ocorrer:
+
+```
+jinja2.exceptions.TemplateNotFound: index.html
+```
+
+Para corrigir:
+
+1. Confira se o arquivo realmente existe.
+    
+2. Verifique se o diretório se chama `templates`.
+    
+3. Confirme se o nome e a extensão estão corretos.
+    
+4. Confira a localização dos templates se estiver utilizando uma Application Factory ou Blueprints.
+    
+
+### Linha 8 — Enviando uma variável
+
+```
+    nome="Marcos",
+```
+
+Essa linha fornece um argumento nomeado à função `render_template()`.
+
+- `nome`: será o nome da variável disponibilizada no contexto Jinja.
+    
+- `=`: associa o argumento ao valor informado.
+    
+- `"Marcos"`: é o valor que será disponibilizado ao template.
+    
+- `,`: separa esse argumento dos demais.
+    
+
+A partir desse momento, o template pode utilizar a variável `nome`.
+
+O nome da variável precisa corresponder ao utilizado no template.
+
+Se você enviar:
+
+```
+return render_template(
+    "index.html",
+    nome_usuario="Marcos",
+)
+```
+
+Mas escrever no HTML:
+
+```
+<h1>Olá, {{ nome }}!</h1>
+```
+
+A variável `nome` não foi fornecida por esse argumento. Dependendo da configuração do Jinja, ela poderá ser tratada como indefinida e resultar em uma saída vazia ou em um erro.
+
+### Linha 9 — Encerrando a chamada
+
+```
+)
+```
+
+O parêntese fecha a chamada de `render_template()`.
+
+Os parênteses e a indentação devem estar corretos para que o código Python seja interpretado.
+
+### Criando o template HTML
+
+Agora crie `templates/index.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Página inicial</title>
+</head>
+<body>
+    <h1>Olá, {{ nome }}!</h1>
+</body>
+</html>
+```
+
+Vamos analisar cada parte.
+
+**Linha 1:**
+
+```
+<!doctype html>
+```
+
+Informa ao navegador que o documento utiliza o padrão HTML moderno.
+
+Não é uma instrução Jinja. É uma declaração HTML.
+
+**Linha 2:**
+
+```
+<html lang="pt-BR">
+```
+
+- `<html>` abre o elemento raiz do documento.
+    
+- `lang="pt-BR"` declara o idioma principal como português brasileiro.
+    
+
+O atributo `lang` é uma boa prática para acessibilidade, leitores de tela e ferramentas que precisam identificar o idioma.
+
+**Linha 3:**
+
+```
+<head>
+```
+
+Abre a seção de metadados do documento.
+
+Essa seção normalmente contém o título da página, a codificação de caracteres, metadados e referências a arquivos CSS ou JavaScript.
+
+**Linha 4:**
+
+```
+<meta charset="utf-8">
+```
+
+Declara a codificação de caracteres UTF-8, permitindo representar corretamente caracteres como `ç`, `ã` e outros caracteres acentuados.
+
+**Linha 5:**
+
+```
+<title>Página inicial</title>
+```
+
+Define o título do documento, normalmente apresentado na aba do navegador.
+
+**Linha 6:**
+
+```
+</head>
+```
+
+Fecha a seção de metadados.
+
+**Linha 7:**
+
+```
+<body>
+```
+
+Abre o corpo do documento, onde fica o conteúdo principal da página.
+
+**Linha 8:**
+
+```
+<h1>Olá, {{ nome }}!</h1>
+```
+
+Essa linha combina HTML e Jinja.
+
+- `<h1>` abre um título de nível 1.
+    
+- `Olá,` é o texto fixo.
+    
+- `{{ nome }}` é uma expressão Jinja.
+    
+- `!` é o texto que vem depois da expressão.
+    
+- `</h1>` fecha o elemento HTML.
+    
+
+Os delimitadores `{{` e `}}` informam ao Jinja que ele deve avaliar a expressão e inserir seu resultado na saída renderizada.
+
+Como o Python enviou `nome="Marcos"`, o resultado será:
+
+```
+<h1>Olá, Marcos!</h1>
+```
+
+**Linha 9:**
+
+```
+</body>
+```
+
+Fecha o corpo do documento.
+
+**Linha 10:**
+
+```
+</html>
+```
+
+Fecha o elemento raiz HTML.
+
+### O que o navegador recebe?
+
+O navegador não precisa interpretar os delimitadores Jinja. O processo de renderização acontece no servidor.
+
+O fluxo é:
+
+```
+Requisição HTTP
+      |
+      v
+Rota Flask: /
+      |
+      v
+Função index()
+      |
+      v
+render_template("index.html", nome="Marcos")
+      |
+      v
+Jinja avalia o template
+      |
+      v
+HTML renderizado
+      |
+      v
+Resposta HTTP enviada ao navegador
+```
+
+Se a requisição for processada corretamente, o navegador receberá o documento HTML com a mensagem final.
+
+## 3. Onde o Flask procura os templates?
+
+Por padrão, o Flask utiliza um diretório chamado `templates`.
+
+Estrutura mínima:
+
+```
+projeto/
+├── app.py
+└── templates/
+    ├── index.html
+    ├── login.html
+    └── perfil.html
+```
+
+### Por que o diretório tem esse nome?
+
+Porque o Flask utiliza essa convenção para localizar templates automaticamente na configuração padrão.
+
+Se você criar uma pasta chamada `paginas` e colocar `index.html` dentro dela, o Flask não passará a procurar nessa pasta automaticamente apenas porque ela existe.
+
+É possível configurar outros caminhos, mas, no começo, seguir a convenção padrão evita configurações desnecessárias.
+
+### Templates dentro de subdiretórios
+
+Considere:
+
+```
+templates/
+├── base.html
+└── auth/
+    ├── login.html
+    └── perfil.html
+```
+
+Para carregar `login.html`, utilize:
+
+```
+return render_template("auth/login.html")
+```
+
+O caminho é relativo ao diretório de templates correspondente. Não é necessário informar o caminho absoluto do sistema operacional.
+
+### Erro comum: `TemplateNotFound`
+
+Exemplo de erro:
+
+```
+jinja2.exceptions.TemplateNotFound: auth/login.html
+```
+
+Isso indica que o mecanismo de templates não conseguiu localizar o template solicitado.
+
+O problema não é necessariamente a sintaxe do HTML. Pode ser um erro de caminho, nome, configuração ou organização do projeto.
+
+**Diagnóstico:**
+
+- Confira a estrutura real das pastas.
+    
+- Verifique a capitalização do nome do arquivo, especialmente em Linux, onde `Login.html` e `login.html` podem ser arquivos diferentes.
+    
+- Confirme se a aplicação e o Blueprint utilizam o diretório esperado.
+    
+- Não tente corrigir o problema alterando a sintaxe de `{{ ... }}` se o arquivo nem sequer está sendo localizado.
+    
+
+## 4. A função `render_template()` em detalhes
+
+A função `render_template()` pertence ao Flask. Ela localiza um template, fornece um contexto e retorna o resultado renderizado.
+
+Importação:
+
+```
+from flask import render_template
+```
+
+Sintaxe geral:
+
+```
+render_template(template_name_or_list, **context)
+```
+
+Essa representação destaca os parâmetros mais importantes para o uso cotidiano. Não é uma declaração completa de todos os detalhes internos da implementação.
+
+### Parâmetro `template_name_or_list`
+
+É o primeiro argumento da chamada.
+
+Ele informa qual template deve ser carregado. Pode ser um nome de template ou uma lista de nomes candidatos.
+
+Exemplo:
+
+```
+return render_template("perfil.html")
+```
+
+Nesse caso, `perfil.html` é o template escolhido.
+
+**É obrigatório?** Sim. A chamada precisa identificar o template que será renderizado.
+
+### Argumentos de contexto: `**context`
+
+O parâmetro `**context` representa argumentos nomeados adicionais.
+
+Exemplo:
+
+```
+return render_template(
+    "perfil.html",
+    nome="Marcos",
+    idade=17,
+)
+```
+
+O Flask disponibiliza os valores para o Jinja com os nomes `nome` e `idade`.
+
+No template:
+
+```
+<h1>{{ nome }}</h1>
+<p>Idade: {{ idade }}</p>
+```
+
+O uso de argumentos de contexto é opcional. Você pode renderizar um template sem enviar variáveis próprias:
+
+```
+return render_template("sobre.html")
+```
+
+Isso funciona se o template não depender de variáveis adicionais que precisem ser fornecidas pela rota ou por outro mecanismo de contexto.
+
+### Erro comum: argumento inesperado
+
+Se você escrever:
+
+```
+render_template(
+    "perfil.html",
+    nome="Marcos",
+    nome="Ana",
+)
+```
+
+O Python gerará um erro de sintaxe porque o mesmo argumento nomeado foi especificado duas vezes na chamada.
+
+Outro erro possível é esquecer uma vírgula entre argumentos ou deixar um parêntese sem fechar. Nesses casos, o Python pode apresentar `SyntaxError` antes mesmo de iniciar o servidor.
+
+### Enviando uma lista
+
+Python:
+
+```
+tarefas = ["Estudar Flask", "Revisar Jinja"]
+
+return render_template(
+    "tarefas.html",
+    tarefas=tarefas,
+)
+```
+
+Jinja:
+
+```
+<ul>
+    {% for tarefa in tarefas %}
+        <li>{{ tarefa }}</li>
+    {% endfor %}
+</ul>
+```
+
+O valor de `tarefas` é uma lista Python. O Jinja percorre essa lista e gera o HTML correspondente.
+
+A variável precisa existir no contexto com o nome utilizado pelo template. O tipo e a estrutura dos dados também precisam ser compatíveis com as operações feitas no template.
+
+## 5. Os três delimitadores fundamentais do Jinja
+
+O Jinja utiliza delimitadores diferentes para expressões, instruções e comentários.
+
+### 5.1. Expressões: `{{ ... }}`
+
+Exemplo:
+
+```
+<p>Olá, {{ nome }}!</p>
+```
+
+Detalhando:
+
+- `{{`: abre uma expressão Jinja.
+    
+- `nome`: identifica a variável ou expressão a ser avaliada.
+    
+- `}}`: fecha a expressão.
+    
+- O resultado é inserido no texto renderizado.
+    
+
+Se `nome` contiver `"Marcos"`, a saída será:
+
+```
+<p>Olá, Marcos!</p>
+```
+
+Os delimitadores são necessários na sintaxe padrão para que o Jinja reconheça a expressão.
+
+Se você escrever:
+
+```
+<p>Olá, nome!</p>
+```
+
+O Jinja não terá motivo para interpretar `nome` como uma variável. O resultado será o texto literal `nome`.
+
+### 5.2. Instruções: `{% ... %}`
+
+Exemplo:
+
+```
+{% if usuario %}
+    <p>Bem-vindo!</p>
+{% endif %}
+```
+
+Detalhando:
+
+- `{%`: inicia uma instrução de controle.
+    
+- `if usuario`: verifica o valor lógico de `usuario`.
+    
+- `<p>Bem-vindo!</p>`: é o conteúdo HTML condicionado à expressão.
+    
+- `{% endif %}`: encerra o bloco iniciado pelo `if`.
+    
+
+Se a condição for verdadeira, o parágrafo será renderizado. Caso contrário, o parágrafo será omitido.
+
+O bloco precisa ser encerrado com a estrutura correspondente. Esquecer `{% endif %}` pode provocar um erro de sintaxe do template durante a renderização.
+
+### 5.3. Comentários: `{# ... #}`
+
+Exemplo:
+
+```
+{# Nome do usuário apresentado na página. #}
+<p>{{ nome }}</p>
+```
+
+- `{#`: abre o comentário Jinja.
+    
+- O texto interno é uma observação para quem mantém o template.
+    
+- `#}` fecha o comentário.
+    
+
+O comentário não é incluído na saída HTML renderizada.
+
+Isso é diferente de:
+
+```
+<!-- Comentário HTML -->
+```
+
+Um comentário HTML pode aparecer no código-fonte enviado ao navegador. Um comentário Jinja é removido durante a renderização.
+
+## 6. Trabalhando com diferentes tipos de dados
+
+O contexto Jinja pode conter strings, números, booleanos, listas, dicionários e objetos Python.
+
+O Jinja permite acessar esses valores, mas a forma de utilização depende do tipo de dado e da operação desejada.
+
+### 6.1. Strings
+
+Python:
+
+```
+nome = "Marcos"
+
+return render_template(
+    "perfil.html",
+    nome=nome,
+)
+```
+
+Análise:
+
+- `nome = "Marcos"` cria a variável Python.
+    
+- `render_template(...)` carrega o template.
+    
+- `nome=nome` envia o conteúdo da variável Python para o contexto Jinja.
+    
+
+O nome antes do `=` é o identificador que o template utilizará. O nome depois do `=` é a variável Python cujo valor está sendo enviado.
+
+Essa distinção é importante. Os nomes não precisam ser iguais:
+
+```
+return render_template(
+    "perfil.html",
+    usuario_nome=nome,
+)
+```
+
+Nesse caso, o template deverá usar `usuario_nome`.
+
+### 6.2. Números
+
+Python:
+
+```
+preco = 99.90
+quantidade = 3
+
+return render_template(
+    "produto.html",
+    preco=preco,
+    quantidade=quantidade,
+)
+```
+
+Jinja:
+
+```
+<p>Preço: {{ preco }}</p>
+<p>Quantidade: {{ quantidade }}</p>
+<p>Subtotal: {{ preco * quantidade }}</p>
+```
+
+Na expressão `preco * quantidade`, o Jinja avalia a multiplicação entre os valores recebidos.
+
+Se `preco` for `99.90` e `quantidade` for `3`, o resultado numérico será aproximadamente `299.7`.
+
+**Atenção:** para aplicações financeiras, evite depender de `float` para cálculos monetários que exigem precisão decimal exata. Faça o tratamento adequado no Python, frequentemente utilizando `Decimal`, e envie o resultado formatado para o template.
+
+### 6.3. Booleanos
+
+Python:
+
+```
+autenticado = True
+
+return render_template(
+    "perfil.html",
+    autenticado=autenticado,
+)
+```
+
+Jinja:
+
+```
+{% if autenticado %}
+    <p>Você está autenticado.</p>
+{% else %}
+    <p>Você não está autenticado.</p>
+{% endif %}
+```
+
+`True` é um valor booleano Python que representa verdadeiro.
+
+No template, `if` verifica a condição. `else` define o conteúdo alternativo. `endif` encerra o bloco.
+
+Essas palavras-chave pertencem à sintaxe do Jinja. Não são nomes de variáveis.
+
+### 6.4. Listas
+
+Python:
+
+```
+tarefas = [
+    "Estudar Python",
+    "Praticar Flask",
+    "Revisar Jinja",
+]
+
+return render_template(
+    "tarefas.html",
+    tarefas=tarefas,
+)
+```
+
+Análise:
+
+- `tarefas = [...]` cria uma lista.
+    
+- Cada string é um elemento da lista.
+    
+- `tarefas=tarefas` disponibiliza essa lista no contexto do template.
+    
+
+Jinja:
+
+```
+<ul>
+    {% for tarefa in tarefas %}
+        <li>{{ tarefa }}</li>
+    {% endfor %}
+</ul>
+```
+
+Linha por linha:
+
+- `<ul>` abre uma lista HTML não ordenada.
+    
+- `{% for tarefa in tarefas %}` inicia a repetição sobre a lista.
+    
+- `tarefa` é a variável local que representa o elemento atual.
+    
+- `<li>` abre um item da lista HTML.
+    
+- `{{ tarefa }}` insere o conteúdo do elemento atual.
+    
+- `</li>` fecha o item HTML.
+    
+- `{% endfor %}` encerra a repetição.
+    
+- `</ul>` fecha a lista HTML.
+    
+
+O número de elementos HTML gerados depende da quantidade de elementos percorridos.
+
+**Erro possível:** se `tarefas` não existir no contexto, o resultado dependerá da configuração do Jinja. Em configurações comuns, a variável indefinida pode ser tratada como vazia, mas isso pode esconder erros de programação. Uma configuração mais estrita pode gerar uma exceção.
+
+### 6.5. Dicionários
+
+Python:
+
+```
+usuario = {
+    "nome": "Marcos",
+    "nivel": "iniciante",
+    "ativo": True,
+}
+
+return render_template(
+    "perfil.html",
+    usuario=usuario,
+)
+```
+
+Jinja:
+
+```
+<h1>{{ usuario["nome"] }}</h1>
+<p>Nível: {{ usuario["nivel"] }}</p>
+```
+
+Detalhando `usuario["nome"]`:
+
+- `usuario` é a variável recebida no contexto.
+    
+- `["nome"]` solicita o valor associado à chave `"nome"` do dicionário.
+    
+- `{{ ... }}` faz o Jinja avaliar a expressão e inserir o resultado.
+    
+
+O resultado será o valor associado à chave.
+
+Também é possível utilizar:
+
+```
+<h1>{{ usuario.nome }}</h1>
+```
+
+Entretanto, a notação com ponto do Jinja pode tentar resolver atributos e itens de maneira diferente da indexação explícita. Quando o objetivo é acessar uma chave específica do dicionário, os colchetes deixam essa intenção mais clara.
+
+Se uma chave não existir, o resultado poderá ser um valor indefinido ou um erro, dependendo da configuração e da forma de acesso.
+
+## 7. Condições com `if`, `elif` e `else`
+
+As condições permitem que o template renderize diferentes trechos conforme os valores recebidos.
+
+Sintaxe:
+
+```
+{% if condição %}
+    conteúdo
+{% elif outra_condição %}
+    outro conteúdo
+{% else %}
+    conteúdo alternativo
+{% endif %}
+```
+
+### Entendendo as palavras-chave
+
+- `if`: inicia uma condição.
+    
+- `elif`: verifica uma condição adicional caso as anteriores não tenham sido verdadeiras.
+    
+- `else`: define o bloco alternativo caso nenhuma condição anterior seja verdadeira.
+    
+- `endif`: encerra o bloco condicional.
+    
+
+`if` é necessário quando você decide utilizar essa estrutura. `elif` e `else` são opcionais. `endif` é necessário para fechar o bloco.
+
+### Exemplo completo
+
+Python:
+
+```
+nivel = "administrador"
+
+return render_template(
+    "painel.html",
+    nivel=nivel,
+)
+```
+
+Jinja:
+
+```
+{% if nivel == "administrador" %}
+    <h1>Painel administrativo</h1>
+{% elif nivel == "moderador" %}
+    <h1>Painel de moderação</h1>
+{% else %}
+    <h1>Painel do usuário</h1>
+{% endif %}
+```
+
+Detalhando a primeira condição:
+
+```
+{% if nivel == "administrador" %}
+```
+
+- `{%`: inicia uma instrução.
+    
+- `if`: inicia a condição.
+    
+- `nivel`: variável do contexto.
+    
+- `==`: operador de comparação por igualdade.
+    
+- `"administrador"`: string utilizada como valor de comparação.
+    
+- `%}`: encerra a instrução de abertura.
+    
+
+A condição será verdadeira quando o valor de `nivel` for igual à string `"administrador"`.
+
+O bloco `elif` verifica outro valor. Se nenhuma condição anterior for verdadeira, o `else` será executado.
+
+**Erro comum:** esquecer `{% endif %}` pode provocar um erro de sintaxe de template. Também é comum escrever um nome de variável diferente daquele que foi enviado pela rota.
+
+**Segurança:** essa condição controla a apresentação da página, não a autorização real. Esconder um botão administrativo não impede que alguém tente acessar diretamente a rota correspondente. A permissão deve ser verificada no servidor.
+
+## 8. Operadores de comparação e operadores lógicos
+
+O Jinja permite comparar valores e combinar condições.
+
+|Operador|Significado|
+|---|---|
+|`==`|Igual a.|
+|`!=`|Diferente de.|
+|`>`|Maior que.|
+|`<`|Menor que.|
+|`>=`|Maior ou igual a.|
+|`<=`|Menor ou igual a.|
+|`and`|Ambas as condições precisam ser verdadeiras.|
+|`or`|Pelo menos uma condição precisa ser verdadeira.|
+|`not`|Inverte o valor lógico.|
+
+Exemplo:
+
+```
+{% if usuario.ativo and usuario.nivel == "administrador" %}
+    <p>Administrador ativo.</p>
+{% endif %}
+```
+
+Analisando a expressão:
+
+1. `usuario.ativo` verifica o valor do atributo `ativo`.
+    
+2. `and` exige que essa condição também seja verdadeira.
+    
+3. `usuario.nivel == "administrador"` compara o nível do usuário.
+    
+4. O parágrafo só será renderizado quando as duas condições forem verdadeiras.
+    
+
+O uso de `and` não significa que a aplicação esteja protegida contra acessos indevidos. É apenas uma condição de renderização.
+
+## 9. Laços de repetição com `for`
+
+O `for` permite percorrer os elementos de uma lista ou de outro objeto iterável.
+
+Sintaxe:
+
+```
+{% for item in itens %}
+    {{ item }}
+{% endfor %}
+```
+
+- `for`: inicia o laço.
+    
+- `item`: variável que representa o elemento atual.
+    
+- `in`: indica a sequência percorrida.
+    
+- `itens`: variável que contém a sequência.
+    
+- `endfor`: encerra o bloco.
+    
+
+### A variável especial `loop`
+
+Dentro do laço, o Jinja disponibiliza o objeto `loop`.
+
+Exemplo:
+
+```
+<ol>
+    {% for tarefa in tarefas %}
+        <li>{{ loop.index }}. {{ tarefa }}</li>
+    {% endfor %}
+</ol>
+```
+
+Detalhando:
+
+- `<ol>` cria uma lista ordenada.
+    
+- `for tarefa in tarefas` percorre a sequência.
+    
+- `loop.index` apresenta a posição atual começando em 1.
+    
+- `tarefa` representa o conteúdo da iteração atual.
+    
+- `endfor` encerra a repetição.
+    
+- `</ol>` fecha a lista.
+    
+
+Outros atributos úteis:
+
+|Atributo|Comportamento|
+|---|---|
+|`loop.index`|Índice começando em 1.|
+|`loop.index0`|Índice começando em 0.|
+|`loop.first`|Indica a primeira iteração.|
+|`loop.last`|Indica a última iteração.|
+|`loop.length`|Quantidade de elementos, quando disponível.|
+|`loop.revindex`|Posição inversa começando em 1, quando disponível.|
+|`loop.revindex0`|Posição inversa começando em 0, quando disponível.|
+
+Esses atributos não são variáveis Python criadas por você. Eles são fornecidos pelo Jinja dentro do contexto do laço.
+
+### O `else` de um laço
+
+Exemplo:
+
+```
+<ul>
+    {% for tarefa in tarefas %}
+        <li>{{ tarefa }}</li>
+    {% else %}
+        <li>Nenhuma tarefa cadastrada.</li>
+    {% endfor %}
+</ul>
+```
+
+O `else` do `for` é executado quando nenhuma iteração ocorre.
+
+Isso é útil quando a lista está vazia.
+
+Não confunda esse comportamento com o `else` de uma condição `if`: no laço, o bloco alternativo está associado à ausência de iterações.
+
+## 10. Escapamento automático de HTML
+
+O Jinja, quando utilizado com a configuração padrão de templates HTML do Flask, realiza escapamento automático de valores para reduzir o risco de injeção de HTML e XSS.
+
+Considere que um usuário envie este texto:
+
+```
+comentario = "<script>alert('teste')</script>"
+```
+
+A aplicação renderiza:
+
+```
+<p>{{ comentario }}</p>
+```
+
+O Jinja escapa os caracteres especiais de HTML em vez de interpretar diretamente o conteúdo como uma tag HTML confiável.
+
+O texto será apresentado como conteúdo, em vez de ser inserido como um elemento `<script>` executável nesse contexto.
+
+### O que é XSS?
+
+XSS (_Cross-Site Scripting_) é uma vulnerabilidade na qual conteúdo malicioso é executado no navegador de outra pessoa, normalmente por meio de dados que a aplicação trata incorretamente como conteúdo confiável.
+
+O escapamento automático ajuda a proteger contra esse tipo de problema em contextos HTML apropriados.
+
+### O filtro `safe`
+
+Exemplo:
+
+```
+{{ conteudo|safe }}
+```
+
+- `conteudo`: variável do contexto.
+    
+- `|`: separa a expressão do filtro.
+    
+- `safe`: informa ao Jinja que o conteúdo deve ser tratado como HTML confiável.
+    
+
+Esse filtro não sanitiza o HTML. Ele não remove automaticamente scripts, atributos perigosos ou outras estruturas maliciosas.
+
+Se o conteúdo for controlado por usuários, utilizá-lo com `safe` sem sanitização adequada pode introduzir uma vulnerabilidade XSS.
+
+Por isso, o escapamento automático deve permanecer ativo sempre que possível.
+
+## 11. Filtros do Jinja
+
+Filtros modificam a apresentação ou transformam valores em expressões Jinja.
+
+Sintaxe:
+
+```
+{{ valor|filtro }}
+```
+
+O caractere `|` aplica um filtro ao valor anterior.
+
+### Filtro `upper`
+
+```
+{{ nome|upper }}
+```
+
+Converte uma string para maiúsculas.
+
+Se `nome` for `"Marcos"`, o resultado será `"MARCOS"`.
+
+### Filtro `lower`
+
+```
+{{ nome|lower }}
+```
+
+Converte uma string para minúsculas.
+
+### Filtro `title`
+
+```
+{{ nome|title }}
+```
+
+Aplica a capitalização de título reconhecida pelo filtro. O resultado depende das regras de capitalização do texto.
+
+### Filtro `capitalize`
+
+```
+{{ nome|capitalize }}
+```
+
+Coloca a primeira letra em maiúscula e converte as demais para minúsculas.
+
+### Filtro `trim`
+
+```
+{{ nome|trim }}
+```
+
+Remove espaços em branco das extremidades da string.
+
+Não remove automaticamente os espaços que estão entre palavras.
+
+### Filtro `length`
+
+```
+{{ tarefas|length }}
+```
+
+Retorna o comprimento ou a quantidade de elementos, conforme o tipo de objeto.
+
+Se `tarefas` for uma lista com três elementos, o resultado será `3`.
+
+### Filtro `default`
+
+```
+{{ apelido|default("Sem apelido") }}
+```
+
+Utiliza o valor alternativo quando a variável está indefinida.
+
+Por padrão, uma string vazia não é necessariamente substituída. Para também substituir valores considerados falsos, utilize o segundo argumento:
+
+```
+{{ apelido|default("Sem apelido", true) }}
+```
+
+O segundo argumento altera o comportamento para incluir valores falsos. Isso significa que valores como `0` e `False` também podem ser substituídos.
+
+### Filtro `join`
+
+```
+{{ nomes|join(", ") }}
+```
+
+Junta os elementos de uma sequência em uma string, utilizando `", "` como separador.
+
+Para a lista:
+
+```
+nomes = ["Ana", "Bruno", "Carla"]
+```
+
+O resultado será:
+
+```
+Ana, Bruno, Carla
+```
+
+### Filtro `replace`
+
+```
+{{ texto|replace("a", "o") }}
+```
+
+Substitui ocorrências da string `"a"` pela string `"o"`.
+
+O comportamento depende do conteúdo original e das regras de correspondência da operação.
+
+### Encadeando filtros
+
+```
+{{ nome|trim|lower }}
+```
+
+O Jinja aplica primeiro `trim` e depois `lower`.
+
+Para `nome = " MArCoS "`, o resultado será:
+
+```
+marcos
+```
+
+**Erros comuns com filtros:**
+
+- Utilizar um filtro com um tipo de dado incompatível.
+    
+- Esquecer aspas ao passar uma string literal como argumento.
+    
+- Esperar que um filtro altere a variável original no Python.
+    
+- Utilizar `safe` em conteúdo não confiável.
+    
+
+Os filtros são aplicados durante a renderização. Em geral, eles não modificam a variável original armazenada no banco ou na aplicação.
+
+## 12. Testes de valores com `is`
+
+No Jinja, `is` é utilizado para verificar se um valor satisfaz determinado teste.
+
+Exemplo:
+
+```
+{% if tarefas is defined %}
+    <p>A variável tarefas foi fornecida.</p>
+{% endif %}
+```
+
+Analisando:
+
+- `if`: inicia uma condição.
+    
+- `tarefas`: identifica a variável.
+    
+- `is defined`: verifica se a variável está definida.
+    
+- O conteúdo será renderizado se a condição for verdadeira.
+    
+- `endif`: encerra a condição.
+    
+
+Testes comuns:
+
+|Teste|Função|
+|---|---|
+|`defined`|Verifica se a variável está definida.|
+|`undefined`|Verifica se a variável está indefinida.|
+|`none`|Verifica se o valor é `None`.|
+|`string`|Verifica se o valor é uma string.|
+|`number`|Verifica se o valor é numérico.|
+|`iterable`|Verifica se o valor é iterável.|
+|`mapping`|Verifica se o valor é um mapeamento, como um dicionário.|
+|`sequence`|Verifica se o valor é reconhecido como sequência pelo teste do Jinja.|
+
+Exemplo:
+
+```
+{% if usuario is defined and usuario is not none %}
+    <p>Os dados do usuário estão disponíveis.</p>
+{% else %}
+    <p>Usuário não informado.</p>
+{% endif %}
+```
+
+Essa condição verifica se `usuario` está definido e não é `None`.
+
+Esses testes são úteis quando a ausência de um valor é uma situação prevista. Porém, se a página depende obrigatoriamente de uma variável, o ideal é garantir que a rota a forneça, em vez de esconder silenciosamente um erro de programação.
+
+## 13. Erros comuns durante a execução
+
+### 13.1. `TemplateNotFound`
+
+Exemplo:
+
+```
+jinja2.exceptions.TemplateNotFound: perfil.html
+```
+
+**O que significa?**
+
+O Flask não conseguiu localizar o template solicitado.
+
+**Causas possíveis:**
+
+- O arquivo não existe.
+    
+- O nome foi digitado incorretamente.
+    
+- O arquivo está em outro diretório.
+    
+- A configuração do diretório de templates está incorreta.
+    
+
+**Como corrigir:**
+
+Confira o nome do arquivo, o caminho relativo e a configuração da aplicação.
+
+### 13.2. `UndefinedError`
+
+Um template pode tentar acessar uma variável ou um atributo que não está disponível.
+
+Exemplo:
+
+```
+{{ usuario.nome }}
+```
+
+Se `usuario` estiver indefinido, o resultado depende da configuração do Jinja e da forma de acesso. Com uma configuração estrita, poderá ocorrer uma exceção de variável indefinida.
+
+**Como corrigir:**
+
+- Confira os argumentos de `render_template()`.
+    
+- Verifique se a variável tem o mesmo nome no Python e no template.
+    
+- Confirme se o objeto possui o atributo esperado.
+    
+- Utilize verificações de existência quando a ausência for válida.
+    
+
+### 13.3. `TemplateSyntaxError`
+
+Esse erro indica que o Jinja não conseguiu interpretar a sintaxe do template.
+
+Exemplo incorreto:
+
+```
+{% if usuario %}
+    <p>Olá!</p>
+```
+
+O bloco foi aberto, mas não foi encerrado.
+
+Correção:
+
+```
+{% if usuario %}
+    <p>Olá!</p>
+{% endif %}
+```
+
+Também podem causar erros de sintaxe delimitadores incompletos, instruções escritas incorretamente e estruturas de controle malformadas.
+
+### 13.4. `SyntaxError` no Python
+
+Exemplo:
+
+```
+return render_template(
+    "perfil.html",
+    nome="Marcos"
+```
+
+A chamada não foi encerrada corretamente.
+
+O Python pode apresentar um erro de sintaxe antes que o Flask comece a processar requisições.
+
+Esse tipo de erro deve ser diagnosticado no arquivo Python, não no template HTML.
+
+### 13.5. `NameError`
+
+Exemplo:
+
+```
+app = Flask(nome_modulo)
+```
+
+Se `nome_modulo` não tiver sido definido anteriormente, o Python poderá apresentar:
+
+```
+NameError: name 'nome_modulo' is not defined
+```
+
+A forma convencional é utilizar:
+
+```
+app = Flask(__name__)
+```
+
+### 13.6. `ModuleNotFoundError`
+
+Exemplo:
+
+```
+ModuleNotFoundError: No module named 'flask'
+```
+
+O interpretador Python não conseguiu importar o pacote.
+
+Possíveis causas:
+
+- Flask não está instalado.
+    
+- O ambiente virtual não está ativado.
+    
+- O comando está utilizando outro interpretador Python.
+    
+
+Verifique o interpretador e instale a dependência no ambiente correto:
+
+```
+python -m pip install Flask
+```
+
+### 13.7. Erro HTTP `404 Not Found`
+
+Um erro `404` significa que o caminho solicitado não correspondeu a uma rota encontrada pela aplicação.
+
+Não é a mesma coisa que `TemplateNotFound`.
+
+- `404` de rota: o Flask não encontrou uma rota correspondente à URL.
+    
+- `TemplateNotFound`: uma rota pode ter sido encontrada, mas o template solicitado não foi localizado.
+    
+
+Essa distinção ajuda a identificar em qual etapa está o problema.
+
+## 14. Boas práticas para trabalhar com Jinja
+
+- Mantenha a lógica de negócio no Python e a apresentação no template.
+    
+- Envie ao template somente os dados necessários.
+    
+- Utilize nomes claros e consistentes para variáveis.
+    
+- Feche corretamente os blocos de controle.
+    
+- Trate listas vazias e valores opcionais de forma explícita.
+    
+- Utilize filtros para transformações simples de apresentação.
+    
+- Mantenha o escapamento automático de HTML ativo.
+    
+- Evite `safe` para dados controlados por usuários.
+    
+- Utilize `url_for()` para gerar URLs a partir dos endpoints Flask.
+    
+- Não confunda esconder elementos HTML com proteger rotas.
+    
+- Não utilize templates para substituir validação, autorização ou regras de negócio.
+    
+- Quando ocorrer um erro, identifique se ele surgiu no Python, na localização do template, na sintaxe Jinja ou no roteamento HTTP.

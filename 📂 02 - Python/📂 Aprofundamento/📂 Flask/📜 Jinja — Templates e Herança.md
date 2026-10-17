@@ -2185,3 +2185,292 @@ Confira os parâmetros passados à macro e os nomes utilizados em seu corpo. O J
 - Mantenha validação, autorização e regras de negócio no servidor, sem depender apenas da apresentação do template.
 
 ---
+## 16. Macros avançadas: argumentos, atributos HTML e componentes configuráveis
+
+Na seção anterior, vimos como as macros permitem reutilizar componentes Jinja, como botões, campos de formulário e mensagens. Agora vamos aprofundar o funcionamento dos parâmetros e entender como construir componentes mais flexíveis sem duplicar templates.
+
+Uma macro pode receber argumentos obrigatórios, argumentos com valores padrão e coleções de argumentos. Também pode gerar atributos HTML de maneira dinâmica.
+
+Esses recursos são úteis quando vários componentes possuem a mesma estrutura, mas precisam variar em detalhes como texto, classes CSS, atributos de acessibilidade e comportamento visual.
+
+### 16.1. Parâmetros obrigatórios e valores padrão
+
+Considere esta macro:
+
+```
+{% macro botao(texto, classe="botao", tipo="button") %}
+    <button type="{{ tipo }}" class="{{ classe }}">
+        {{ texto }}
+    </button>
+{% endmacro %}
+```
+
+Ela recebe três parâmetros:
+
+|Parâmetro|Obrigatório?|Valor padrão|Finalidade|
+|---|---|---|---|
+|`texto`|Sim|Nenhum|Conteúdo textual do botão.|
+|`classe`|Não|`"botao"`|Classe CSS do botão.|
+|`tipo`|Não|`"button"`|Tipo do elemento HTML.|
+
+A macro pode ser chamada assim:
+
+```
+{{ botao("Abrir painel") }}
+```
+
+Como somente `texto` foi informado, os outros parâmetros utilizam seus valores padrão.
+
+A saída será semelhante a:
+
+```
+<button type="button" class="botao">
+    Abrir painel
+</button>
+```
+
+Também é possível alterar os parâmetros opcionais:
+
+```
+{{ botao("Salvar", "botao-primario", "submit") }}
+```
+
+Nesse caso, a macro recebe os três valores na ordem em que os parâmetros foram definidos.
+
+### 16.2. Argumentos nomeados em macros
+
+Além de fornecer argumentos pela posição, você pode indicar o nome de cada parâmetro:
+
+```
+{{ botao(
+    texto="Salvar alterações",
+    tipo="submit",
+    classe="botao-primario"
+) }}
+```
+
+Essa forma é útil quando uma macro possui vários parâmetros opcionais. Ela torna a chamada mais legível e reduz a dependência da ordem dos argumentos.
+
+O nome utilizado na chamada precisa corresponder a um parâmetro aceito pela macro.
+
+Por exemplo, `classe` não é automaticamente equivalente a `class`. Se a macro define um parâmetro chamado `classe`, a chamada deve utilizar esse nome.
+
+### 16.3. Parâmetros variáveis com `varargs`
+
+Em macros Jinja, `varargs` permite acessar argumentos posicionais adicionais que não foram associados aos parâmetros explicitamente declarados.
+
+Exemplo:
+
+```
+{% macro listar_titulos(principal, secundario) %}
+    <h1>{{ principal }}</h1>
+    <h2>{{ secundario }}</h2>
+
+    {% for titulo in varargs %}
+        <h3>{{ titulo }}</h3>
+    {% endfor %}
+{% endmacro %}
+```
+
+Chamada:
+
+```
+{{ listar_titulos(
+    "Painel",
+    "Configurações",
+    "Perfil",
+    "Segurança",
+    "Preferências"
+) }}
+```
+
+Os dois primeiros argumentos são associados aos parâmetros `principal` e `secundario`. Os argumentos posicionais restantes ficam disponíveis em `varargs`.
+
+Assim, o laço percorre os títulos adicionais.
+
+Esse recurso pode ser útil quando a quantidade de argumentos posicionais varia. Entretanto, em componentes de interface, parâmetros explícitos costumam ser mais fáceis de compreender e manter.
+
+### 16.4. Parâmetros variáveis nomeados com `kwargs`
+
+O recurso `kwargs` disponibiliza argumentos nomeados adicionais que não correspondem aos parâmetros declarados na macro.
+
+Considere:
+
+```
+{% macro campo_simples(nome, rotulo) %}
+    <label for="{{ nome }}">{{ rotulo }}</label>
+    <input
+        id="{{ nome }}"
+        name="{{ nome }}"
+        {% for atributo, valor in kwargs.items() %}
+            {{ atributo }}="{{ valor }}"
+        {% endfor %}
+    >
+{% endmacro %}
+```
+
+A chamada pode incluir atributos adicionais:
+
+```
+{{ campo_simples(
+    "email",
+    "E-mail",
+    type="email",
+    placeholder="voce@exemplo.com",
+    autocomplete="email"
+) }}
+```
+
+Os parâmetros `nome` e `rotulo` são declarados explicitamente. Os argumentos `type`, `placeholder` e `autocomplete` são adicionais e ficam disponíveis por meio de `kwargs`.
+
+O método `items()` de um dicionário permite percorrer os pares de chave e valor. Nesse contexto, cada par representa um atributo e seu valor.
+
+**Atenção:** esse exemplo demonstra o mecanismo, mas não deve ser utilizado sem cuidados em produção. Nomes e valores de atributos precisam ser controlados, e valores não confiáveis não devem ser inseridos indiscriminadamente em atributos HTML. Para campos WTForms, normalmente é preferível utilizar os mecanismos próprios de renderização dos campos.
+
+### 16.5. O problema de gerar atributos HTML manualmente
+
+Ao criar componentes configuráveis, pode parecer conveniente gerar qualquer atributo recebido:
+
+```
+<input {{ atributo }}="{{ valor }}">
+```
+
+Entretanto, essa abordagem exige cuidado. Um atributo HTML não é apenas texto decorativo: dependendo do nome e do valor, ele pode alterar o comportamento do elemento.
+
+Por isso, componentes de produção devem definir quais atributos aceitam ou utilizar recursos de renderização que tratem os atributos de maneira apropriada.
+
+Por exemplo, uma macro que aceita somente uma classe CSS e um texto tem uma interface mais restrita:
+
+```
+{% macro mensagem(texto, classe="info") %}
+    <p class="{{ classe }}">{{ texto }}</p>
+{% endmacro %}
+```
+
+Essa restrição torna o componente mais previsível e fácil de manter.
+
+### 16.6. Argumentos posicionais versus nomeados
+
+Considere:
+
+```
+{% macro alerta(titulo, mensagem, classe="alerta-info") %}
+    <div class="{{ classe }}">
+        <strong>{{ titulo }}</strong>
+        <p>{{ mensagem }}</p>
+    </div>
+{% endmacro %}
+```
+
+Uma chamada posicional seria:
+
+```
+{{ alerta("Atenção", "Confira os dados", "alerta-aviso") }}
+```
+
+Uma chamada com argumentos nomeados seria:
+
+```
+{{ alerta(
+    titulo="Atenção",
+    mensagem="Confira os dados",
+    classe="alerta-aviso"
+) }}
+```
+
+As duas formas fornecem os mesmos valores.
+
+A forma posicional é compacta, enquanto a forma nomeada pode facilitar a leitura em chamadas maiores.
+
+Quando a macro possui vários argumentos opcionais, prefira uma chamada que deixe explícito o significado dos valores.
+
+### 16.7. Utilizando macros para mensagens de alerta
+
+Uma aplicação pode exibir mensagens de tipos diferentes: informação, sucesso, aviso e erro.
+
+Uma macro pode centralizar a estrutura HTML:
+
+```
+{% macro alerta(titulo, mensagem, tipo="info") %}
+    <section class="alerta alerta-{{ tipo }}">
+        <h2>{{ titulo }}</h2>
+        <p>{{ mensagem }}</p>
+    </section>
+{% endmacro %}
+```
+
+Depois de importar a macro:
+
+```
+{{ componentes.alerta(
+    "Operação concluída",
+    "Os dados foram salvos.",
+    "sucesso"
+) }}
+```
+
+A classe final será `alerta alerta-sucesso`.
+
+A macro controla a estrutura, enquanto o argumento `tipo` permite variar a classe CSS.
+
+A classe, por si só, não cria o estilo visual. É necessário que o CSS da aplicação defina as regras correspondentes.
+
+Também é importante não utilizar essa classe como única indicação de significado. Para mensagens de erro, por exemplo, o texto deve explicar o problema, e a interface deve manter uma apresentação compreensível para pessoas que não distinguem cores.
+
+### 16.8. Macros não são funções Python comuns
+
+Embora uma macro se pareça com uma função, ela pertence à linguagem de templates do Jinja.
+
+Uma macro é declarada no template:
+
+```
+{% macro saudacao(nome) %}
+    <p>Olá, {{ nome }}!</p>
+{% endmacro %}
+```
+
+Ela é chamada durante a renderização:
+
+```
+{{ saudacao("Marcos") }}
+```
+
+Isso não significa que o Python possa importar diretamente essa definição como se fosse uma função comum de um módulo `.py`.
+
+No Flask, o Python prepara os dados e solicita a renderização. O Jinja interpreta a macro dentro do ambiente de templates e produz a saída correspondente.
+
+Quando uma operação exige acesso ao banco de dados, regras de negócio ou processamento complexo, ela deve permanecer na camada Python apropriada.
+
+### 16.9. Escolhendo a melhor estratégia para um componente
+
+Antes de criar uma macro, avalie a necessidade de reutilização.
+
+- Se deseja incorporar um trecho HTML completo, `include` pode ser suficiente.
+    
+- Se deseja gerar um componente com parâmetros explícitos, uma macro costuma ser adequada.
+    
+- Se deseja compartilhar uma estrutura de página e permitir que páginas filhas substituam áreas específicas, utilize herança com `extends` e `block`.
+    
+- Se o componente exige processamento complexo, prepare os dados no Python e mantenha o template focado na apresentação.
+    
+
+A melhor solução é aquela que reduz repetição sem tornar o comportamento difícil de entender.
+
+### 16.10. Cuidados com segurança e manutenção
+
+- Não trate argumentos recebidos de usuários como HTML confiável.
+    
+- Não aplique `safe` indiscriminadamente aos resultados das macros.
+    
+- Evite permitir atributos HTML arbitrários sem uma lista de valores aceitos.
+    
+- Prefira nomes de parâmetros claros e consistentes.
+    
+- Utilize valores padrão apenas quando eles representarem um comportamento realmente desejado.
+    
+- Evite macros excessivamente genéricas que tentam resolver muitos problemas diferentes.
+    
+- Mantenha operações de banco, autorização e regras de negócio fora das macros.
+    
+- Lembre-se de que gerar um botão ou link não garante que a ação correspondente esteja autorizada no servidor.
+---

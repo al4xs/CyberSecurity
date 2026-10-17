@@ -6754,3 +6754,427 @@ O processo exato depende das ferramentas instaladas e da versão do Jinja utiliz
     
 
 ---
+## 29. Testes automatizados de templates Jinja com pytest e Flask
+
+Testes automatizados permitem verificar se os templates Jinja estão sendo renderizados corretamente, se recebem os dados esperados e se comportam de maneira segura.
+
+Em aplicações Flask, os testes podem verificar tanto o resultado final de uma rota quanto o comportamento de um template isoladamente.
+
+### 29.1. O que testar em um template?
+
+Alguns aspectos importantes são:
+
+- Se a rota retorna o código HTTP esperado.
+    
+- Se o template correto é renderizado.
+    
+- Se os dados enviados pelo Flask aparecem no HTML.
+    
+- Se condições e laços produzem o conteúdo esperado.
+    
+- Se valores fornecidos pelo usuário são escapados corretamente.
+    
+- Se erros como templates inexistentes são tratados conforme o comportamento esperado.
+    
+
+Por exemplo, imagine uma rota que renderiza uma página de perfil:
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/perfil")
+def perfil():
+    return render_template(
+        "perfil.html",
+        nome="Ana",
+        idade=25,
+    )
+```
+
+O template `templates/perfil.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Perfil</title>
+</head>
+<body>
+    <h1>{{ nome }}</h1>
+    <p>Idade: {{ idade }}</p>
+</body>
+</html>
+```
+
+Um teste pode verificar se a resposta contém o nome e a idade esperados, sem precisar abrir o navegador.
+
+### 29.2. Preparando o ambiente de testes
+
+O `pytest` é uma ferramenta de testes para Python que permite escrever funções de teste simples e executá-las automaticamente.
+
+Instalação:
+
+```
+python -m pip install pytest
+```
+
+Uma organização possível para o projeto é:
+
+```
+meu_projeto/
+├── app.py
+├── templates/
+│   └── perfil.html
+└── tests/
+    └── test_templates.py
+```
+
+O arquivo de testes pode importar a aplicação e utilizar o cliente de testes do Flask.
+
+### 29.3. Testando uma rota com `test_client()`
+
+O método `app.test_client()` cria um cliente HTTP de testes. Ele permite simular requisições à aplicação sem iniciar um servidor real e sem precisar de um navegador.
+
+Exemplo em `tests/test_templates.py`:
+
+```
+from app import app
+
+
+def test_perfil():
+    client = app.test_client()
+
+    resposta = client.get("/perfil")
+
+    assert resposta.status_code == 200
+    assert b"Ana" in resposta.data
+    assert b"Idade: 25" in resposta.data
+```
+
+Execute na raiz do projeto:
+
+```
+pytest
+```
+
+O resultado esperado é que o teste passe se a rota retornar HTTP `200` e o HTML contiver os textos esperados.
+
+#### Entendendo as verificações
+
+|Expressão|Finalidade|
+|---|---|
+|`client.get("/perfil")`|Simula uma requisição GET|
+|`resposta.status_code`|Consulta o código HTTP retornado|
+|`resposta.data`|Obtém o corpo da resposta em bytes|
+|`b"Ana"`|Representa uma sequência de bytes|
+|`assert`|Verifica se uma condição é verdadeira|
+
+Como `resposta.data` contém bytes, os textos comparados diretamente com ela normalmente também devem ser representados como bytes, usando o prefixo `b`.
+
+Se preferir trabalhar com strings, utilize:
+
+```
+html = resposta.get_data(as_text=True)
+
+assert "Ana" in html
+assert "Idade: 25" in html
+```
+
+### 29.4. Testando a presença de elementos HTML
+
+Um teste pode verificar se o template gerou determinados elementos:
+
+```
+def test_perfil_contem_titulo():
+    client = app.test_client()
+
+    resposta = client.get("/perfil")
+    html = resposta.get_data(as_text=True)
+
+    assert "<h1>Ana</h1>" in html
+    assert "<title>Perfil</title>" in html
+```
+
+Essa abordagem é simples e útil quando a estrutura esperada é previsível.
+
+Entretanto, comparar HTML por meio de strings pode deixar o teste frágil. Alterações em espaços, quebras de linha ou formatação podem fazer um teste falhar mesmo quando a página continua funcional.
+
+Para verificações estruturais mais complexas, é possível utilizar um parser HTML, como o `BeautifulSoup`, em conjunto com o `pytest`.
+
+O objetivo do teste deve determinar o nível de detalhe da comparação.
+
+### 29.5. Testando templates com dados diferentes
+
+Templates frequentemente recebem dados dinâmicos. Por isso, é importante verificar se os valores são inseridos corretamente.
+
+Considere:
+
+```
+<h1>Olá, {{ nome }}!</h1>
+
+{% if administrador %}
+    <p>Acesso administrativo</p>
+{% else %}
+    <p>Acesso comum</p>
+{% endif %}
+```
+
+O teste pode fazer requisições a rotas que forneçam diferentes valores e verificar o resultado produzido.
+
+Por exemplo, se uma rota utilizar `nome="Carlos"` e `administrador=False`, o HTML deve conter `Olá, Carlos!` e `Acesso comum`.
+
+Para testar vários cenários sem duplicar funções, o `pytest` oferece parametrização com `@pytest.mark.parametrize`.
+
+```
+import pytest
+
+
+@pytest.mark.parametrize(
+    ("nome", "administrador", "esperado"),
+    [
+        ("Ana", True, "Acesso administrativo"),
+        ("Carlos", False, "Acesso comum"),
+    ],
+)
+def test_tipo_acesso(nome, administrador, esperado):
+    # O teste deve chamar uma rota ou função
+    # que renderize o template com esses dados.
+    ...
+```
+
+O exemplo demonstra a estrutura da parametrização. Para que seja executável, é necessário implementar a chamada à aplicação e verificar o HTML retornado.
+
+A vantagem é que uma única função de teste pode avaliar vários cenários independentes.
+
+### 29.6. Testando o escapamento automático
+
+Templates HTML do Flask normalmente utilizam escapamento automático para impedir que valores dinâmicos sejam interpretados diretamente como marcação HTML.
+
+Considere um template:
+
+```
+<p>{{ mensagem }}</p>
+```
+
+Se a variável `mensagem` receber:
+
+```
+mensagem = "<script>alert(1)</script>"
+```
+
+O comportamento esperado, com escapamento automático habilitado, é que os caracteres especiais sejam convertidos em entidades HTML, em vez de o conteúdo ser inserido como uma tag `<script>` executável.
+
+Um teste pode verificar isso por meio de uma rota que renderize a variável:
+
+```
+def test_mensagem_escapada():
+    client = app.test_client()
+
+    resposta = client.get("/mensagem-de-teste")
+    html = resposta.get_data(as_text=True)
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+```
+
+Esse teste pressupõe que a rota `/mensagem-de-teste` renderize o valor malicioso no template e que o escapamento automático esteja habilitado.
+
+A verificação é importante porque o escapamento pode ser desativado acidentalmente, por exemplo, com o uso inadequado de `|safe` ou de `Markup`.
+
+### 29.7. Testando templates diretamente pelo ambiente Jinja
+
+Em determinadas situações, pode ser útil testar a renderização sem realizar uma requisição HTTP.
+
+O Flask disponibiliza o ambiente Jinja por meio de `app.jinja_env`.
+
+```
+def test_template_perfil_direto():
+    with app.app_context():
+        template = app.jinja_env.get_template("perfil.html")
+
+        html = template.render(
+            nome="Ana",
+            idade=25,
+        )
+
+        assert "<h1>Ana</h1>" in html
+        assert "Idade: 25" in html
+```
+
+Nesse exemplo:
+
+- `app.jinja_env` fornece o ambiente Jinja configurado pela aplicação.
+    
+- `get_template("perfil.html")` carrega o template pelo nome relativo à pasta de templates.
+    
+- `render()` fornece os valores usados pelas expressões Jinja e retorna o HTML como string.
+    
+
+Esse método é útil para testar a lógica de um template isoladamente.
+
+**Limitação importante:** `template.render()` não equivale a chamar `flask.render_template()`. A renderização direta não executa automaticamente o fluxo de renderização do Flask, incluindo seus context processors. Valores como `request`, `session` e outros dados disponibilizados pelo contexto da requisição podem não estar presentes da mesma forma.
+
+Se o template depender do contexto de uma requisição, utilize o cliente de testes ou crie um contexto de requisição explicitamente.
+
+### 29.8. Diferença entre `test_request_context()` e `test_client()`
+
+Os dois recursos permitem testar partes da aplicação Flask, mas têm finalidades diferentes.
+
+|Recurso|Finalidade|
+|---|---|
+|`app.test_client()`|Simular uma requisição HTTP e obter uma resposta completa|
+|`app.test_request_context()`|Criar o contexto de uma requisição sem executar automaticamente todo o ciclo de atendimento de uma rota|
+|`app.app_context()`|Disponibilizar o contexto da aplicação sem necessariamente criar um contexto de requisição|
+
+Exemplo de contexto de requisição:
+
+```
+from flask import request
+
+
+def test_contexto_requisicao():
+    with app.test_request_context(
+        "/perfil?modo=simples"
+    ):
+        assert request.path == "/perfil"
+        assert request.args["modo"] == "simples"
+```
+
+O contexto permite acessar objetos vinculados à requisição, como `request`.
+
+Entretanto, entrar em `test_request_context()` não executa automaticamente a função da rota, nem substitui o ciclo completo de uma requisição HTTP. Para verificar o status da resposta, redirecionamentos e o HTML final de uma rota, prefira `test_client()`.
+
+### 29.9. Testando erros de carregamento de templates
+
+Quando um template não existe, o Jinja pode lançar `TemplateNotFound`.
+
+Isso pode ser testado diretamente:
+
+```
+import pytest
+from jinja2 import TemplateNotFound
+
+
+def test_template_inexistente():
+    with app.app_context():
+        with pytest.raises(TemplateNotFound):
+            app.jinja_env.get_template(
+                "arquivo_que_nao_existe.html"
+            )
+```
+
+O teste passa quando a exceção esperada é lançada.
+
+Essa abordagem ajuda a detectar nomes incorretos de templates e problemas de organização de arquivos.
+
+Em testes de rotas, o comportamento pode ser diferente: uma exceção não tratada pode resultar em HTTP `500`, dependendo da configuração da aplicação e do ambiente de testes.
+
+### 29.10. Testando templates com `StrictUndefined`
+
+Por padrão, variáveis indefinidas no Jinja podem produzir resultados silenciosos em determinadas operações. Para identificar erros de nomes durante o desenvolvimento, é possível configurar `StrictUndefined`.
+
+```
+from jinja2 import StrictUndefined
+
+app.jinja_env.undefined = StrictUndefined
+```
+
+Considere um template com:
+
+```
+<p>{{ usuario }}</p>
+```
+
+Uma renderização sem fornecer `usuario` pode lançar `UndefinedError` quando `StrictUndefined` estiver ativo.
+
+O teste pode ser escrito assim:
+
+```
+import pytest
+from jinja2 import UndefinedError
+
+
+def test_variavel_obrigatoria():
+    with app.app_context():
+        template = app.jinja_env.from_string(
+            "<p>{{ usuario }}</p>"
+        )
+
+        with pytest.raises(UndefinedError):
+            template.render()
+```
+
+Esse teste cria um template diretamente a partir de uma string. Ele não depende de um arquivo físico na pasta `templates`.
+
+A configuração global de `app.jinja_env.undefined` afeta a aplicação inteira. Por isso, escolha cuidadosamente onde ativar `StrictUndefined`, principalmente se houver templates que dependam intencionalmente de valores opcionais.
+
+### 29.11. Organização dos testes com fixtures
+
+Quando muitos testes precisam da mesma aplicação ou do mesmo cliente, o `pytest` permite reutilizar a preparação por meio de fixtures.
+
+Em aplicações que utilizam uma função fábrica, uma organização comum é:
+
+```
+import pytest
+
+from meu_projeto import create_app
+
+
+@pytest.fixture
+def app():
+    aplicacao = create_app({
+        "TESTING": True,
+    })
+
+    yield aplicacao
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+def test_perfil(client):
+    resposta = client.get("/perfil")
+
+    assert resposta.status_code == 200
+```
+
+Esse exemplo pressupõe que o projeto tenha uma função `create_app(config)` que construa e configure a aplicação Flask. Essa função não é fornecida automaticamente pelo Flask; ela precisa ser implementada no projeto.
+
+A fixture `app` cria a aplicação de testes, enquanto a fixture `client` fornece o cliente HTTP associado a ela.
+
+O benefício é evitar a repetição da inicialização da aplicação em cada função de teste e permitir configurações específicas para testes.
+
+### 29.12. Testes unitários e testes de integração
+
+Os testes de templates podem ser organizados de acordo com o que se deseja verificar.
+
+**Teste unitário:** concentra-se em uma parte isolada, como a renderização de um template com um conjunto conhecido de variáveis.
+
+**Teste de integração:** verifica a interação entre componentes, como uma rota Flask que busca dados, envia esses dados ao Jinja e devolve o HTML ao cliente.
+
+Exemplos de objetivos:
+
+- Verificar se um filtro personalizado transforma um valor corretamente.
+    
+- Verificar se uma macro gera o elemento HTML esperado.
+    
+- Verificar se uma rota utiliza o template correto.
+    
+- Verificar se dados enviados à rota aparecem na resposta.
+    
+- Verificar se valores fornecidos pelo usuário são escapados.
+    
+- Verificar se uma requisição inválida resulta no código HTTP esperado.
+    
+
+Um teste isolado pode confirmar que uma macro funciona, mas não garante que uma rota real esteja importando essa macro corretamente. Da mesma forma, um teste de rota bem-sucedido não cobre necessariamente todos os casos possíveis de um filtro personalizado.
+
+Combinar testes unitários e de integração oferece uma cobertura mais útil do comportamento da aplicação.
+
+---

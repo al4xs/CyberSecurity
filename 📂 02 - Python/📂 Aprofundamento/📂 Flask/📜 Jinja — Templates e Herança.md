@@ -4599,3 +4599,312 @@ Para aplicações que utilizam macros e herança, também é útil testar as pá
     
 
 ---
+## 22. Blocos `call`, `caller` e filtros aplicados a blocos de conteúdo
+
+### 22.1. O problema de passar conteúdo para uma macro
+
+Uma macro do Jinja permite criar componentes reutilizáveis. Normalmente, os valores são passados por argumentos:
+
+```
+{% macro alerta(titulo, mensagem) %}
+    <div class="alerta">
+        <h3>{{ titulo }}</h3>
+        <p>{{ mensagem }}</p>
+    </div>
+{% endmacro %}
+
+{{ alerta("Atenção", "Verifique os dados informados.") }}
+```
+
+Esse formato funciona quando o componente recebe valores simples, como textos, números ou listas.
+
+Entretanto, pode ser necessário passar um conteúdo HTML mais elaborado para dentro do componente, contendo vários elementos, condições ou expressões Jinja.
+
+Uma solução seria criar uma macro para cada combinação de conteúdo, mas isso reduziria a flexibilidade do componente.
+
+O Jinja oferece os blocos `call` e a variável especial `caller` para resolver esse problema.
+
+### 22.2. O bloco `call`
+
+O bloco `call` permite chamar uma macro e fornecer um bloco de conteúdo como parte da chamada.
+
+Considere esta macro:
+
+```
+{% macro painel(titulo) %}
+    <section class="painel">
+        <h2>{{ titulo }}</h2>
+
+        <div class="painel-conteudo">
+            {{ caller() }}
+        </div>
+    </section>
+{% endmacro %}
+```
+
+Ela pode ser utilizada assim:
+
+```
+{% call painel("Informações do usuário") %}
+    <p>Nome: João</p>
+    <p>Status: Ativo</p>
+    <a href="/perfil">Ver perfil</a>
+{% endcall %}
+```
+
+O resultado renderizado será semelhante a:
+
+```
+<section class="painel">
+    <h2>Informações do usuário</h2>
+
+    <div class="painel-conteudo">
+        <p>Nome: João</p>
+        <p>Status: Ativo</p>
+        <a href="/perfil">Ver perfil</a>
+    </div>
+</section>
+```
+
+O conteúdo escrito entre `call` e `endcall` fica disponível para a macro por meio de `caller()`.
+
+A macro controla onde esse conteúdo será inserido. Ela pode chamá-lo dentro de um contêiner, depois de um título ou em outra posição adequada à estrutura do componente.
+
+### 22.3. Como funciona `caller()`
+
+`caller` é uma variável especial disponibilizada no contexto de uma macro chamada com `call`. Ela representa o bloco de conteúdo fornecido pelo código que realizou a chamada.
+
+A expressão:
+
+```
+{{ caller() }}
+```
+
+executa esse bloco e insere o conteúdo renderizado naquele ponto.
+
+É importante diferenciar os dois papéis:
+
+- `call`: realiza a chamada da macro e fornece o bloco de conteúdo.
+    
+- `caller`: permite que a macro execute o conteúdo fornecido pelo chamador.
+    
+
+Uma macro que utiliza `caller()` sem ter recebido um bloco de chamada compatível pode gerar um erro de execução.
+
+Se uma macro também for utilizada sem `call`, mas o conteúdo for opcional, é possível verificar se `caller` está definido:
+
+```
+{% macro painel(titulo) %}
+    <section class="painel">
+        <h2>{{ titulo }}</h2>
+
+        {% if caller is defined %}
+            <div class="painel-conteudo">
+                {{ caller() }}
+            </div>
+        {% endif %}
+    </section>
+{% endmacro %}
+```
+
+Assim, a macro pode ser chamada com ou sem um bloco de conteúdo:
+
+```
+{{ painel("Painel vazio") }}
+```
+
+Ou:
+
+```
+{% call painel("Painel personalizado") %}
+    <p>Conteúdo fornecido pelo chamador.</p>
+{% endcall %}
+```
+
+### 22.4. Passando argumentos para `caller`
+
+O bloco de conteúdo também pode receber argumentos. Isso é útil quando a macro percorre uma coleção e precisa fornecer cada elemento ao conteúdo personalizado.
+
+Exemplo de macro que renderiza uma lista:
+
+```
+{% macro lista_personalizada(usuarios) %}
+    <ul>
+        {% for usuario in usuarios %}
+            <li>
+                {{ caller(usuario) }}
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}
+```
+
+A chamada correspondente utiliza uma variável entre parênteses depois de `call`:
+
+```
+{% call(usuario) lista_personalizada(usuarios) %}
+    <strong>{{ usuario.nome }}</strong>
+    <span>{{ usuario.status }}</span>
+{% endcall %}
+```
+
+O parâmetro `usuario` declarado em `call(usuario)` recebe o argumento enviado pela macro em `caller(usuario)`.
+
+O fluxo é:
+
+1. A macro percorre a coleção `usuarios`.
+    
+2. Para cada elemento, chama `caller(usuario)`.
+    
+3. O bloco definido pelo chamador recebe esse elemento.
+    
+4. O bloco renderiza os campos desejados.
+    
+5. O resultado é inserido no item da lista.
+    
+
+Isso permite reutilizar a lógica de iteração sem obrigar a macro a conhecer a estrutura HTML específica de cada elemento.
+
+A macro pode, por exemplo, controlar a lista e sua organização, enquanto o chamador decide se cada usuário será apresentado com nome, status, links ou outros campos.
+
+### 22.5. Diferença entre macros convencionais e `call`
+
+|Característica|Macro convencional|Macro com `call`|
+|---|---|---|
+|Entrada principal|Argumentos explícitos|Argumentos e bloco de conteúdo|
+|Conteúdo personalizado|Normalmente montado pela própria macro|Fornecido pelo chamador|
+|Reutilização|Reaproveita estrutura e lógica|Reaproveita estrutura, permitindo conteúdo variável|
+|Uso típico|Botões, campos e elementos padronizados|Painéis, diálogos, listas e contêineres personalizados|
+
+Não é necessário usar `call` para toda macro. Se o componente precisa receber apenas valores e gerar uma estrutura previsível, uma macro convencional costuma ser mais simples.
+
+Use `call` quando o componente precisa controlar a estrutura externa, mas permitir que quem o utiliza determine parte do conteúdo interno.
+
+### 22.6. O bloco `filter`
+
+O bloco `filter` aplica um filtro Jinja ao conteúdo renderizado dentro dele.
+
+Exemplo:
+
+```
+{% filter upper %}
+    texto convertido para maiúsculas
+{% endfilter %}
+```
+
+O resultado será:
+
+```
+TEXTO CONVERTIDO PARA MAIÚSCULAS
+```
+
+Diferentemente de uma expressão como:
+
+```
+{{ nome | upper }}
+```
+
+que aplica o filtro a uma expressão específica, o bloco `filter` aplica o filtro ao conteúdo inteiro do bloco.
+
+É possível utilizar filtros encadeados:
+
+```
+{% filter trim | upper %}
+    mensagem de exemplo
+{% endfilter %}
+```
+
+Nesse caso, o conteúdo renderizado passa primeiro por `trim`, que remove espaços em branco das extremidades, e depois por `upper`, que converte os caracteres para maiúsculas.
+
+O bloco pode conter texto e expressões Jinja:
+
+```
+{% filter upper %}
+    Usuário: {{ usuario.nome }}
+    Status: {{ usuario.status }}
+{% endfilter %}
+```
+
+O filtro será aplicado ao resultado renderizado dessas expressões.
+
+### 22.7. Quando utilizar `filter` em vez de uma expressão
+
+Uma expressão simples costuma ser suficiente quando o filtro deve atuar sobre uma variável:
+
+```
+<p>{{ descricao | upper }}</p>
+```
+
+O bloco `filter` é útil quando existe um trecho maior que precisa passar pelo mesmo processamento:
+
+```
+{% filter upper %}
+    <p>Nome: {{ usuario.nome }}</p>
+    <p>Status: {{ usuario.status }}</p>
+{% endfilter %}
+```
+
+Entretanto, é necessário ter cuidado ao aplicar filtros de texto a conteúdo HTML. Um filtro como `upper` modifica também o texto presente nas tags e nos atributos, podendo produzir resultados indesejados. O bloco `filter` não deve ser tratado como um mecanismo de sanitização de HTML.
+
+### 22.8. Escapamento e segurança ao usar `call`
+
+O conteúdo fornecido a uma macro por meio de `call` continua sujeito às regras de renderização e escapamento do ambiente Jinja.
+
+Em templates HTML renderizados pelo Flask, o escapamento automático normalmente protege valores inseridos por expressões como `{{ usuario.nome }}`.
+
+Por exemplo:
+
+```
+{% macro painel(titulo) %}
+    <section>
+        <h2>{{ titulo }}</h2>
+        <div>{{ caller() }}</div>
+    </section>
+{% endmacro %}
+
+{% call painel(titulo) %}
+    <p>{{ descricao }}</p>
+{% endcall %}
+```
+
+O título e a descrição são renderizados de acordo com as regras de escapamento aplicáveis ao ambiente e aos valores utilizados.
+
+Não utilize `|safe` indiscriminadamente para fazer o conteúdo aparecer como HTML. Esse filtro desativa o escapamento para o valor marcado como seguro e pode permitir injeção de HTML ou JavaScript quando o conteúdo contém dados não confiáveis.
+
+Também não confunda a capacidade de passar um bloco HTML para uma macro com uma garantia de que todo conteúdo produzido será seguro. A segurança depende da origem dos dados, do contexto em que são inseridos e das regras de escapamento aplicadas.
+
+### 22.9. Erros comuns
+
+**Chamar** `**caller()**` **sem utilizar** `**call**`
+
+Se a macro depende de `caller()`, mas é chamada sem um bloco de conteúdo, pode ocorrer um erro porque não existe um bloco chamador disponível.
+
+Quando o conteúdo for opcional, verifique `caller is defined` antes de executá-lo.
+
+**Declarar argumentos incompatíveis**
+
+Se o bloco de chamada fornece argumentos, a macro precisa invocar `caller()` com a quantidade e a ordem esperadas.
+
+Por exemplo, um bloco declarado com `call(usuario)` espera receber um argumento correspondente quando a macro executar `caller(usuario)`.
+
+**Confundir o escopo da macro com o do bloco chamador**
+
+O bloco fornecido em `call` pode utilizar variáveis disponíveis no contexto em que foi definido. Já os argumentos explicitamente enviados por `caller(...)` são a forma adequada de transmitir valores calculados pela macro para esse bloco.
+
+**Usar** `**filter**` **como sanitizador**
+
+Filtros como `upper`, `trim` e `replace` transformam conteúdo, mas não garantem que HTML seja seguro. A proteção contra conteúdo malicioso exige escapamento adequado e validação compatível com o contexto de saída.
+
+### 22.10. Referência rápida
+
+|Sintaxe|Finalidade|
+|---|---|
+|`{% call macro(...) %}...{% endcall %}`|Chama uma macro fornecendo um bloco de conteúdo|
+|`{{ caller() }}`|Renderiza o bloco fornecido pelo chamador|
+|`{{ caller(valor) }}`|Renderiza o bloco passando um argumento|
+|`{% call(item) macro(...) %}`|Declara a variável que recebe o argumento enviado ao bloco|
+|`{% if caller is defined %}`|Verifica se a macro recebeu um bloco chamador|
+|`{% filter upper %}...{% endfilter %}`|Aplica um filtro ao conteúdo renderizado do bloco|
+|`{% filter trim \| upper %}...{% endfilter %}`|Encadeia filtros sobre o conteúdo do bloco|
+
+---

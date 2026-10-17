@@ -7178,3 +7178,324 @@ Um teste isolado pode confirmar que uma macro funciona, mas não garante que uma
 Combinar testes unitários e de integração oferece uma cobertura mais útil do comportamento da aplicação.
 
 ---
+## 30. Renderização de templates fora de uma requisição Flask
+
+O Jinja pode ser utilizado independentemente de uma requisição HTTP. Embora o Flask integre o Jinja ao sistema de templates de aplicações web, o mecanismo de renderização também pode ser utilizado para gerar e-mails, arquivos HTML, relatórios e textos dinâmicos.
+
+A diferença fundamental está no contexto disponível durante a renderização.
+
+### 30.1. Renderização com `render_template()`
+
+Em uma aplicação Flask, a função `render_template()` carrega um arquivo de template e renderiza seu conteúdo com os dados fornecidos.
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+@app.route("/relatorio")
+def relatorio():
+    return render_template(
+        "relatorio.html",
+        titulo="Relatório mensal",
+        total=1500,
+    )
+```
+
+Template `templates/relatorio.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ titulo }}</title>
+</head>
+<body>
+    <h1>{{ titulo }}</h1>
+    <p>Total: {{ total }}</p>
+</body>
+</html>
+```
+
+O Flask procura o arquivo na pasta de templates configurada e retorna o resultado renderizado pela rota.
+
+Essa função normalmente é utilizada dentro do contexto de uma aplicação Flask. Fora de uma requisição, pode ser necessário criar explicitamente um contexto apropriado.
+
+### 30.2. Renderizando um template dentro do contexto da aplicação
+
+O contexto da aplicação disponibiliza informações relacionadas à própria aplicação, mas não cria automaticamente uma requisição HTTP.
+
+```
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+
+with app.app_context():
+    html = render_template(
+        "relatorio.html",
+        titulo="Relatório mensal",
+        total=1500,
+    )
+
+    print(html)
+```
+
+O resultado é uma string contendo o HTML renderizado.
+
+Esse padrão pode ser útil para tarefas executadas em segundo plano, como gerar um relatório ou preparar conteúdo para um sistema de envio de e-mails.
+
+Entretanto, se o template depender de objetos vinculados à requisição, como `request` ou `session`, apenas o contexto da aplicação não será suficiente.
+
+Além disso, o código acima pressupõe que o arquivo `templates/relatorio.html` exista e que a configuração da aplicação esteja correta.
+
+### 30.3. Renderização direta com `app.jinja_env`
+
+Quando não é necessário utilizar o fluxo de renderização do Flask, é possível acessar diretamente o ambiente Jinja.
+
+```
+template = app.jinja_env.get_template("relatorio.html")
+
+html = template.render(
+    titulo="Relatório mensal",
+    total=1500,
+)
+
+print(html)
+```
+
+O método `get_template()` carrega um template pelo nome, enquanto `render()` fornece os valores que serão utilizados durante a renderização.
+
+Essa abordagem é útil quando se deseja trabalhar diretamente com o mecanismo de templates.
+
+Existe, porém, uma diferença importante: a renderização direta não executa automaticamente os context processors do Flask. Por isso, variáveis que normalmente seriam disponibilizadas pelo Flask podem não estar presentes.
+
+O ambiente Jinja também pode ser utilizado para criar templates a partir de strings:
+
+```
+template = app.jinja_env.from_string(
+    "Olá, {{ nome }}!"
+)
+
+resultado = template.render(nome="Ana")
+
+print(resultado)
+```
+
+Saída:
+
+```
+Olá, Ana!
+```
+
+`from_string()` é útil para templates pequenos e dinâmicos que não precisam ser armazenados em arquivos separados.
+
+### 30.4. Gerando e-mails com Jinja
+
+Uma aplicação pode utilizar templates para construir o conteúdo de e-mails de maneira organizada, separando a estrutura das mensagens dos dados específicos de cada destinatário.
+
+Uma estrutura possível é:
+
+```
+meu_projeto/
+├── app.py
+└── templates/
+    └── emails/
+        ├── boas_vindas.html
+        └── boas_vindas.txt
+```
+
+O template HTML `templates/emails/boas_vindas.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<body>
+    <h1>Olá, {{ nome }}!</h1>
+
+    <p>
+        Sua conta foi criada com sucesso.
+    </p>
+
+    <p>
+        Obrigado por se cadastrar.
+    </p>
+</body>
+</html>
+```
+
+O template de texto simples `templates/emails/boas_vindas.txt`:
+
+```
+Olá, {{ nome }}!
+
+Sua conta foi criada com sucesso.
+
+Obrigado por se cadastrar.
+```
+
+Os dois arquivos representam versões diferentes da mesma mensagem. Isso permite enviar um e-mail com uma alternativa HTML e outra em texto simples.
+
+A renderização pode ser feita assim:
+
+```
+from flask import render_template
+
+with app.app_context():
+    html = render_template(
+        "emails/boas_vindas.html",
+        nome="Ana",
+    )
+
+    texto = render_template(
+        "emails/boas_vindas.txt",
+        nome="Ana",
+    )
+```
+
+Nesse exemplo, `html` e `texto` contêm os respectivos conteúdos renderizados. O código ainda não envia o e-mail: ele apenas prepara as mensagens.
+
+O envio exige uma biblioteca ou serviço de e-mail, além da configuração necessária para autenticação e entrega.
+
+### 30.5. Organizando um e-mail com conteúdo HTML e texto simples
+
+Para enviar as duas versões de uma mensagem, a biblioteca padrão `email.message` permite construir uma mensagem multipart.
+
+```
+from email.message import EmailMessage
+
+mensagem = EmailMessage()
+
+mensagem["Subject"] = "Boas-vindas"
+mensagem["From"] = "remetente@example.com"
+mensagem["To"] = "destinatario@example.com"
+
+mensagem.set_content(texto)
+mensagem.add_alternative(html, subtype="html")
+```
+
+Nesse exemplo:
+
+- `set_content()` define a versão em texto simples.
+    
+- `add_alternative()` adiciona uma versão alternativa em HTML.
+    
+- `subtype="html"` identifica o conteúdo HTML.
+    
+
+Os endereços utilizados são exemplos ilustrativos. Para entregar a mensagem, ainda é necessário configurar um mecanismo de envio, como um servidor SMTP.
+
+A separação entre renderização e envio é útil porque permite testar os templates sem depender de uma conexão com um serviço externo.
+
+### 30.6. Gerando arquivos de texto
+
+O Jinja não está limitado ao HTML. Um template pode gerar qualquer conteúdo textual que faça sentido para a aplicação.
+
+Por exemplo, um arquivo `templates/relatorio.txt`:
+
+```
+Relatório: {{ titulo }}
+
+Total de registros: {{ total }}
+
+{% if erros %}
+Erros encontrados:
+{% for erro in erros %}
+- {{ erro }}
+{% endfor %}
+{% else %}
+Nenhum erro encontrado.
+{% endif %}
+```
+
+A renderização:
+
+```
+with app.app_context():
+    texto = render_template(
+        "relatorio.txt",
+        titulo="Importação de dados",
+        total=250,
+        erros=[
+            "Registro 12 inválido",
+            "Registro 48 incompleto",
+        ],
+    )
+
+print(texto)
+```
+
+O resultado será um relatório textual preenchido com os valores fornecidos.
+
+Essa técnica também pode ser utilizada para gerar mensagens, arquivos de configuração e outros conteúdos baseados em texto. Entretanto, a sintaxe do Jinja não valida automaticamente se o conteúdo final respeita o formato específico esperado por outro programa.
+
+### 30.7. Diferença entre Jinja e arquivos estáticos
+
+Um arquivo estático contém conteúdo previamente definido. Já um template Jinja permite construir o conteúdo durante a execução.
+
+Por exemplo, um arquivo HTML estático pode conter:
+
+```
+<h1>Olá, visitante!</h1>
+```
+
+Um template dinâmico pode conter:
+
+```
+<h1>Olá, {{ nome }}!</h1>
+```
+
+No segundo caso, o valor de `nome` é fornecido durante a renderização.
+
+Isso não significa que todo arquivo deva ser transformado em template. Se o conteúdo não depende de dados dinâmicos, um arquivo estático pode ser mais simples e apropriado.
+
+### 30.8. Escapamento e segurança em conteúdos gerados
+
+O escapamento automático do Jinja depende do tipo de template e da configuração do ambiente.
+
+Em templates HTML carregados pelo Flask, o escapamento automático normalmente é habilitado. Isso ajuda a impedir que valores inseridos em expressões como `{{ nome }}` sejam interpretados diretamente como marcação HTML.
+
+Entretanto, o comportamento não deve ser generalizado para todos os formatos.
+
+Por exemplo, em um template de texto simples, converter caracteres em entidades HTML pode produzir conteúdo incorreto. Além disso, escapamento HTML não é um mecanismo universal de segurança para arquivos de configuração, JavaScript, CSS ou outros formatos.
+
+Considere:
+
+```
+<p>{{ mensagem }}</p>
+```
+
+Se `mensagem` contiver caracteres especiais, o Jinja poderá escapá-los de acordo com as regras aplicáveis ao template HTML.
+
+Por outro lado:
+
+```
+<p>{{ mensagem | safe }}</p>
+```
+
+O filtro `safe` marca o valor como seguro para não ser escapado novamente pelo mecanismo HTML. Ele deve ser utilizado apenas quando o conteúdo for confiável ou tiver sido sanitizado de forma adequada.
+
+Nunca considere um conteúdo seguro apenas porque ele foi renderizado por um template.
+
+### 30.9. Cuidados ao gerar arquivos
+
+Ao utilizar Jinja para produzir arquivos, considere os seguintes aspectos:
+
+- **Codificação:** defina a codificação esperada pelo sistema de destino, geralmente UTF-8 para arquivos textuais modernos.
+    
+- **Quebras de linha:** verifique se o formato exige uma convenção específica.
+    
+- **Escapamento:** utilize as regras adequadas ao formato gerado.
+    
+- **Dados externos:** valide os valores recebidos antes de utilizá-los em conteúdos que serão processados por outros programas.
+    
+- **Contexto:** não presuma que `request`, `session` e outros objetos do Flask estarão disponíveis em qualquer renderização.
+    
+- **Responsabilidades:** mantenha a geração do conteúdo separada do envio de e-mails, gravação de arquivos ou outras operações externas.
+    
+
+A renderização é uma etapa de transformação de um template em conteúdo final. A maneira como esse conteúdo será armazenado, transmitido ou interpretado por outro sistema depende da aplicação que o utiliza.
+
+---

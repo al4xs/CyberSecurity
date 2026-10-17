@@ -8536,3 +8536,339 @@ Ao trabalhar com dados dinâmicos no Jinja:
 O escapamento é uma camada importante de proteção, mas a segurança depende de manter cada valor no contexto correto e de não transformar dados não confiáveis em código executável.
 
 ---
+## 35. Depuração avançada e diagnóstico de problemas em templates Jinja
+
+Quando um template Jinja apresenta um erro, o problema pode estar na sintaxe do template, nos dados fornecidos pelo Python, na configuração do ambiente ou na integração com o Flask.
+
+A depuração consiste em identificar em qual etapa o erro ocorre e utilizar as informações disponíveis para encontrar sua causa.
+
+### 35.1. Identificando as etapas de falha
+
+O processamento de um template pode ser dividido em etapas:
+
+```
+Código Python
+     |
+     v
+Localização do template
+     |
+     v
+Análise da sintaxe
+     |
+     v
+Compilação
+     |
+     v
+Renderização com os dados
+     |
+     v
+Resposta final
+```
+
+Cada etapa pode produzir erros diferentes.
+
+|Etapa|Exemplos de problemas|
+|---|---|
+|Localização|`TemplateNotFound`|
+|Análise da sintaxe|`TemplateSyntaxError`|
+|Compilação|Erros relacionados à geração do código do template|
+|Renderização|`UndefinedError`, erros em filtros ou funções|
+|Integração com Flask|Contexto ausente, exceções na rota ou erros HTTP|
+
+Identificar a etapa em que ocorreu a falha ajuda a evitar alterações desnecessárias em partes que estão funcionando corretamente.
+
+### 35.2. Erros de sintaxe com `TemplateSyntaxError`
+
+Um erro de sintaxe ocorre quando o Jinja não consegue interpretar a estrutura do template.
+
+Por exemplo:
+
+```
+{% if usuario %}
+    <p>Usuário encontrado</p>
+```
+
+O bloco `if` não foi encerrado com `endif`.
+
+A forma correta é:
+
+```
+{% if usuario %}
+    <p>Usuário encontrado</p>
+{% endif %}
+```
+
+O Jinja normalmente lança `TemplateSyntaxError` quando encontra construções sintaticamente inválidas durante a análise do template.
+
+A exceção pode incluir informações como a linha em que o problema foi detectado e o nome do template, quando disponível.
+
+### 35.3. Inspecionando informações da exceção
+
+Durante a depuração, é útil examinar o tipo da exceção, sua mensagem e o traceback.
+
+```
+from jinja2 import TemplateSyntaxError
+
+try:
+    app.jinja_env.from_string(
+        "{% if usuario %}Olá"
+    )
+
+except TemplateSyntaxError as erro:
+    print("Mensagem:", erro.message)
+    print("Linha:", erro.lineno)
+    print("Nome:", erro.name)
+```
+
+Nesse exemplo, o Jinja tenta analisar um template incompleto.
+
+Os atributos `message`, `lineno` e `name` fornecem informações sobre o erro. O nome pode ser `None` quando o template não possui um nome associado, como acontece com uma string criada por `from_string()`.
+
+O objetivo é utilizar as informações para localizar a construção inválida, não ocultar o problema.
+
+### 35.4. Erros de variáveis indefinidas
+
+Uma variável indefinida pode produzir resultados inesperados dependendo da configuração do ambiente.
+
+Considere:
+
+```
+<p>{{ usuario.nome }}</p>
+```
+
+Se `usuario` não tiver sido fornecido ao template, a renderização poderá resultar em `UndefinedError`, especialmente quando o ambiente utiliza `StrictUndefined`.
+
+Uma configuração útil durante o desenvolvimento é:
+
+```
+from jinja2 import StrictUndefined
+
+app.jinja_env.undefined = StrictUndefined
+```
+
+Essa configuração faz com que o uso de valores indefinidos gere exceções em situações nas quais o Jinja normalmente poderia tolerá-los.
+
+Ela ajuda a identificar erros de digitação, como:
+
+```
+{{ usario.nome }}
+```
+
+quando o nome correto é `usuario`.
+
+Entretanto, variáveis opcionais precisam ser tratadas explicitamente. Se determinado valor puder estar ausente legitimamente, utilize condições ou valores padrão adequados.
+
+### 35.5. Investigando `TemplateNotFound`
+
+A exceção `TemplateNotFound` indica que o Jinja não conseguiu localizar um template solicitado.
+
+Exemplo:
+
+```
+from flask import render_template
+
+
+@app.route("/perfil")
+def perfil():
+    return render_template("usuarios/perfil.html")
+```
+
+Para que o carregamento funcione na estrutura convencional do Flask, o arquivo deve estar em:
+
+```
+templates/
+└── usuarios/
+    └── perfil.html
+```
+
+Se o arquivo estiver em outra pasta, tiver um nome diferente ou não estiver acessível por nenhum loader configurado, o carregamento poderá falhar.
+
+Ao investigar esse erro, verifique:
+
+- O nome passado para `render_template()`.
+    
+- A localização real do arquivo.
+    
+- A configuração de `template_folder`.
+    
+- Os loaders registrados no ambiente.
+    
+- A organização de templates associada aos blueprints.
+    
+
+Evite resolver o problema simplesmente duplicando arquivos em vários diretórios. Primeiro identifique qual caminho o ambiente está tentando carregar.
+
+### 35.6. Usando o modo de depuração do Flask
+
+Durante o desenvolvimento, o modo de depuração do Flask ajuda a identificar erros ocorridos durante o processamento de uma requisição.
+
+Uma configuração de desenvolvimento pode utilizar:
+
+```
+app.run(debug=True)
+```
+
+O modo de depuração fornece informações detalhadas sobre exceções e pode permitir o recarregamento automático do código.
+
+**Não habilite o modo de depuração em produção.** A interface de depuração pode expor informações sensíveis e, em determinadas configurações, permitir a execução de código. Ela deve ser utilizada apenas em ambientes controlados.
+
+Para aplicações modernas, prefira configurar o ambiente de execução de desenvolvimento de acordo com as ferramentas e práticas recomendadas pela versão do Flask utilizada.
+
+### 35.7. Registrando erros com `logging`
+
+Em vez de utilizar apenas `print()`, aplicações maiores podem registrar problemas por meio do sistema de logging do Python.
+
+```
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def processar_template():
+    try:
+        template = app.jinja_env.get_template(
+            "usuarios/perfil.html"
+        )
+
+        return template.render(nome="Ana")
+
+    except Exception:
+        logger.exception(
+            "Falha ao renderizar o template de perfil"
+        )
+        raise
+```
+
+O método `logger.exception()` registra uma mensagem acompanhada das informações da exceção atual, incluindo o traceback.
+
+O `raise` relança a exceção para que ela continue sendo tratada pelo mecanismo apropriado da aplicação.
+
+Esse padrão é útil quando se deseja registrar um erro sem transformar silenciosamente uma falha em um resultado aparentemente válido.
+
+Evite capturar todas as exceções e retornar uma página vazia, pois isso dificulta o diagnóstico e pode esconder defeitos importantes.
+
+### 35.8. Inspecionando os dados enviados ao template
+
+Às vezes, o template está correto, mas os dados fornecidos pelo Python não são os esperados.
+
+Considere:
+
+```
+return render_template(
+    "usuarios/lista.html",
+    usuarios=usuarios,
+)
+```
+
+Se `usuarios` estiver vazio, o laço do template não produzirá os elementos esperados.
+
+Para investigar, examine os dados antes da renderização:
+
+```
+print("Quantidade:", len(usuarios))
+print("Dados:", usuarios)
+```
+
+Em aplicações reais, utilize logging apropriado e evite registrar informações pessoais, credenciais, tokens ou outros dados sensíveis.
+
+Também é importante conferir os nomes das variáveis passadas ao template. Um valor enviado como `usuarios` não estará disponível automaticamente com outro nome, como `lista_usuarios`.
+
+### 35.9. Diferenciando erros do Jinja e erros do Python
+
+Nem toda exceção que ocorre durante a renderização é criada pelo Jinja.
+
+Por exemplo, um filtro personalizado pode executar uma operação Python que falha:
+
+```
+def dividir(valor):
+    return 100 / valor
+```
+
+Se o template executar:
+
+```
+{{ 0 | dividir }}
+```
+
+A função poderá lançar `ZeroDivisionError`.
+
+O erro se manifesta durante a renderização, mas sua causa está na implementação do filtro.
+
+Por isso, ao analisar uma exceção, verifique o traceback para identificar se a falha ocorreu no parser, no código gerado pelo Jinja, em um filtro personalizado ou em outra função chamada durante a renderização.
+
+### 35.10. Depurando herança e componentes
+
+Problemas de herança podem surgir quando um template não estende o arquivo esperado, utiliza um nome de bloco incorreto ou sobrescreve um bloco sem preservar o conteúdo necessário.
+
+Por exemplo:
+
+```
+{% extends "base.html" %}
+
+{% block conteudo %}
+    <h1>Perfil</h1>
+{% endblock %}
+```
+
+Se `base.html` não possuir um bloco chamado `conteudo`, o bloco definido no template filho não terá o efeito esperado sobre a estrutura da página.
+
+Para investigar:
+
+1. Confirme o template base utilizado em `extends`.
+    
+2. Verifique os nomes dos blocos no template pai.
+    
+3. Confirme se os arquivos estão sendo carregados pelos caminhos corretos.
+    
+4. Inspecione o HTML final para determinar quais partes foram renderizadas.
+    
+5. Verifique se macros e templates incluídos recebem os dados esperados.
+    
+
+A renderização final é uma evidência importante: ela mostra o conteúdo produzido pelo mecanismo, em vez de apenas a estrutura individual dos arquivos de origem.
+
+### 35.11. Testes como ferramenta de diagnóstico
+
+Testes automatizados permitem reproduzir erros de templates de forma consistente.
+
+Por exemplo:
+
+```
+def test_pagina_perfil(client):
+    resposta = client.get("/perfil")
+
+    assert resposta.status_code == 200
+
+    html = resposta.get_data(as_text=True)
+
+    assert "<h1>Perfil</h1>" in html
+```
+
+Esse teste verifica o código HTTP e a presença de um elemento esperado na resposta.
+
+Quando ele falha, a mensagem do `pytest` ajuda a identificar qual condição não foi satisfeita.
+
+Os testes também podem verificar cenários com valores ausentes, listas vazias, entradas especiais e permissões diferentes. Isso permite descobrir problemas antes que eles apareçam em uso real.
+
+### 35.12. Procedimento sistemático de diagnóstico
+
+Quando um template apresenta um comportamento incorreto, utilize uma sequência de investigação:
+
+1. **Reproduza o problema:** determine qual rota ou template provoca a falha.
+    
+2. **Leia a exceção:** identifique o tipo, a mensagem e o traceback.
+    
+3. **Localize a etapa:** verifique se o problema está no carregamento, na análise, na renderização ou na integração com o Flask.
+    
+4. **Inspecione os dados:** confirme os nomes, os tipos e os valores fornecidos ao template.
+    
+5. **Verifique o contexto:** determine se o template depende de variáveis do Flask, como `request` ou `session`.
+    
+6. **Examine a saída:** confira o HTML ou texto efetivamente produzido.
+    
+7. **Crie um teste de regressão:** registre o comportamento esperado para impedir que o mesmo defeito volte a ocorrer.
+    
+
+Esse processo reduz a necessidade de alterar várias partes do projeto sem uma hipótese clara sobre a origem do erro.
+
+---

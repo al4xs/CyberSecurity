@@ -2957,3 +2957,378 @@ A configuração deve ser testada com os templates da aplicação, pois ela pode
 A regra prática é manter explícita a origem dos dados. Quanto mais uma página depende de variáveis que surgem implicitamente, mais difícil fica entender e testar seu comportamento.
 
 ---
+## 18. Controle de espaços em branco, comentários e blocos avançados de herança
+
+O Jinja não apenas substitui variáveis e executa estruturas de controle: ele também determina como o texto resultante será organizado.
+
+Isso é importante porque espaços, quebras de linha e indentação existentes no template podem aparecer na saída renderizada. Em HTML, boa parte desses espaços é visualmente irrelevante, mas pode afetar a legibilidade do código-fonte gerado, respostas textuais, arquivos de configuração e outros formatos.
+
+Nesta seção, veremos como controlar a saída e utilizar recursos avançados da herança de templates.
+
+### 18.1. Como o Jinja trata espaços em branco
+
+Considere este template:
+
+```
+<ul>
+    {% for nome in nomes %}
+        <li>{{ nome }}</li>
+    {% endfor %}
+</ul>
+```
+
+O Jinja interpreta o laço e produz o HTML correspondente. Dependendo da configuração do ambiente e da posição dos delimitadores, algumas quebras de linha e espaços presentes no template também podem permanecer na saída.
+
+Em páginas HTML, a diferença visual costuma ser pequena. Porém, quando o template gera texto puro, JSON formatado, e-mails ou outros conteúdos, o controle de espaços pode ser mais importante.
+
+O Jinja disponibiliza modificadores para remover espaços em branco próximos aos delimitadores.
+
+### 18.2. Removendo espaços com `-`
+
+O hífen (`-`) colocado junto ao delimitador de uma instrução Jinja remove espaços em branco adjacentes.
+
+Considere:
+
+```
+{% for nome in nomes %}
+    {{ nome }}
+{% endfor %}
+```
+
+É possível modificar os delimitadores:
+
+```
+{%- for nome in nomes -%}
+    {{ nome }}
+{%- endfor -%}
+```
+
+O modificador pode ser utilizado nos delimitadores de instruções, expressões e comentários.
+
+|Forma|Efeito|
+|---|---|
+|`{%-`|Remove espaços em branco imediatamente anteriores ao delimitador de abertura|
+|`-%}`|Remove espaços em branco imediatamente posteriores ao delimitador de fechamento|
+|`{{-`|Remove espaços anteriores à expressão|
+|`-}}`|Remove espaços posteriores à expressão|
+|`{#-`|Remove espaços anteriores ao comentário|
+|`-#}`|Remove espaços posteriores ao comentário|
+
+O comportamento é local ao delimitador: cada hífen controla o lado correspondente da região de template.
+
+**Atenção:** usar os modificadores indiscriminadamente pode juntar partes do conteúdo que deveriam ficar separadas.
+
+Por exemplo:
+
+```
+{% for nome in nomes -%}
+{{ nome }}
+{%- endfor %}
+```
+
+A remoção dos espaços ao redor das instruções pode produzir uma saída diferente daquela obtida com o template original.
+
+Não adicione hífens automaticamente a todos os delimitadores. Primeiro identifique quais espaços realmente precisam ser removidos.
+
+### 18.3. Removendo espaços com `+`
+
+O sinal de mais (`+`) permite desativar a remoção de espaços que seria aplicada por configurações de controle de espaços do ambiente.
+
+Por exemplo:
+
+```
+{%+ if mostrar %}
+    Conteúdo
+{% endif %}
+```
+
+O `+` pode aparecer junto ao delimitador de abertura ou de fechamento, conforme o lado cujo comportamento se deseja preservar.
+
+Esse recurso é especialmente relevante quando o ambiente foi configurado para remover espaços em branco automaticamente.
+
+Em um ambiente sem essa configuração, o sinal de mais geralmente não produz uma diferença prática na renderização.
+
+### 18.4. Configurações globais de espaços em branco
+
+O Jinja possui configurações que afetam o tratamento de espaços em branco durante a renderização.
+
+No Flask, elas podem ser configuradas pelo ambiente Jinja:
+
+```
+app.jinja_env.trim_blocks = True
+app.jinja_env.lstrip_blocks = True
+```
+
+As duas opções têm funções distintas.
+
+|Configuração|Comportamento|
+|---|---|
+|`trim_blocks`|Remove a primeira quebra de linha após um bloco de instrução, quando aplicável|
+|`lstrip_blocks`|Remove espaços e tabulações antes do início de um bloco de instrução na linha|
+
+Essas opções ajudam a reduzir quebras de linha e espaços desnecessários no HTML gerado.
+
+Exemplo:
+
+```
+<ul>
+{% for nome in nomes %}
+    <li>{{ nome }}</li>
+{% endfor %}
+</ul>
+```
+
+Com as opções habilitadas, a saída tende a conter menos espaços associados às linhas que possuem instruções Jinja.
+
+Isso não significa que o HTML será automaticamente minificado. O Jinja continua preservando o conteúdo textual que não for removido pelas regras de tratamento de espaços.
+
+**Boa prática:** escolha uma política consistente para o projeto. Misturar remoções globais com muitos modificadores locais pode tornar a saída difícil de prever.
+
+### 18.5. Comentários do Jinja
+
+Os comentários do Jinja utilizam a sintaxe:
+
+```
+{# Este comentário não aparece na saída renderizada. #}
+```
+
+Diferentemente dos comentários HTML, eles são removidos durante o processamento do template.
+
+Compare:
+
+```
+<!-- Comentário HTML -->
+<p>{{ nome }}</p>
+```
+
+Com:
+
+```
+{# Comentário Jinja #}
+<p>{{ nome }}</p>
+```
+
+O comentário HTML permanece no código-fonte HTML gerado. O comentário Jinja não.
+
+|Tipo|Sintaxe|Aparece no HTML final?|
+|---|---|---|
+|Comentário Jinja|`{# ... #}`|Não|
+|Comentário HTML|`<!-- ... -->`|Sim|
+
+Use comentários Jinja para registrar observações internas sobre o template sem enviá-las ao navegador.
+
+Lembre-se de que nenhum dos dois tipos de comentário deve ser usado para armazenar senhas, tokens ou outras informações confidenciais.
+
+### 18.6. O bloco `raw`
+
+Em determinadas situações, é necessário exibir a sintaxe do próprio Jinja sem que ela seja interpretada.
+
+Para isso, existe o bloco `raw`.
+
+```
+{% raw %}
+    {{ nome }}
+    {% if usuario %}
+        Conteúdo
+    {% endif %}
+{% endraw %}
+```
+
+Dentro desse bloco, as expressões e instruções Jinja mostradas são tratadas como texto, em vez de serem executadas.
+
+A saída inclui os delimitadores exibidos no exemplo.
+
+Esse recurso é útil para:
+
+- Documentação de sintaxe.
+    
+- Tutoriais sobre Jinja.
+    
+- Exemplos de código armazenados em templates.
+    
+- Conteúdo que precisa mostrar literalmente os delimitadores do mecanismo de templates.
+    
+
+O bloco `raw` não deve ser confundido com uma forma de tornar conteúdo confiável ou seguro. Ele controla a interpretação da sintaxe Jinja durante a renderização, não substitui o escapamento de saída HTML nem valida dados externos.
+
+### 18.7. O bloco `super()` na herança
+
+Na herança de templates, um template filho pode substituir o conteúdo de um bloco definido pelo template pai.
+
+Entretanto, às vezes o filho precisa acrescentar conteúdo sem descartar tudo o que o pai já fornece. Para isso, existe `super()`.
+
+Template pai, `templates/base.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+
+    {% block extra_head %}
+    <title>Painel</title>
+    {% endblock %}
+</head>
+<body>
+    {% block conteudo %}{% endblock %}
+</body>
+</html>
+```
+
+Template filho, `templates/painel.html`:
+
+```
+{% extends "base.html" %}
+
+{% block extra_head %}
+    {{ super() }}
+    <meta name="description" content="Painel de controle">
+{% endblock %}
+
+{% block conteudo %}
+    <h1>Painel</h1>
+{% endblock %}
+```
+
+A chamada `super()` insere o conteúdo correspondente ao bloco do template pai no ponto em que foi chamada.
+
+Sem ela, o bloco `extra_head` do filho substituiria o conteúdo original do pai, incluindo o elemento `<title>`.
+
+Com `super()`, o filho preserva esse conteúdo e acrescenta a descrição.
+
+O recurso é útil quando vários templates precisam estender uma estrutura comum sem duplicar o conteúdo já definido.
+
+### 18.8. Blocos aninhados
+
+Os blocos de herança podem ser organizados dentro de outros blocos, desde que a estrutura seja válida.
+
+Por exemplo, um template base pode fornecer um bloco para o conteúdo principal e outro para scripts específicos:
+
+```
+{% block conteudo %}
+    <main>
+        {% block conteudo_principal %}{% endblock %}
+    </main>
+{% endblock %}
+```
+
+Um template filho pode substituir o bloco externo e definir o interno:
+
+```
+{% extends "base.html" %}
+
+{% block conteudo %}
+    {{ super() }}
+
+    {% block conteudo_principal %}
+        <h1>Área administrativa</h1>
+    {% endblock %}
+{% endblock %}
+```
+
+Nesse exemplo, é necessário prestar atenção à relação entre os blocos e à chamada de `super()`: ela preserva o conteúdo herdado, incluindo o conteúdo do bloco interno presente no pai. Se o filho redefinir o bloco interno, essa redefinição também será utilizada conforme a estrutura de herança.
+
+Blocos aninhados permitem criar pontos de extensão mais específicos em layouts complexos, mas uma hierarquia excessiva pode dificultar a leitura. Utilize-os quando houver uma necessidade real de personalização.
+
+### 18.9. O bloco `scoped`
+
+Por padrão, blocos definidos dentro de laços não recebem automaticamente as variáveis locais do laço quando são sobrescritos por um template filho.
+
+O modificador `scoped` permite que o contexto local seja disponibilizado ao bloco.
+
+Template pai:
+
+```
+<ul>
+    {% for usuario in usuarios %}
+        <li>
+            {% block item_usuario scoped %}
+                {{ usuario.nome }}
+            {% endblock %}
+        </li>
+    {% endfor %}
+</ul>
+```
+
+O template filho pode substituir o bloco:
+
+```
+{% extends "usuarios.html" %}
+
+{% block item_usuario %}
+    <strong>{{ usuario.nome }}</strong>
+{% endblock %}
+```
+
+Como o bloco pai foi declarado com `scoped`, a variável local `usuario` fica disponível dentro da implementação sobrescrita.
+
+Esse recurso é útil quando um bloco precisa ser personalizado por herança, mas depende de variáveis criadas por uma estrutura de controle externa.
+
+Não confunda `scoped` com a criação de uma variável global: ele trata do contexto disponibilizado ao bloco.
+
+### 18.10. O bloco `required`
+
+O modificador `required` indica que um bloco deve ser implementado por um template descendente, em vez de utilizar uma implementação vazia ou padrão.
+
+Exemplo:
+
+```
+{% block conteudo required %}{% endblock %}
+```
+
+Um template que estenda esse template deverá fornecer uma implementação para o bloco obrigatório. Se o requisito não for atendido, o Jinja produzirá um erro durante a renderização.
+
+O bloco obrigatório precisa conter apenas espaços em branco e comentários em sua implementação original, conforme as regras do Jinja.
+
+Esse recurso é útil para layouts abstratos que definem uma estrutura comum, mas exigem que cada template concreto forneça determinada parte do conteúdo.
+
+Por exemplo, um template base pode exigir que cada página declare seu conteúdo principal, evitando páginas que estendam a estrutura sem implementar a área esperada.
+
+### 18.11. O objeto especial `self`
+
+Dentro de um template, `self` permite acessar os blocos definidos pelo próprio template, incluindo as implementações resultantes da herança.
+
+Por exemplo:
+
+```
+{% block titulo %}
+    Painel administrativo
+{% endblock %}
+
+<title>{{ self.titulo() }}</title>
+```
+
+A chamada `self.titulo()` renderiza o conteúdo do bloco `titulo`.
+
+Esse mecanismo pode ser útil quando o conteúdo de um bloco precisa ser reutilizado em outra parte do mesmo template.
+
+Entretanto, não confunda `self` com `self` de uma classe Python. Aqui, ele representa o objeto de blocos do template Jinja.
+
+Para layouts simples, pode ser mais fácil definir uma variável e utilizá-la em mais de um local. Reserve `self` para casos em que seja importante reutilizar o resultado de um bloco, respeitando a estrutura de herança.
+
+### 18.12. Erros comuns no controle de espaços e na herança
+
+|Problema|Causa provável|Como investigar|
+|---|---|---|
+|HTML gerado sem espaços esperados|Uso excessivo de `-` ou configuração global de espaços|Examine os delimitadores e as opções `trim_blocks` e `lstrip_blocks`|
+|Comentários aparecem no navegador|Foi usado comentário HTML em vez de comentário Jinja|Utilize `{# ... #}` para comentários internos|
+|O bloco do pai desapareceu|O filho sobrescreveu o bloco sem chamar `super()`|Adicione `{{ super() }}` quando precisar preservar o conteúdo herdado|
+|Variável do laço não aparece no bloco sobrescrito|O bloco não recebeu o escopo local esperado|Verifique se a declaração do bloco precisa de `scoped`|
+|Template filho falha por falta de conteúdo|Existe um bloco `required` sem implementação|Implemente o bloco no template descendente|
+|Sintaxe Jinja aparece como texto|O conteúdo está dentro de um bloco `raw`|Verifique onde o bloco começa e termina|
+|Saída HTML tem muitas quebras de linha|Espaços do template foram preservados|Avalie as configurações globais e os modificadores locais|
+
+### 18.13. Escolhendo o recurso correto
+
+| Necessidade                                                    | Recurso                |
+| -------------------------------------------------------------- | ---------------------- |
+| Remover espaços em branco em um ponto específico               | Modificadores `-`      |
+| Preservar espaços diante de uma configuração global de remoção | Modificadores `+`      |
+| Ocultar comentários da saída renderizada                       | `{# ... #}`            |
+| Exibir literalmente a sintaxe Jinja                            | `raw`                  |
+| Preservar o conteúdo original de um bloco pai                  | `super()`              |
+| Disponibilizar variáveis locais a um bloco sobrescrito         | `scoped`               |
+| Exigir uma implementação em templates descendentes             | `required`             |
+| Reutilizar o conteúdo renderizado de um bloco                  | `self.nome_do_bloco()` |
+
+---

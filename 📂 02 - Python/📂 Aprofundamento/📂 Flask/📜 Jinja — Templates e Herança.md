@@ -7698,3 +7698,213 @@ Algumas precauções importantes:
 Extensões ampliam a capacidade do Jinja, mas também aumentam a complexidade do ambiente. Sempre que uma solução convencional resolver o problema de maneira clara, prefira-a.
 
 ---
+## 32. Desempenho, compilação e cache de templates Jinja
+
+O Jinja possui mecanismos para reduzir o custo de renderização dos templates, incluindo o cache de templates carregados e compilados. Entender esses mecanismos ajuda a diagnosticar problemas de desempenho e a configurar corretamente aplicações Flask.
+
+É importante distinguir três operações: localizar um template, compilá-lo e renderizá-lo.
+
+### 32.1. As etapas da renderização
+
+Quando uma aplicação solicita um template, o Jinja precisa obter seu conteúdo, preparar sua representação executável e produzir a saída final.
+
+O fluxo conceitual é:
+
+```
+Aplicação Flask
+      |
+      v
+Localização do template
+      |
+      v
+Carregamento do conteúdo
+      |
+      v
+Análise e compilação Jinja
+      |
+      v
+Renderização com os dados
+      |
+      v
+HTML ou texto final
+```
+
+O Jinja pode reutilizar templates que já foram carregados e compilados, evitando repetir parte do trabalho em renderizações posteriores.
+
+Entretanto, os valores dinâmicos continuam sendo processados a cada renderização. O cache do template não significa que o HTML final de uma requisição será automaticamente reutilizado em outra.
+
+### 32.2. Cache de templates
+
+O ambiente Jinja possui um cache interno de templates. Por padrão, ele mantém um número limitado de templates carregados recentemente, permitindo reutilizá-los quando forem solicitados novamente.
+
+No Flask, o ambiente é acessível por meio de `app.jinja_env`.
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+print(app.jinja_env.cache)
+```
+
+O cache armazena referências a templates carregados pelo ambiente. Ele não é um cache de páginas HTML renderizadas, nem um mecanismo de armazenamento de dados de usuários.
+
+A configuração `cache_size` do ambiente Jinja controla o tamanho desse cache.
+
+```
+app.jinja_env.cache.capacity = 400
+```
+
+Nesse exemplo, o limite é ajustado para 400 templates armazenados no cache interno.
+
+O valor adequado depende da aplicação. Aumentar o limite indiscriminadamente não garante uma melhoria perceptível e pode elevar o consumo de memória.
+
+### 32.3. Desabilitando o cache de templates
+
+Durante o desenvolvimento, pode ser útil desabilitar o cache interno para investigar comportamentos relacionados ao carregamento de templates.
+
+```
+app.jinja_env.cache = {}
+```
+
+Com o cache interno desabilitado dessa maneira, o Jinja não reutiliza as entradas do cache anterior. Isso não significa, por si só, que todo cache possível do sistema tenha sido desativado.
+
+Outra opção é configurar o tamanho do cache:
+
+```
+app.jinja_env.cache.capacity = 0
+```
+
+Um cache com capacidade zero não mantém templates nesse cache interno.
+
+Essas configurações devem ser realizadas durante a inicialização ou configuração do ambiente, e não alteradas indiscriminadamente durante requisições concorrentes.
+
+### 32.4. `auto_reload` e alterações nos arquivos
+
+O Jinja oferece a configuração `auto_reload`, que controla a verificação de alterações nos arquivos dos templates carregados.
+
+```
+app.jinja_env.auto_reload = True
+```
+
+Quando essa opção está habilitada, o Jinja pode verificar se o arquivo de origem foi modificado e recarregar o template quando necessário.
+
+Isso é útil durante o desenvolvimento, pois permite observar alterações sem reiniciar manualmente a aplicação a cada modificação.
+
+Em ambientes de produção, a estratégia pode ser diferente, dependendo do processo de implantação e do modo como os templates são distribuídos.
+
+Desabilitar `auto_reload` pode reduzir verificações de arquivos, mas também significa que alterações realizadas nos templates podem não ser percebidas automaticamente pelo ambiente já em execução.
+
+### 32.5. Cache interno e bytecode cache
+
+O cache interno de templates não é o único mecanismo disponível.
+
+O Jinja também permite utilizar um _bytecode cache_, que armazena o código compilado dos templates para reutilização em carregamentos posteriores.
+
+Uma implementação disponível é `FileSystemBytecodeCache`.
+
+```
+from jinja2 import FileSystemBytecodeCache
+
+app.jinja_env.bytecode_cache = FileSystemBytecodeCache(
+    "/tmp/jinja-bytecode-cache"
+)
+```
+
+Nesse exemplo, o Jinja utiliza um diretório para armazenar o bytecode dos templates.
+
+O diretório precisa existir ou poder ser criado conforme as condições do ambiente, e o processo da aplicação deve ter permissões adequadas para acessá-lo.
+
+O bytecode cache pode ser útil quando templates são carregados em processos que precisam reconstruir seus ambientes, pois permite reutilizar código compilado armazenado anteriormente.
+
+Ele não elimina a necessidade de renderizar o template com os valores atuais.
+
+**Diferença fundamental:**
+
+- **Cache interno:** reutiliza objetos de templates carregados pelo ambiente.
+    
+- **Bytecode cache:** reutiliza código compilado armazenado em um cache.
+    
+- **Cache de resposta HTTP:** reutiliza uma resposta final para determinadas requisições, quando existe um mecanismo específico para isso.
+    
+
+São mecanismos diferentes e não devem ser tratados como equivalentes.
+
+### 32.6. Compilação antecipada de templates
+
+Em determinados cenários, o Jinja permite compilar templates antecipadamente, antes de eles serem utilizados durante a execução normal da aplicação.
+
+O ambiente Jinja oferece o método `compile_templates()` para esse propósito.
+
+```
+app.jinja_env.compile_templates(
+    target="/tmp/jinja-compiled",
+    zip=None,
+    ignore_errors=False,
+)
+```
+
+Esse exemplo compila os templates encontrados pelo loader do ambiente para um destino especificado.
+
+A compilação antecipada pode ser útil em processos de implantação que desejam preparar os templates previamente.
+
+Entretanto, o uso desse método depende da organização dos templates, do loader utilizado e da estratégia de distribuição da aplicação. Ele não é necessário para a maioria dos projetos Flask comuns.
+
+O diretório de destino também deve ser escolhido de acordo com as permissões e a estrutura de implantação.
+
+### 32.7. Medindo o desempenho antes de otimizar
+
+Antes de alterar o cache ou a estratégia de compilação, é importante identificar onde está o custo real.
+
+Uma medição simples pode comparar várias renderizações:
+
+```
+from time import perf_counter
+
+from flask import render_template
+
+with app.app_context():
+    inicio = perf_counter()
+
+    for _ in range(1000):
+        render_template(
+            "relatorio.html",
+            titulo="Relatório",
+            total=1500,
+        )
+
+    fim = perf_counter()
+
+print(f"Tempo total: {fim - inicio:.4f} segundos")
+```
+
+Esse código mede o tempo total de mil renderizações. Ele não isola exclusivamente o custo de compilação, pois inclui o restante do trabalho realizado durante cada renderização.
+
+Para obter resultados úteis, execute medições repetidas, considere o aquecimento inicial do ambiente e teste com templates e dados representativos da aplicação real.
+
+Também é importante distinguir o tempo gasto no Jinja do tempo consumido por consultas ao banco de dados, chamadas externas, processamento Python e transmissão da resposta HTTP.
+
+### 32.8. Boas práticas de desempenho
+
+Ao otimizar uma aplicação Flask que utiliza Jinja:
+
+- Evite realizar operações complexas e desnecessárias dentro dos templates.
+    
+- Prepare os dados no Python antes de chamar `render_template()`.
+    
+- Reutilize templates e componentes quando isso melhorar a organização.
+    
+- Mantenha o cache habilitado quando ele for adequado ao ambiente.
+    
+- Avalie `auto_reload` de acordo com a estratégia de desenvolvimento e implantação.
+    
+- Considere bytecode cache quando houver uma necessidade concreta.
+    
+- Meça o desempenho antes e depois de cada alteração.
+    
+- Não confunda cache de templates com cache de respostas HTTP.
+    
+
+O objetivo é reduzir trabalho repetido sem comprometer a correção dos dados renderizados, a previsibilidade do ambiente ou a facilidade de manutenção do projeto.
+
+---

@@ -1208,3 +1208,503 @@ Antes de alterar o comportamento de segurança, verifique se a aplicação realm
 |`variavel is defined`|Verifica se uma variável está definida.|
 
 Os templates Jinja são processados no servidor para produzir a saída final. As expressões e instruções do Jinja não são, por si mesmas, executadas pelo navegador.
+
+---
+## 14. Jinja e Flask-WTF: renderizando formulários
+
+O Jinja permite construir a apresentação de um formulário HTML, mas não é responsável por validar os dados recebidos pelo servidor. Para trabalhar com formulários de maneira estruturada no Flask, uma opção comum é utilizar a extensão **Flask-WTF**, que integra o WTForms ao Flask e oferece recursos como validação, geração de campos e proteção CSRF.
+
+Essas tecnologias trabalham em conjunto, mas possuem responsabilidades diferentes:
+
+- **HTML:** define os elementos do formulário, como campos de texto, senhas e botões.
+    
+- **Jinja:** renderiza o formulário e apresenta os dados recebidos pelo template.
+    
+- **Flask-WTF:** integra os formulários ao Flask e facilita a validação e a proteção CSRF.
+    
+- **WTForms:** fornece a estrutura dos campos, os validadores e o processamento dos dados do formulário.
+    
+- **Flask:** recebe a requisição HTTP e coordena o processamento na rota.
+    
+
+Essa separação permite que o Python defina a estrutura e as regras de validação, enquanto o Jinja controla como os campos e as mensagens aparecem na página.
+
+### 14.1. Como um formulário chega ao Jinja
+
+Em um formulário convencional, o HTML define os campos que o navegador apresenta. Quando o usuário envia o formulário, o navegador envia os dados ao servidor por meio de uma requisição HTTP.
+
+Com Flask-WTF, a estrutura do formulário é normalmente definida em uma classe Python. A rota cria uma instância dessa classe e a disponibiliza ao template.
+
+Considere um formulário de login.
+
+Arquivo `forms.py`:
+
+```
+from flask_wtf import FlaskForm
+from wtforms import PasswordField, StringField, SubmitField
+from wtforms.validators import DataRequired, Length
+
+
+class LoginForm(FlaskForm):
+    usuario = StringField(
+        "Usuário",
+        validators=[
+            DataRequired(),
+            Length(min=3, max=30),
+        ],
+    )
+
+    senha = PasswordField(
+        "Senha",
+        validators=[
+            DataRequired(),
+        ],
+    )
+
+    enviar = SubmitField("Entrar")
+```
+
+Essa classe define três campos: `usuario`, `senha` e `enviar`.
+
+Alguns elementos importantes:
+
+- `FlaskForm` é a classe-base que integra o formulário ao Flask-WTF.
+    
+- `StringField` representa um campo de texto.
+    
+- `PasswordField` representa um campo de senha.
+    
+- `SubmitField` representa um controle de envio do formulário.
+    
+- `DataRequired()` exige que o campo tenha um valor considerado válido para esse validador.
+    
+- `Length(min=3, max=30)` limita o comprimento do valor aceito pelo campo.
+    
+
+Os validadores são executados durante a validação do formulário. Definir um campo não significa que seus dados já foram validados.
+
+Na rota, o formulário pode ser disponibilizado ao Jinja:
+
+```
+from flask import render_template
+from .forms import LoginForm
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    form = LoginForm()
+
+    return render_template(
+        "login.html",
+        form=form,
+    )
+```
+
+Nesse exemplo, a rota cria uma instância de `LoginForm` e envia essa instância ao template com o nome `form`.
+
+A rota aceita `GET` e `POST`, mas ainda não processa o envio. Essa parte será importante quando estudarmos `validate_on_submit()`.
+
+No arquivo `templates/login.html`, o Jinja pode acessar os campos da instância:
+
+```
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <div>
+        {{ form.usuario.label }}
+        {{ form.usuario() }}
+    </div>
+
+    <div>
+        {{ form.senha.label }}
+        {{ form.senha() }}
+    </div>
+
+    {{ form.enviar() }}
+</form>
+```
+
+A expressão `form.usuario` acessa o campo `usuario` da instância do formulário. Já `form.usuario()` chama esse campo para gerar sua representação HTML.
+
+Essa diferença é importante: acessar o campo permite utilizar suas propriedades, enquanto chamá-lo normalmente gera o elemento HTML correspondente.
+
+### 14.2. Como funciona `form.campo()`
+
+No Jinja, um campo WTForms pode ser chamado como uma função:
+
+```
+{{ form.usuario() }}
+```
+
+Essa chamada gera um elemento HTML correspondente ao campo. Para um `StringField`, o resultado será semelhante a:
+
+```
+<input id="usuario" name="usuario" type="text" value="">
+```
+
+O HTML exato pode variar conforme o tipo de campo, seus atributos, os dados recebidos e as configurações utilizadas.
+
+O WTForms gera atributos como `id` e `name` a partir da definição do campo. O atributo `name` é especialmente importante porque identifica o campo nos dados enviados pelo navegador.
+
+Também é possível passar atributos HTML na chamada:
+
+```
+{{ form.usuario(class_="campo-texto", placeholder="Seu usuário") }}
+```
+
+O resultado será semelhante a:
+
+```
+<input
+    class="campo-texto"
+    id="usuario"
+    name="usuario"
+    placeholder="Seu usuário"
+    type="text"
+    value=""
+>
+```
+
+O argumento `placeholder` define o texto de orientação que aparece no campo vazio. O argumento `class_` permite definir a classe CSS do elemento.
+
+O sufixo `_` em `class_` existe porque `class` é uma palavra reservada da linguagem Python. O WTForms utiliza `class_` como forma de receber o atributo HTML `class`.
+
+Não é necessário escrever manualmente o elemento `<input>` quando o campo já está definido no formulário. Entretanto, você continua podendo controlar a estrutura externa do HTML com `<div>`, `<label>`, classes CSS e outros elementos.
+
+### 14.3. A diferença entre `form.campo.label` e `form.campo()`
+
+Observe:
+
+```
+{{ form.usuario.label }}
+{{ form.usuario() }}
+```
+
+Essas duas expressões têm funções diferentes.
+
+`form.usuario.label` representa o rótulo associado ao campo. Como o campo foi definido com `"Usuário"`, o WTForms pode gerar:
+
+```
+<label for="usuario">Usuário</label>
+```
+
+Já `form.usuario()` gera o controle de entrada:
+
+```
+<input id="usuario" name="usuario" type="text" value="">
+```
+
+O atributo `for` do `<label>` normalmente corresponde ao `id` do campo. Essa associação permite que o usuário clique no rótulo para focar o campo correspondente e contribui para a acessibilidade do formulário.
+
+A estrutura completa pode ficar assim:
+
+```
+<div class="form-group">
+    {{ form.usuario.label }}
+    {{ form.usuario(class_="form-control") }}
+</div>
+```
+
+O Jinja controla onde cada elemento aparece. O WTForms fornece a representação dos campos e rótulos.
+
+### 14.4. Enviando atributos HTML para os campos
+
+A chamada de um campo pode receber atributos adicionais:
+
+```
+{{ form.usuario(
+    class_="form-control",
+    placeholder="Digite seu usuário",
+    autocomplete="username",
+    required=True
+) }}
+```
+
+Os argumentos correspondem a atributos HTML que o campo deverá utilizar.
+
+|Argumento|Finalidade|
+|---|---|
+|`class_`|Define a classe CSS do elemento.|
+|`placeholder`|Apresenta uma orientação dentro do campo.|
+|`autocomplete`|Orienta o navegador sobre o preenchimento automático.|
+|`required=True`|Adiciona o atributo HTML `required`.|
+
+O atributo HTML `required` ajuda o navegador a verificar se o campo foi preenchido antes de enviar o formulário. Entretanto, ele não substitui a validação no servidor.
+
+Uma requisição pode ser enviada sem passar pelas validações do navegador. Por isso, os validadores WTForms continuam necessários.
+
+Os atributos também podem ser definidos diretamente na classe Python, dependendo da configuração desejada. A chamada no template é útil quando a apresentação precisa variar entre páginas ou componentes.
+
+### 14.5. O método `form.hidden_tag()` e os campos ocultos
+
+O método:
+
+```
+{{ form.hidden_tag() }}
+```
+
+renderiza os campos ocultos do formulário, incluindo o campo CSRF quando a proteção está habilitada e configurada.
+
+Um campo oculto é um elemento HTML que não aparece visualmente como um campo convencional:
+
+```
+<input type="hidden" name="csrf_token" value="...">
+```
+
+O valor real do token é gerado pelo mecanismo de proteção; não deve ser escrito manualmente como uma string fixa.
+
+A função de `hidden_tag()` não é esconder os erros nem validar todos os campos. Ela facilita a inclusão dos campos ocultos que pertencem ao formulário.
+
+Em formulários Flask-WTF com proteção CSRF habilitada, incluir `form.hidden_tag()` é uma maneira comum de garantir que o token seja enviado junto com os demais dados.
+
+Exemplo:
+
+```
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    {{ form.usuario.label }}
+    {{ form.usuario() }}
+
+    {{ form.senha.label }}
+    {{ form.senha() }}
+
+    {{ form.enviar() }}
+</form>
+```
+
+A inclusão do token no formulário é apenas parte da proteção. O servidor também precisa validar esse token ao receber a requisição.
+
+### 14.6. Exibindo erros de validação
+
+Um formulário pode ser renderizado corretamente e, ainda assim, conter dados inválidos. Por exemplo, o usuário pode enviar um campo vazio ou um nome com comprimento inferior ao permitido.
+
+O WTForms disponibiliza os erros associados a cada campo por meio de `field.errors`.
+
+Considere:
+
+```
+{{ form.usuario.label }}
+{{ form.usuario() }}
+
+{% for erro in form.usuario.errors %}
+    <p class="erro">{{ erro }}</p>
+{% endfor %}
+```
+
+O funcionamento é o seguinte:
+
+1. `form.usuario` acessa o campo de usuário.
+    
+2. `form.usuario.errors` fornece a coleção de mensagens de erro associadas ao campo.
+    
+3. O `for` percorre as mensagens existentes.
+    
+4. `{{ erro }}` apresenta cada mensagem no HTML renderizado.
+    
+
+Se houver dois erros, por exemplo, o laço poderá produzir dois parágrafos. Se não houver erros, o laço não terá iterações e nenhum parágrafo de erro será gerado.
+
+A coleção `errors` é fornecida pelo WTForms. Você não precisa criar manualmente uma lista de erros no template.
+
+### 14.7. Exibindo os erros de todos os campos
+
+Quando um formulário contém vários campos, pode ser útil apresentar as mensagens logo abaixo de cada um.
+
+```
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <div class="form-group">
+        {{ form.usuario.label }}
+        {{ form.usuario() }}
+
+        {% for erro in form.usuario.errors %}
+            <p class="erro">{{ erro }}</p>
+        {% endfor %}
+    </div>
+
+    <div class="form-group">
+        {{ form.senha.label }}
+        {{ form.senha() }}
+
+        {% for erro in form.senha.errors %}
+            <p class="erro">{{ erro }}</p>
+        {% endfor %}
+    </div>
+
+    {{ form.enviar() }}
+</form>
+```
+
+Cada campo possui sua própria coleção de erros. Por isso, `form.usuario.errors` e `form.senha.errors` não representam a mesma coisa.
+
+Essa abordagem oferece controle explícito sobre a posição das mensagens, mas pode gerar repetição quando muitos formulários utilizam o mesmo padrão visual.
+
+Uma alternativa é criar um componente Jinja reutilizável para renderizar um campo e seus erros. A herança, os blocos e a inclusão de templates são recursos que permitem organizar esse tipo de estrutura.
+
+### 14.8. Entendendo `form.validate_on_submit()`
+
+O método `validate_on_submit()` é fornecido pelo Flask-WTF. Ele verifica se a requisição atual corresponde a um envio de formulário que deve ser validado e executa a validação.
+
+Uma rota pode utilizar:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    form = LoginForm()
+
+    if form.validate_on_submit():
+        # Os dados passaram pela validação.
+        pass
+
+    return render_template("login.html", form=form)
+```
+
+No fluxo habitual:
+
+- Em uma requisição `GET`, a página é exibida com o formulário.
+    
+- Em uma requisição `POST`, o método processa os dados enviados e executa a validação.
+    
+- Se a validação falhar, o método retorna `False`, e os erros ficam disponíveis nos campos.
+    
+- Se a validação passar, o método retorna `True`, permitindo que a rota prossiga com o processamento dos dados.
+    
+
+O método não significa que o usuário está autenticado, que o cadastro foi salvo ou que a operação está autorizada. Ele indica que o formulário passou pelas validações configuradas.
+
+A lógica posterior ainda precisa realizar a operação correspondente, como consultar as credenciais no banco, criar um registro ou verificar permissões.
+
+### 14.9. Diferença entre validação no navegador e no servidor
+
+Considere um campo com:
+
+```
+{{ form.usuario(required=True) }}
+```
+
+O atributo `required` é interpretado pelo navegador. Ele pode impedir o envio normal do formulário enquanto o campo estiver vazio.
+
+Por outro lado, um validador Python como:
+
+```
+DataRequired()
+```
+
+é executado durante a validação do WTForms no servidor.
+
+A distinção é importante:
+
+|Validação|Onde ocorre|Objetivo|
+|---|---|---|
+|Atributos HTML, como `required`|Navegador|Melhorar a experiência de preenchimento.|
+|Validadores WTForms|Servidor|Verificar os dados recebidos pela aplicação.|
+|Regras de negócio|Aplicação Python|Verificar condições específicas da operação.|
+
+Uma aplicação segura não deve depender exclusivamente das verificações realizadas pelo navegador, pois elas podem ser contornadas.
+
+### 14.10. Proteção CSRF nos formulários
+
+CSRF (_Cross-Site Request Forgery_) é um tipo de ataque em que um navegador autenticado é induzido a enviar uma requisição indesejada para uma aplicação na qual o usuário já possui uma sessão válida.
+
+O Flask-WTF oferece integração com proteção CSRF para formulários. Em uma configuração usual, o formulário contém um token que o servidor verifica quando recebe a requisição.
+
+Para usar essa proteção corretamente, é necessário configurar uma chave secreta para a aplicação e manter a proteção habilitada.
+
+Exemplo de configuração:
+
+```
+app.config["SECRET_KEY"] = "valor-secreto-de-exemplo"
+```
+
+O valor apresentado é apenas ilustrativo. Em uma aplicação real, utilize um segredo forte, privado e configurado por um mecanismo apropriado, como uma variável de ambiente. Não publique a chave real no código versionado.
+
+No template:
+
+```
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <!-- Campos do formulário -->
+</form>
+```
+
+O `hidden_tag()` inclui o token CSRF do formulário quando a proteção está habilitada.
+
+**Importante:** CSRF e validação de campos são proteções diferentes. Um formulário pode conter campos válidos e, ainda assim, apresentar um token CSRF ausente ou inválido. Da mesma forma, um token válido não significa que os dados enviados são corretos ou que a operação está autorizada.
+
+### 14.11. Erros comuns com formulários Flask-WTF
+
+**Erro:** `**form**` **não está definido**
+
+Se o template contém:
+
+```
+{{ form.usuario() }}
+```
+
+mas a rota não disponibilizou uma variável chamada `form`, o template poderá produzir uma variável indefinida ou um erro, dependendo da configuração do Jinja.
+
+Verifique se a rota criou o formulário e o enviou ao template:
+
+```
+form = LoginForm()
+return render_template("login.html", form=form)
+```
+
+**Erro: campo não aparece como esperado**
+
+Verifique se está acessando o campo correto e se a chamada inclui os atributos desejados:
+
+```
+{{ form.usuario() }}
+```
+
+Acessar `form.usuario.label` apresenta o rótulo, enquanto chamar `form.usuario()` gera o controle HTML.
+
+**Erros de validação não aparecem**
+
+Confira se o template percorre `form.campo.errors` e se a rota executa a validação antes de renderizar novamente o formulário.
+
+```
+{% for erro in form.usuario.errors %}
+    <p>{{ erro }}</p>
+{% endfor %}
+```
+
+**Erro de CSRF**
+
+Se o servidor rejeitar a requisição por causa do token CSRF, confira se o formulário inclui `form.hidden_tag()`, se a proteção está configurada corretamente e se o formulário foi processado no fluxo esperado.
+
+Não desabilite a proteção automaticamente para eliminar o erro. Primeiro identifique por que o token não está sendo enviado ou validado.
+
+**O formulário aceita dados inesperados**
+
+Confira os validadores definidos na classe Python. A apresentação de um campo no template não determina, por si só, quais valores o servidor deve aceitar.
+
+Também verifique as regras de negócio que precisam ser aplicadas após a validação do WTForms.
+
+### 14.12. Boas práticas ao integrar Jinja e Flask-WTF
+
+- Defina os campos e validadores na classe Python, em vez de concentrar todas as regras no HTML.
+    
+- Utilize `form.campo.label` para apresentar rótulos associados aos controles.
+    
+- Utilize `form.campo()` para renderizar os elementos correspondentes.
+    
+- Inclua `form.hidden_tag()` em formulários que utilizam a proteção CSRF do Flask-WTF.
+    
+- Percorra `form.campo.errors` para apresentar mensagens de validação.
+    
+- Utilize `validate_on_submit()` no fluxo de processamento de formulários quando apropriado.
+    
+- Não confunda validação bem-sucedida com autenticação, autorização ou persistência no banco.
+    
+- Trate os dados recebidos no servidor, mesmo quando o HTML utiliza atributos como `required`.
+    
+- Mantenha segredos fora do código público e configure corretamente a chave da aplicação.
+    
+- Reutilize componentes Jinja quando vários formulários compartilharem a mesma estrutura visual.
+
+---

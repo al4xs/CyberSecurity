@@ -7871,4 +7871,35 @@ Cada camada possui uma responsabilidade específica:
 Essa separação torna a aplicação mais fácil de entender, testar, manter e ampliar.
 
 ---
-	
+# 📚 Material Complementar — Playlist de Flask
+
+## Flask — Lan Code
+
+**Canal:** Lan Code
+
+**Playlist:** Flask — Seriezinha paia de flask
+
+**Link:** [https://www.youtube.com/playlist?list=PLyOx5V4KUjDf3-flamHYkJ2ygYmdRDdE9](https://www.youtube.com/playlist?list=PLyOx5V4KUjDf3-flamHYkJ2ygYmdRDdE9)
+
+**Conteúdo:** playlist com 6 vídeos sobre Flask.
+
+### Quando utilizar este material?
+
+Esta playlist é uma referência complementar à documentação **Flask — Do Básico ao Avançado**. As aulas podem ser utilizadas para:
+
+- Revisar conceitos estudados na documentação.
+    
+- Tirar dúvidas durante o desenvolvimento de aplicações Flask.
+    
+- Acompanhar explicações em vídeo quando um conceito não ficar claro apenas pela leitura.
+    
+- Reforçar o aprendizado por meio de uma abordagem diferente da documentação escrita.
+    
+
+### Como aproveitar a playlist
+
+Utilize esta documentação como material de consulta técnica e a playlist como apoio ao aprendizado. Ao encontrar uma dúvida, procure o tópico correspondente na anotação e, se necessário, assista às aulas para reforçar a compreensão.
+
+O objetivo é ter duas fontes complementares de estudo: **uma documentação organizada para consulta rápida e aulas em vídeo para aprofundar a compreensão dos conceitos.**
+
+---

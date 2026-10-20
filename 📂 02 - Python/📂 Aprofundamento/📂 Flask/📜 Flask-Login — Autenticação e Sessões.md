@@ -444,7 +444,7 @@ O `user_loader` não valida a senha. Sua responsabilidade é recuperar o usuári
 
 Até aqui, conhecemos os elementos básicos necessários para integrar o Flask-Login à aplicação.
 
-|Componente|Responsabilidade|
-|---|---|
-|`Flask`|Executa a aplicação web e gerencia as requisições.|
-|`LoginManager`|Integra o|
+| Componente     | Responsabilidade                                   |
+| -------------- | -------------------------------------------------- |
+| `Flask`        | Executa a aplicação web e gerencia as requisições. |
+| `LoginManager` | Integra o                                          |

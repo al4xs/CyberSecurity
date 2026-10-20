@@ -5663,4 +5663,606 @@ Ao combinar Tailwind, JavaScript e Flask, considere as seguintes recomendações
 Em uma aplicação Flask, o navegador pode ocultar um botão administrativo, mas isso não protege a rota correspondente. A autorização precisa ser verificada no servidor.
 
 ---
+# 📜 Tailwind CSS — Estilização de Interfaces
 
+---
+
+# Parte 11 — Padrões de interface para painéis administrativos
+
+## 85. Construindo um dashboard com Tailwind
+
+Um dashboard reúne informações importantes de uma aplicação em uma única tela. Em um portfólio administrável, por exemplo, pode apresentar a quantidade de projetos publicados, rascunhos, mensagens recebidas e ações recentes.
+
+O Tailwind ajuda a construir essa interface com utilitários de layout, espaçamento, cores e tipografia.
+
+### 85.1. Estrutura de cartões de indicadores
+
+```
+<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">
+            Projetos publicados
+        </p>
+
+        <p class="mt-2 text-3xl font-bold text-gray-900">
+            {{ total_publicados }}
+        </p>
+    </article>
+
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">
+            Rascunhos
+        </p>
+
+        <p class="mt-2 text-3xl font-bold text-gray-900">
+            {{ total_rascunhos }}
+        </p>
+    </article>
+
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">
+            Mensagens recebidas
+        </p>
+
+        <p class="mt-2 text-3xl font-bold text-gray-900">
+            {{ total_mensagens }}
+        </p>
+    </article>
+
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">
+            Tecnologias cadastradas
+        </p>
+
+        <p class="mt-2 text-3xl font-bold text-gray-900">
+            {{ total_tecnologias }}
+        </p>
+    </article>
+</section>
+```
+
+As classes principais são:
+
+- `grid`: ativa CSS Grid.
+    
+- `grid-cols-1`: utiliza uma coluna por padrão.
+    
+- `sm:grid-cols-2`: utiliza duas colunas a partir do breakpoint `sm`.
+    
+- `xl:grid-cols-4`: utiliza quatro colunas a partir do breakpoint `xl`.
+    
+- `gap-4`: define o espaçamento entre os cartões.
+    
+- `rounded-xl`: arredonda os cantos.
+    
+- `border`: adiciona uma borda.
+    
+- `bg-white`: define o fundo branco.
+    
+- `p-5`: aplica espaçamento interno.
+    
+- `shadow-sm`: adiciona uma sombra discreta.
+    
+- `text-sm`: utiliza um tamanho de texto pequeno.
+    
+- `text-gray-500`: define uma cor de texto secundário.
+    
+- `text-3xl`: aumenta o tamanho do número.
+    
+- `font-bold`: aplica peso de fonte em negrito.
+    
+
+O CSS equivalente conceitual do layout é:
+
+```
+.indicadores {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (min-width: 40rem) {
+    .indicadores {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 80rem) {
+    .indicadores {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+```
+
+Os valores correspondem aos breakpoints padrão do Tailwind CSS v4. Um tema personalizado pode alterar esses valores.
+
+Os números apresentados devem vir dos dados reais da aplicação, fornecidos pelo Flask, e não de valores fixos no template.
+
+---
+
+## 86. Criando tabelas administrativas
+
+Tabelas são úteis para listar registros que possuem várias propriedades, como projetos, usuários, produtos ou mensagens.
+
+O Tailwind permite controlar bordas, alinhamento, espaçamento e comportamento responsivo usando classes utilitárias.
+
+### 86.1. Tabela básica de projetos
+
+```
+<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <table class="w-full text-left text-sm">
+        <thead class="border-b bg-gray-50 text-gray-600">
+            <tr>
+                <th scope="col" class="px-4 py-3 font-semibold">
+                    Projeto
+                </th>
+
+                <th scope="col" class="px-4 py-3 font-semibold">
+                    Status
+                </th>
+
+                <th scope="col" class="px-4 py-3 font-semibold">
+                    Data
+                </th>
+
+                <th scope="col" class="px-4 py-3 text-right font-semibold">
+                    Ações
+                </th>
+            </tr>
+        </thead>
+
+        <tbody class="divide-y divide-gray-200">
+            {% for projeto in projetos %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium text-gray-900">
+                        {{ projeto.titulo }}
+                    </td>
+
+                    <td class="px-4 py-3">
+                        {{ projeto.status }}
+                    </td>
+
+                    <td class="px-4 py-3 text-gray-600">
+                        {{ projeto.data_formatada }}
+                    </td>
+
+                    <td class="px-4 py-3 text-right">
+                        <a
+                            href="{{ url_for('editar_projeto', projeto_id=projeto.id) }}"
+                            class="font-medium text-blue-600 hover:underline"
+                        >
+                            Editar
+                        </a>
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                        Nenhum projeto cadastrado.
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+```
+
+### 86.2. Entendendo as classes da tabela
+
+- `overflow-x-auto`: permite rolagem horizontal quando o conteúdo excede a largura disponível.
+    
+- `w-full`: faz a tabela ocupar a largura do contêiner.
+    
+- `text-left`: alinha o texto à esquerda.
+    
+- `text-sm`: aplica tamanho de texto pequeno.
+    
+- `border-b`: aplica borda inferior.
+    
+- `bg-gray-50`: define um fundo cinza claro.
+    
+- `px-4 py-3`: aplica espaçamento horizontal e vertical.
+    
+- `divide-y divide-gray-200`: adiciona divisores horizontais entre os filhos.
+    
+- `hover:bg-gray-50`: altera o fundo da linha durante o hover.
+    
+- `text-right`: alinha o conteúdo à direita.
+    
+- `colspan="4"`: faz a célula ocupar quatro colunas da tabela.
+    
+
+O CSS equivalente de `overflow-x-auto` é:
+
+```
+.container {
+    overflow-x: auto;
+}
+```
+
+Esse utilitário é especialmente útil em dispositivos móveis, nos quais uma tabela com várias colunas pode não caber na largura da tela.
+
+### 86.3. Por que utilizar `scope="col"`
+
+O atributo `scope="col"` identifica uma célula de cabeçalho como cabeçalho da coluna correspondente.
+
+Ele não altera a aparência visual, mas ajuda tecnologias assistivas a interpretar a estrutura da tabela.
+
+O Tailwind cuida da apresentação; a semântica continua sendo definida pelo HTML.
+
+---
+
+## 87. Estados visuais para status de registros
+
+Um painel administrativo normalmente precisa distinguir visualmente estados como publicado, rascunho, pendente e erro.
+
+Uma abordagem comum é utilizar etiquetas pequenas, conhecidas como badges.
+
+### 87.1. Criando etiquetas de status
+
+```
+<span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+    Publicado
+</span>
+```
+
+As classes representam:
+
+- `inline-flex`: utiliza Flexbox com comportamento em linha.
+    
+- `items-center`: centraliza os itens no eixo transversal.
+    
+- `rounded-full`: cria bordas totalmente arredondadas.
+    
+- `bg-green-100`: define um fundo verde claro.
+    
+- `px-3 py-1`: aplica espaçamento interno.
+    
+- `text-xs`: utiliza texto pequeno.
+    
+- `font-medium`: aplica peso de fonte médio.
+    
+- `text-green-800`: define texto verde escuro.
+    
+
+### 87.2. Mapeando estados para classes completas
+
+No Python, podemos criar um mapeamento:
+
+```
+estilos_status = {
+    "publicado": "bg-green-100 text-green-800",
+    "rascunho": "bg-gray-100 text-gray-800",
+    "pendente": "bg-yellow-100 text-yellow-800",
+    "erro": "bg-red-100 text-red-800",
+}
+```
+
+Na rota Flask, os estilos podem ser disponibilizados ao template:
+
+```
+return render_template(
+    "projetos.html",
+    projetos=projetos,
+    estilos_status=estilos_status,
+)
+```
+
+No template:
+
+```
+{% for projeto in projetos %}
+    {% set estilo = estilos_status.get(projeto.status, "bg-gray-100 text-gray-800") %}
+
+    <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ estilo }}">
+        {{ projeto.status }}
+    </span>
+{% endfor %}
+```
+
+O importante é que as classes completas estejam presentes no código examinado pelo Tailwind.
+
+Se os nomes de classes forem montados dinamicamente a partir de fragmentos, o compilador poderá não gerar os estilos correspondentes.
+
+O mapeamento deve usar estados permitidos pela aplicação. Não permita que dados arbitrários fornecidos pelo usuário sejam tratados como classes CSS sem validação.
+
+---
+
+## 88. Criando filtros com formulários GET
+
+Filtros permitem que o administrador encontre registros sem precisar percorrer uma lista inteira.
+
+O método HTTP `GET` é apropriado para filtros de consulta que podem ser representados por parâmetros na URL.
+
+### 88.1. Formulário de busca
+
+```
+<form method="get" class="flex flex-col gap-3 sm:flex-row">
+    <label for="busca" class="sr-only">
+        Buscar projeto
+    </label>
+
+    <input
+        id="busca"
+        name="q"
+        type="search"
+        value="{{ busca }}"
+        placeholder="Buscar projeto..."
+        class="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+    >
+
+    <label for="status" class="sr-only">
+        Filtrar por status
+    </label>
+
+    <select
+        id="status"
+        name="status"
+        class="rounded-lg border border-gray-300 px-3 py-2"
+    >
+        <option value="">Todos os status</option>
+        <option value="publicado" {% if status == "publicado" %}selected{% endif %}>
+            Publicado
+        </option>
+        <option value="rascunho" {% if status == "rascunho" %}selected{% endif %}>
+            Rascunho
+        </option>
+    </select>
+
+    <button
+        type="submit"
+        class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+    >
+        Filtrar
+    </button>
+</form>
+```
+
+As classes relevantes são:
+
+- `flex`: ativa Flexbox.
+    
+- `flex-col`: organiza os elementos verticalmente.
+    
+- `sm:flex-row`: organiza os elementos em linha a partir de `sm`.
+    
+- `gap-3`: define o espaçamento entre os controles.
+    
+- `min-w-0`: permite que o elemento encolha abaixo do tamanho mínimo automático do conteúdo.
+    
+- `flex-1`: permite que o campo ocupe o espaço disponível.
+    
+- `focus:border-blue-500`: altera a cor da borda no foco.
+    
+- `focus:ring-2`: aplica um anel visual de foco.
+    
+
+O formulário envia os parâmetros na URL, por exemplo:
+
+```
+/projetos?q=portfolio&status=publicado
+```
+
+Isso facilita compartilhar uma busca, atualizar a página e navegar pelo histórico do navegador.
+
+### 88.2. Processando os filtros no Flask
+
+Exemplo conceitual usando uma lista em memória:
+
+```
+from flask import request, render_template
+
+
+@app.route("/projetos")
+def listar_projetos():
+    busca = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+
+    projetos_filtrados = projetos
+
+    if busca:
+        projetos_filtrados = [
+            projeto
+            for projeto in projetos_filtrados
+            if busca.casefold() in projeto["titulo"].casefold()
+        ]
+
+    if status in {"publicado", "rascunho"}:
+        projetos_filtrados = [
+            projeto
+            for projeto in projetos_filtrados
+            if projeto["status"] == status
+        ]
+
+    return render_template(
+        "projetos.html",
+        projetos=projetos_filtrados,
+        busca=busca,
+        status=status,
+    )
+```
+
+Esse exemplo pressupõe que `projetos` seja uma lista acessível pela rota e que cada item seja um dicionário com as chaves `titulo` e `status`.
+
+Em uma aplicação real, normalmente os filtros seriam aplicados na consulta ao banco de dados. Isso evita carregar todos os registros na memória antes de filtrar.
+
+---
+
+## 89. Paginação e apresentação dos resultados
+
+Quando uma tabela possui muitos registros, exibir todos de uma vez pode prejudicar a navegação e aumentar o trabalho necessário para renderizar a página.
+
+A paginação divide os resultados em páginas menores.
+
+### 89.1. Estrutura visual de uma paginação
+
+```
+<nav
+    aria-label="Paginação dos projetos"
+    class="mt-6 flex items-center justify-between gap-4"
+>
+    {% if pagina_anterior %}
+        <a
+            href="{{ url_for('listar_projetos', page=pagina - 1, q=busca, status=status) }}"
+            class="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
+        >
+            Anterior
+        </a>
+    {% else %}
+        <span class="rounded-lg border border-gray-200 px-4 py-2 text-gray-400">
+            Anterior
+        </span>
+    {% endif %}
+
+    <span class="text-sm text-gray-600">
+        Página {{ pagina }} de {{ total_paginas }}
+    </span>
+
+    {% if pagina_proxima %}
+        <a
+            href="{{ url_for('listar_projetos', page=pagina + 1, q=busca, status=status) }}"
+            class="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
+        >
+            Próxima
+        </a>
+    {% else %}
+        <span class="rounded-lg border border-gray-200 px-4 py-2 text-gray-400">
+            Próxima
+        </span>
+    {% endif %}
+</nav>
+```
+
+As classes controlam o layout, o espaçamento, as bordas e os estados visuais.
+
+A estrutura pressupõe que o Flask forneça `pagina`, `total_paginas`, `pagina_anterior`, `pagina_proxima`, `busca` e `status`.
+
+### 89.2. A paginação visual não executa a paginação dos dados
+
+O template apenas apresenta links e informações. Para a paginação funcionar, a rota precisa:
+
+1. Ler o número da página solicitado.
+    
+2. Validar o parâmetro recebido.
+    
+3. Aplicar os filtros.
+    
+4. Consultar o intervalo de registros correspondente.
+    
+5. Calcular a quantidade de páginas.
+    
+6. Enviar os dados ao template.
+    
+
+Se o projeto utiliza SQLAlchemy, uma abordagem comum é fazer a paginação diretamente na consulta ao banco de dados.
+
+Não confunda a apresentação dos controles com a lógica que seleciona os registros.
+
+---
+
+## 90. Estados vazios e carregamento
+
+Um estado vazio aparece quando uma lista não possui registros para apresentar.
+
+Isso pode ocorrer porque ainda não existem projetos cadastrados ou porque os filtros não encontraram correspondências.
+
+### 90.1. Estado vazio com Jinja
+
+```
+{% if projetos %}
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {% for projeto in projetos %}
+            <article class="rounded-xl border border-gray-200 bg-white p-5">
+                <h2 class="font-semibold">{{ projeto.titulo }}</h2>
+                <p class="mt-2 text-sm text-gray-600">
+                    {{ projeto.descricao }}
+                </p>
+            </article>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
+        <h2 class="text-lg font-semibold text-gray-900">
+            Nenhum projeto encontrado
+        </h2>
+
+        <p class="mt-2 text-sm text-gray-600">
+            Tente alterar os filtros ou cadastre um novo projeto.
+        </p>
+
+        <a
+            href="{{ url_for('novo_projeto') }}"
+            class="mt-5 inline-flex rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+        >
+            Criar projeto
+        </a>
+    </div>
+{% endif %}
+```
+
+As classes principais incluem:
+
+- `border-dashed`: utiliza uma borda tracejada.
+    
+- `px-6 py-12`: define espaçamento horizontal e vertical.
+    
+- `text-center`: centraliza o texto.
+    
+- `mt-2` e `mt-5`: definem margens superiores.
+    
+- `inline-flex`: permite organizar o conteúdo do link com Flexbox.
+    
+
+A rota `novo_projeto` precisa existir na aplicação. O exemplo demonstra o padrão de apresentação, não uma implementação completa de cadastro.
+
+### 90.2. Diferenciando lista vazia de carregamento
+
+Um estado vazio não é a mesma coisa que um estado de carregamento.
+
+- **Vazio:** a consulta terminou e não há resultados.
+    
+- **Carregando:** a operação ainda não terminou.
+    
+- **Erro:** a operação não pôde ser concluída.
+    
+
+Se a página utiliza apenas renderização tradicional no servidor, o navegador normalmente recebe o HTML depois que a rota termina de processar a requisição.
+
+Indicadores de carregamento são especialmente úteis quando uma interface realiza operações assíncronas no navegador, como buscas dinâmicas ou atualizações parciais.
+
+A apresentação deve refletir o estado real da operação, evitando mostrar uma animação indefinidamente ou indicar que não existem resultados antes de a consulta terminar.
+
+---
+
+## 91. Boas práticas para interfaces administrativas
+
+Uma interface administrativa precisa priorizar clareza, consistência e previsibilidade.
+
+Algumas recomendações:
+
+- Utilize a mesma escala de espaçamento nas diferentes páginas.
+    
+- Mantenha títulos e hierarquia visual consistentes.
+    
+- Use cores de status com significado coerente.
+    
+- Forneça mensagens claras para listas vazias.
+    
+- Preserve filtros durante a navegação entre páginas.
+    
+- Garanta que formulários tenham rótulos associados.
+    
+- Utilize elementos semânticos para tabelas e navegação.
+    
+- Evite depender apenas de cores para transmitir estados.
+    
+- Teste o layout em dispositivos com larguras diferentes.
+    
+- Não confie no CSS para implementar regras de autorização ou validação.
+    
+- Mantenha a lógica de consulta e paginação no Flask ou na camada de acesso aos dados.
+    
+
+O objetivo do Tailwind é tornar a implementação da apresentação mais rápida e consistente. A qualidade final depende também da organização do HTML, dos dados e do comportamento da aplicação.
+
+---

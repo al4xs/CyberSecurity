@@ -999,3 +999,487 @@ A principal ideia é separar as responsabilidades:
 Essa separação facilita a manutenção e evita confundir a verificação de senhas com o gerenciamento da sessão.
 
 ---
+# 18. Por que não devemos armazenar senhas em texto puro?
+
+Na parte anterior, criamos um fluxo de login didático. Porém, ele tinha uma limitação importante: verificava apenas o e-mail e não validava a senha.
+
+Em uma aplicação real, precisamos armazenar as senhas de forma segura.
+
+Imagine que uma tabela de usuários contenha estes dados:
+
+|E-mail|Senha|
+|---|---|
+|[usuario@example.com](mailto:usuario@example.com)|minhaSenha123|
+
+Se alguém conseguir acessar essa tabela, poderá ler diretamente as senhas dos usuários.
+
+Isso acontece porque elas estão armazenadas em texto puro, sem qualquer proteção.
+
+A abordagem correta é armazenar um **hash da senha**, utilizando um algoritmo apropriado para senhas, e verificar posteriormente se a senha digitada corresponde a esse hash.
+
+O processo fica assim:
+
+```
+Cadastro
+   │
+   ▼
+Usuário define a senha
+   │
+   ▼
+Aplicação gera o hash
+   │
+   ▼
+Banco armazena o hash
+```
+
+Durante o login:
+
+```
+Usuário informa a senha
+          │
+          ▼
+Aplicação recupera o hash
+armazenado no banco
+          │
+          ▼
+Verifica a senha informada
+          │
+     ┌────┴────┐
+     ▼         ▼
+  Correta   Incorreta
+     │         │
+     ▼         ▼
+  Login      Recusa
+```
+
+O sistema não precisa recuperar a senha original. Ele verifica se a senha fornecida corresponde ao hash armazenado.
+
+## 18.1. Hash não é criptografia reversível
+
+Um hash é o resultado de uma função que transforma uma entrada em uma representação derivada dela.
+
+A criptografia convencional permite recuperar os dados originais quando se possui a chave apropriada. Um hash de senha não foi projetado para funcionar dessa maneira.
+
+Para senhas, devemos utilizar algoritmos específicos, como scrypt, Argon2id ou PBKDF2, com parâmetros adequados. Funções rápidas como SHA-256, usadas isoladamente, não são uma escolha apropriada para armazenar senhas, pois facilitam tentativas massivas de adivinhação.
+
+O Werkzeug, que acompanha o ecossistema Flask, oferece funções práticas para essa finalidade.
+
+---
+
+# 19. Gerando e verificando hashes com Werkzeug
+
+O Werkzeug disponibiliza duas funções úteis:
+
+- `generate_password_hash()`: gera o hash de uma senha.
+    
+- `check_password_hash()`: verifica se uma senha corresponde ao hash armazenado.
+    
+
+Importe as funções:
+
+```
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
+```
+
+## 19.1. Gerando o hash
+
+```
+senha = "minhaSenha123"
+
+senha_hash = generate_password_hash(senha)
+
+print(senha_hash)
+```
+
+A variável `senha_hash` recebe uma representação derivada da senha, incluindo as informações necessárias para verificar a senha posteriormente.
+
+O resultado não será igual ao texto original da senha.
+
+Por padrão, o Werkzeug utiliza um método apropriado para hashing de senhas. O método e seus parâmetros podem variar conforme a versão instalada, portanto consulte a documentação correspondente ao ambiente do projeto.
+
+Não é necessário criar manualmente um salt para o uso normal dessa função: o mecanismo de hashing cuida disso.
+
+## 19.2. Verificando a senha
+
+```
+senha_informada = "minhaSenha123"
+
+if check_password_hash(senha_hash, senha_informada):
+    print("Senha correta")
+else:
+    print("Senha incorreta")
+```
+
+A função recebe o hash armazenado e a senha informada. Ela retorna `True` quando a senha corresponde ao hash e `False` caso contrário.
+
+Por exemplo:
+
+```
+check_password_hash(senha_hash, "outraSenha")
+```
+
+Retorna `False` se a senha não corresponder.
+
+**Importante:** o hash deve ser salvo no banco de dados durante o cadastro. Durante o login, recuperamos esse hash e utilizamos `check_password_hash()` para verificar a senha digitada.
+
+---
+
+# 20. Adaptando a classe Usuario
+
+Na parte anterior, a classe `Usuario` continha apenas um identificador e um e-mail. Agora podemos acrescentar o hash da senha.
+
+```
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
+class Usuario(UserMixin):
+    def __init__(self, id, email, senha_hash):
+        self.id = id
+        self.email = email
+        self.senha_hash = senha_hash
+
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+```
+
+Vamos analisar as alterações.
+
+```
+self.senha_hash = senha_hash
+```
+
+Armazena no objeto o hash da senha, não a senha original.
+
+O método:
+
+```
+def verificar_senha(self, senha):
+    return check_password_hash(self.senha_hash, senha)
+```
+
+Recebe a senha digitada e verifica se ela corresponde ao hash armazenado.
+
+Assim, a lógica de verificação fica dentro da classe `Usuario`, evitando repetir a mesma chamada em vários pontos da aplicação.
+
+O método `verificar_senha()` é uma escolha de nome nossa. O Flask-Login não exige que esse método exista: ele é criado para organizar a lógica da aplicação.
+
+---
+
+# 21. Criando um usuário de teste com hash
+
+Para continuar o exemplo sem banco de dados, podemos criar um usuário temporário em memória.
+
+```
+usuarios = {
+    "1": Usuario(
+        id="1",
+        email="admin@example.com",
+        senha_hash=generate_password_hash("SenhaForte!2026"),
+    ),
+}
+```
+
+Nesse exemplo, a senha é convertida em hash durante a criação do objeto.
+
+Isso serve apenas para estudo. Em uma aplicação real, não devemos criar contas administrativas com senhas fixas no código-fonte.
+
+Também não devemos utilizar essa abordagem para armazenar usuários permanentemente: os dados em memória desaparecem quando o processo Python é reiniciado.
+
+Em uma aplicação real, o cadastro deve gerar o hash e persistir o usuário no banco de dados.
+
+---
+
+# 22. Implementando um login com verificação de senha
+
+Agora podemos adaptar a rota de login para verificar tanto o e-mail quanto a senha.
+
+No arquivo `app.py`:
+
+```
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+)
+
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+)
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
+```
+
+Considere que a classe `Usuario` e o dicionário `usuarios` já foram definidos conforme as seções anteriores.
+
+A rota pode ser implementada assim:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        senha = request.form.get("senha", "")
+
+        usuario = next(
+            (
+                user
+                for user in usuarios.values()
+                if user.email == email
+            ),
+            None,
+        )
+
+        if usuario is None or not usuario.verificar_senha(senha):
+            flash("E-mail ou senha inválidos.", "error")
+            return redirect(url_for("login"))
+
+        login_user(usuario)
+
+        flash("Login realizado com sucesso.", "success")
+        return redirect(url_for("admin"))
+
+    return render_template("login.html")
+```
+
+O código pressupõe que `Usuario` tenha o método `verificar_senha()` definido anteriormente.
+
+## 22.1. Entendendo a validação
+
+Primeiro, recebemos os campos do formulário:
+
+```
+email = request.form.get("email", "").strip()
+senha = request.form.get("senha", "")
+```
+
+O e-mail passa por `strip()` para remover espaços no início e no final. A senha não passa por essa operação, pois espaços podem fazer parte de uma senha válida.
+
+Depois, procuramos o usuário:
+
+```
+usuario = next(
+    (
+        user
+        for user in usuarios.values()
+        if user.email == email
+    ),
+    None,
+)
+```
+
+Se nenhum usuário corresponder ao e-mail, `usuario` será `None`.
+
+A condição seguinte verifica se o usuário não existe ou se a senha está incorreta:
+
+```
+if usuario is None or not usuario.verificar_senha(senha):
+```
+
+O operador `or` permite rejeitar o login quando qualquer uma dessas situações acontece. Como Python utiliza avaliação de curto-circuito, `usuario.verificar_senha(senha)` não será executado quando `usuario` for `None`.
+
+A mensagem é propositalmente genérica:
+
+```
+flash("E-mail ou senha inválidos.", "error")
+```
+
+Isso evita revelar diretamente se um e-mail está cadastrado, o que poderia facilitar a enumeração de contas.
+
+Por fim, quando as credenciais são válidas:
+
+```
+login_user(usuario)
+```
+
+O Flask-Login registra o usuário como autenticado.
+
+**Atenção:** o armazenamento em memória continua sendo apenas didático. A implementação não possui persistência, limitação de tentativas ou controles adicionais necessários para um sistema de produção.
+
+---
+
+# 23. Atualizando o formulário HTML
+
+Como a rota agora recebe e-mail e senha, precisamos acrescentar o campo de senha ao formulário.
+
+Arquivo `templates/login.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Entrar</h1>
+
+    <form method="POST">
+        <label for="email">E-mail</label>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="username"
+            required
+        >
+
+        <label for="senha">Senha</label>
+        <input
+            type="password"
+            id="senha"
+            name="senha"
+            autocomplete="current-password"
+            required
+        >
+
+        <button type="submit">Entrar</button>
+    </form>
+</body>
+</html>
+```
+
+O atributo `type="password"` faz com que o navegador oculte visualmente os caracteres digitados. Isso não criptografa a senha e não substitui HTTPS.
+
+Os atributos `autocomplete="username"` e `autocomplete="current-password"` ajudam os navegadores e gerenciadores de senhas a identificar os campos.
+
+O atributo `required` melhora a experiência do formulário, mas a aplicação também deve validar os dados recebidos no servidor.
+
+---
+
+# 24. Exibindo mensagens com flash
+
+A função `flash()` permite armazenar uma mensagem temporária para que ela seja exibida na próxima página.
+
+Ela é útil para comunicar o resultado de operações como login, logout, cadastro e atualização de dados.
+
+Exemplo:
+
+```
+from flask import flash
+
+flash("Login realizado com sucesso.", "success")
+```
+
+O primeiro argumento é o texto da mensagem. O segundo é uma categoria escolhida pela aplicação, que pode ser utilizada para definir a aparência da mensagem.
+
+No exemplo, usamos as categorias `success` e `error`.
+
+## 24.1. Exibindo as mensagens no template
+
+Podemos criar um fragmento reutilizável.
+
+Arquivo `templates/components/flash_messages.html`:
+
+```
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+```
+
+O trecho:
+
+```
+get_flashed_messages(with_categories=true)
+```
+
+retorna as mensagens acompanhadas de suas categorias.
+
+O `with` limita o escopo da variável `messages` ao bloco, e o `for` percorre as mensagens disponíveis.
+
+Para incluir esse fragmento em `login.html`, utilize:
+
+```
+{% include "components/flash_messages.html" %}
+```
+
+Coloque a inclusão no local em que as mensagens devem aparecer, normalmente antes do formulário.
+
+Se o projeto utilizar Tailwind CSS, as classes de apresentação podem ser adicionadas diretamente ao fragmento. Nesse caso, lembre-se de que o Tailwind precisa detectar essas classes para incluí-las no CSS compilado.
+
+---
+
+# 25. Por que utilizar redirect depois do POST?
+
+Depois de receber e processar um formulário, é comum redirecionar o usuário para outra página.
+
+Por exemplo:
+
+```
+return redirect(url_for("admin"))
+```
+
+Essa abordagem segue o padrão _Post/Redirect/Get_.
+
+O navegador envia uma requisição POST para processar os dados. Depois, o servidor responde com um redirecionamento, e o navegador faz uma nova requisição GET para carregar a página de destino.
+
+O fluxo é:
+
+```
+POST /login
+     │
+     ▼
+Valida credenciais
+     │
+     ▼
+Registra autenticação
+     │
+     ▼
+Redireciona para /admin
+     │
+     ▼
+GET /admin
+```
+
+Isso evita que uma simples atualização da página de destino repita diretamente o envio original do formulário.
+
+Entretanto, redirecionar não substitui a validação das credenciais, a proteção CSRF ou a verificação de permissões.
+
+---
+
+# 26. Cuidados antes de utilizar esse código em produção
+
+O exemplo apresentado nesta parte é voltado ao aprendizado. Antes de utilizá-lo em um sistema real, algumas mudanças são necessárias:
+
+- Persistir os usuários em um banco de dados.
+    
+- Armazenar hashes de senha gerados por um método apropriado.
+    
+- Validar as credenciais no servidor antes de chamar `login_user()`.
+    
+- Utilizar HTTPS e uma `SECRET_KEY` forte, mantida fora do código-fonte.
+    
+- Implementar proteção CSRF nos formulários que alteram o estado da aplicação.
+    
+- Considerar limitação de tentativas de login e mecanismos de monitoramento.
+    
+- Configurar os cookies de sessão adequadamente para o ambiente de produção.
+    
+- Verificar permissões separadamente da autenticação.
+    
+- Evitar revelar se um e-mail está cadastrado por meio de mensagens de erro excessivamente específicas.
+    
+
+O Flask-Login resolve uma parte importante do processo de autenticação, mas a segurança de um sistema de login depende também do armazenamento das credenciais, da validação dos dados e das proteções implementadas na aplicação.
+
+---

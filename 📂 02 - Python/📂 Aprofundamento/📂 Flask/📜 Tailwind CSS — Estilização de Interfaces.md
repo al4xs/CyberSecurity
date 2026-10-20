@@ -1624,3 +1624,490 @@ Também é importante distinguir duas situações:
     
 
 ---
+## 30. Dark mode no Tailwind CSS
+
+O _dark mode_ permite oferecer uma interface com cores escuras, normalmente para reduzir o brilho visual e permitir que o usuário escolha entre um tema claro e um escuro.
+
+No CSS tradicional, podemos utilizar uma classe no elemento raiz ou uma media query para definir o tema. No Tailwind, utilizamos a variante `dark:` para aplicar classes quando o modo escuro está ativo.
+
+Exemplo:
+
+```
+<div class="bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+    <h1 class="text-2xl font-bold">Painel administrativo</h1>
+    <p class="mt-2 text-gray-600 dark:text-gray-300">
+        Conteúdo da aplicação.
+    </p>
+</div>
+```
+
+Equivalência conceitual em CSS:
+
+```
+.painel {
+    background-color: white;
+    color: #111827;
+}
+
+.painel p {
+    color: #4b5563;
+}
+
+.dark .painel {
+    background-color: #111827;
+    color: white;
+}
+
+.dark .painel p {
+    color: #d1d5db;
+}
+```
+
+As classes `dark:bg-gray-900` e `dark:text-white` não representam cores aplicadas permanentemente. Elas definem estilos condicionais que dependem de como o modo escuro está configurado.
+
+**Importante:** a variante `dark:` não significa, por si só, que haverá um botão para alternar o tema. É necessário definir como a aplicação ativa o modo escuro.
+
+---
+
+## 31. Dark mode automático com a preferência do sistema
+
+Por padrão, o Tailwind CSS utiliza a preferência de esquema de cores do sistema operacional ou navegador para determinar o comportamento da variante `dark:`.
+
+Essa preferência é acessada por meio da media query CSS `prefers-color-scheme`.
+
+Exemplo em HTML:
+
+```
+<div class="bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+    Tema adaptado à preferência do sistema.
+</div>
+```
+
+Equivalência CSS:
+
+```
+.painel {
+    background-color: white;
+    color: #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+    .painel {
+        background-color: #111827;
+        color: white;
+    }
+}
+```
+
+Se o sistema estiver configurado para o modo escuro, as regras condicionais serão aplicadas.
+
+Esse comportamento é útil quando queremos adaptar a interface automaticamente, sem implementar um controle manual de tema.
+
+Entretanto, em um painel administrativo, pode ser interessante permitir que o próprio usuário escolha entre tema claro, escuro ou automático.
+
+---
+
+## 32. Ativando o dark mode manualmente no Tailwind CSS v4
+
+No Tailwind CSS v4, podemos redefinir a variante `dark` para que ela seja ativada pela presença de uma classe `.dark` em um elemento ancestral.
+
+No arquivo CSS de entrada:
+
+```
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+Com essa configuração, podemos ativar o modo escuro adicionando a classe `dark` ao elemento raiz da página.
+
+```
+<html lang="pt-BR" class="dark">
+    <body>
+        <main class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+            <h1 class="text-2xl font-bold">Painel administrativo</h1>
+        </main>
+    </body>
+</html>
+```
+
+Nesse exemplo, a classe `dark` no elemento `html` ativa as variantes `dark:` utilizadas dentro dele.
+
+A expressão:
+
+```
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+define um seletor que corresponde ao próprio elemento `.dark` e aos elementos que estejam dentro de um ancestral com essa classe.
+
+O uso de `:where()` ajuda a manter a especificidade do seletor baixa.
+
+**Observação:** essa configuração é específica para o Tailwind CSS v4. Em projetos com versões anteriores, a configuração pode ser diferente.
+
+---
+
+## 33. Alternando o tema com JavaScript
+
+Depois de configurar o Tailwind para utilizar a classe `.dark`, podemos alternar o tema com JavaScript.
+
+O exemplo abaixo é independente de Flask, mas pode ser utilizado em um template Jinja.
+
+```
+<button
+    id="theme-toggle"
+    type="button"
+    class="rounded-lg border px-4 py-2"
+>
+    Alternar tema
+</button>
+
+<script>
+    const button = document.querySelector("#theme-toggle");
+
+    button.addEventListener("click", () => {
+        document.documentElement.classList.toggle("dark");
+    });
+</script>
+```
+
+A linha:
+
+```
+document.documentElement.classList.toggle("dark");
+```
+
+adiciona a classe `dark` ao elemento `html` quando ela não existe e remove a classe quando ela já está presente.
+
+O Tailwind não executa essa lógica. Ele apenas fornece as classes CSS necessárias para a apresentação visual.
+
+### 33.1. Persistindo a preferência com `localStorage`
+
+Se o usuário alternar o tema e recarregar a página, a classe será perdida caso a preferência não seja armazenada.
+
+Podemos utilizar `localStorage` para guardar a escolha no navegador.
+
+```
+<script>
+    const root = document.documentElement;
+    const button = document.querySelector("#theme-toggle");
+
+    const savedTheme = localStorage.getItem("theme");
+
+    if (savedTheme === "dark") {
+        root.classList.add("dark");
+    } else if (savedTheme === "light") {
+        root.classList.remove("dark");
+    }
+
+    button.addEventListener("click", () => {
+        const isDark = root.classList.toggle("dark");
+
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+    });
+</script>
+```
+
+Nesse exemplo:
+
+- `localStorage.getItem("theme")` recupera a preferência salva.
+    
+- `classList.toggle("dark")` alterna o tema.
+    
+- `localStorage.setItem(...)` salva a escolha.
+    
+- Ao recarregar a página, a preferência é reaplicada.
+    
+
+Esse código pressupõe que o botão `theme-toggle` exista na página antes da execução do script.
+
+Em aplicações reais, também é importante evitar uma mudança visual brusca entre o carregamento inicial e a aplicação do tema. Para isso, a preferência pode ser aplicada antes de o conteúdo da página ser renderizado.
+
+**Segurança:** não armazene senhas, tokens de autenticação ou outros segredos em `localStorage`. Nesse exemplo, ele é utilizado somente para uma preferência visual.
+
+---
+
+## 34. Organizando o dark mode em templates Jinja
+
+Em uma aplicação Flask, é comum ter um template base responsável por estruturar as páginas e incluir os arquivos CSS e JavaScript.
+
+Por exemplo, em `templates/base.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{% block title %}Meu painel{% endblock %}</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/output.css') }}"
+    >
+</head>
+<body class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+
+    <header class="border-b border-gray-200 p-4 dark:border-gray-700">
+        <nav class="mx-auto flex max-w-5xl items-center justify-between">
+            <a href="{{ url_for('home') }}" class="font-bold">
+                Meu painel
+            </a>
+
+            <button
+                id="theme-toggle"
+                type="button"
+                class="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600"
+            >
+                Alternar tema
+            </button>
+        </nav>
+    </header>
+
+    <main class="mx-auto max-w-5xl p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+</body>
+</html>
+```
+
+Uma página que estende esse template pode concentrar apenas seu conteúdo específico:
+
+```
+{% extends "base.html" %}
+
+{% block title %}Início{% endblock %}
+
+{% block content %}
+    <section class="rounded-xl border border-gray-200 p-6 dark:border-gray-700">
+        <h1 class="text-2xl font-bold">Página inicial</h1>
+        <p class="mt-2 text-gray-600 dark:text-gray-300">
+            Conteúdo da página.
+        </p>
+    </section>
+{% endblock %}
+```
+
+O uso de `extends` permite reutilizar a estrutura principal. Assim, a configuração do tema pode permanecer no template base, enquanto as páginas individuais definem somente seus próprios conteúdos.
+
+O JavaScript de alternância pode ser colocado em `static/js/theme.js`, evitando repetir o mesmo código em cada template.
+
+---
+
+## 35. Variáveis de tema com `@theme`
+
+O Tailwind CSS v4 utiliza variáveis CSS de tema para definir valores que participam do sistema de utilitários.
+
+Podemos personalizar cores, fontes, espaçamentos, pontos de quebra e animações por meio da diretiva `@theme`.
+
+Exemplo:
+
+```
+@import "tailwindcss";
+
+@theme {
+    --color-brand-500: #7c3aed;
+    --color-brand-600: #6d28d9;
+
+    --font-display: "Inter", sans-serif;
+
+    --breakpoint-tablet: 50rem;
+}
+```
+
+Essas definições permitem utilizar classes correspondentes, como:
+
+```
+<div class="bg-brand-500 font-display tablet:grid">
+    Conteúdo personalizado
+</div>
+```
+
+Equivalências conceituais:
+
+|Classe|CSS equivalente|
+|---|---|
+|`bg-brand-500`|`background-color: #7c3aed;`|
+|`bg-brand-600`|`background-color: #6d28d9;`|
+|`font-display`|`font-family: "Inter", sans-serif;`|
+|`tablet:grid`|Aplica `display: grid` a partir do breakpoint `tablet`|
+
+A classe `tablet:grid` utiliza o breakpoint personalizado de `50rem`, ou 800 pixels quando a unidade raiz equivale a 16 pixels.
+
+A fonte `Inter` precisa estar disponível para o navegador, por exemplo, por meio de um arquivo de fonte local ou de uma fonte já instalada. Declarar a família no tema não instala a fonte automaticamente.
+
+### 35.1. `@theme` versus variáveis CSS comuns
+
+As duas formas estão relacionadas, mas não possuem exatamente o mesmo objetivo.
+
+Variáveis CSS comuns:
+
+```
+:root {
+    --cor-principal: #7c3aed;
+}
+```
+
+Podem ser consumidas em CSS:
+
+```
+.botao {
+    background-color: var(--cor-principal);
+}
+```
+
+Já variáveis declaradas em `@theme` são integradas ao sistema de tema do Tailwind e podem originar utilitários.
+
+Por exemplo:
+
+```
+@theme {
+    --color-brand-500: #7c3aed;
+}
+```
+
+Isso permite utilizar:
+
+```
+<button class="bg-brand-500">Salvar</button>
+```
+
+Portanto, utilize variáveis CSS comuns quando precisar de valores reutilizáveis no CSS e `@theme` quando quiser integrar esses valores ao sistema de utilitários do Tailwind.
+
+---
+
+## 36. Criando classes próprias com `@utility`
+
+Embora o Tailwind incentive a composição de classes utilitárias diretamente no HTML, existem situações em que uma utilidade personalizada é conveniente.
+
+No Tailwind CSS v4, podemos declarar uma utilidade com `@utility`.
+
+```
+@import "tailwindcss";
+
+@utility text-balance {
+    text-wrap: balance;
+}
+```
+
+Depois, a classe pode ser utilizada normalmente:
+
+```
+<h1 class="text-3xl font-bold text-balance">
+    Uma descrição de título que pode ocupar mais de uma linha
+</h1>
+```
+
+Equivalência CSS:
+
+```
+.text-balance {
+    text-wrap: balance;
+}
+```
+
+A propriedade `text-wrap: balance` tenta distribuir o texto em várias linhas de maneira visualmente equilibrada, especialmente útil em títulos.
+
+### 36.1. Quando criar uma utilidade personalizada?
+
+Considere criar uma utilidade quando:
+
+- Uma regra representa uma necessidade recorrente do projeto.
+    
+- O comportamento não é oferecido diretamente por uma classe existente.
+    
+- A classe possui uma finalidade clara e específica.
+    
+- A abstração melhora a manutenção do código.
+    
+
+Por outro lado, evite criar uma classe própria para cada combinação trivial de propriedades. Isso pode duplicar funcionalidades que o Tailwind já oferece.
+
+A diretiva `@utility` é uma funcionalidade do Tailwind CSS v4. Em versões anteriores, o mecanismo de extensão de classes pode ser diferente.
+
+---
+
+## 37. Reutilizando estilos com componentes Flask
+
+Em projetos Flask, uma mesma combinação de classes pode aparecer em muitos templates.
+
+Por exemplo:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700">
+    Salvar
+</button>
+```
+
+Se esse botão aparecer repetidamente em várias páginas, alterar todas as ocorrências pode ser trabalhoso.
+
+Uma possibilidade é utilizar macros Jinja ou componentes reutilizáveis de template.
+
+### 37.1. Exemplo com macro Jinja
+
+Crie `templates/components.html`:
+
+```
+{% macro button(text, type="button") %}
+    <button
+        type="{{ type }}"
+        class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+    >
+        {{ text }}
+    </button>
+{% endmacro %}
+```
+
+Depois, em outro template:
+
+```
+{% from "components.html" import button %}
+
+{{ button("Salvar") }}
+```
+
+Para criar um botão de envio de formulário:
+
+```
+{{ button("Entrar", "submit") }}
+```
+
+A macro recebe o texto e o tipo do botão e gera a estrutura HTML com as classes.
+
+Essa abordagem é diferente de criar uma classe CSS personalizada: a macro reutiliza a estrutura HTML, os atributos e as classes Tailwind em conjunto.
+
+### 37.2. Cuidados com macros e HTML
+
+O argumento `text` é renderizado pelo mecanismo de autoescape do Jinja quando usado em um contexto HTML normal, ajudando a evitar que conteúdo fornecido pelo usuário seja interpretado como HTML.
+
+Não desative o escape sem necessidade, por exemplo, utilizando `|safe` sobre conteúdo não confiável.
+
+Macros também podem receber parâmetros adicionais para classes, atributos ou variações visuais. Entretanto, quanto mais parâmetros forem adicionados, mais importante se torna manter uma interface clara e consistente.
+
+---
+
+## 38. Boas práticas para personalizar o Tailwind
+
+Ao personalizar um projeto Tailwind CSS v4:
+
+- Use `@theme` para definir valores que devem participar do sistema de utilitários.
+    
+- Use `@utility` para criar utilidades específicas e reutilizáveis.
+    
+- Use variáveis CSS comuns para valores consumidos diretamente pelo CSS.
+    
+- Centralize comportamentos compartilhados em templates base ou macros Jinja quando isso facilitar a manutenção.
+    
+- Evite duplicar regras existentes no Tailwind.
+    
+- Não confunda a classe visual de um elemento com seu comportamento real.
+    
+- Teste o resultado no navegador e verifique o CSS compilado.
+    
+- Confirme a versão do Tailwind antes de utilizar diretivas específicas, como `@custom-variant`, `@theme` e `@utility`.
+    
+
+A personalização deve complementar o sistema de utilitários, e não criar uma camada paralela desnecessária de estilos.

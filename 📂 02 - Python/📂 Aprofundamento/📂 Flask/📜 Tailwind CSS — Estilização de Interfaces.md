@@ -2113,3 +2113,515 @@ Ao personalizar um projeto Tailwind CSS v4:
 A personalização deve complementar o sistema de utilitários, e não criar uma camada paralela desnecessária de estilos.
 
 ---
+## 39. Estilizando formulários com Tailwind CSS
+
+Formulários são componentes fundamentais em aplicações Flask. Eles aparecem em páginas de login, cadastro, pesquisa, edição de dados e painéis administrativos.
+
+O Tailwind permite estilizar cada elemento diretamente com classes utilitárias, sem precisar criar uma regra CSS separada para cada campo.
+
+Considere um formulário de cadastro:
+
+```
+<form class="mx-auto max-w-lg space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div>
+        <label for="username" class="mb-1 block text-sm font-medium text-gray-700">
+            Nome de usuário
+        </label>
+
+        <input
+            id="username"
+            name="username"
+            type="text"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        >
+    </div>
+
+    <div>
+        <label for="email" class="mb-1 block text-sm font-medium text-gray-700">
+            E-mail
+        </label>
+
+        <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        >
+    </div>
+
+    <div>
+        <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
+            Senha
+        </label>
+
+        <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        >
+    </div>
+
+    <button
+        type="submit"
+        class="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+    >
+        Criar conta
+    </button>
+</form>
+```
+
+### 39.1. Entendendo as classes utilizadas
+
+|Classe|Equivalência ou finalidade CSS|
+|---|---|
+|`mx-auto`|`margin-inline: auto;`|
+|`max-w-lg`|Define uma largura máxima de 32rem no tema padrão|
+|`space-y-5`|Adiciona espaçamento vertical entre os filhos diretos|
+|`rounded-xl`|`border-radius: 0.75rem;`|
+|`border border-gray-200`|Define uma borda de 1px com a cor correspondente|
+|`bg-white`|`background-color: #fff;`|
+|`p-6`|`padding: 1.5rem;`|
+|`shadow-sm`|Aplica uma sombra pequena|
+|`w-full`|`width: 100%;`|
+|`focus:border-blue-500`|Muda a borda quando o campo recebe foco|
+|`focus:ring-2`|Aplica um anel visual de 2px|
+|`transition-colors`|Anima mudanças nas propriedades de cor suportadas|
+|`hover:bg-blue-700`|Altera o fundo quando o cursor passa sobre o botão|
+
+Os valores de espaçamento, cores e sombras dependem do tema e da configuração utilizados.
+
+### 39.2. Por que utilizar `label` e `for`?
+
+Observe este trecho:
+
+```
+<label for="email">E-mail</label>
+<input id="email" name="email" type="email">
+```
+
+O atributo `for` do `label` corresponde ao atributo `id` do campo.
+
+Essa associação permite que tecnologias assistivas identifiquem o rótulo do campo e também facilita sua seleção com o mouse ou toque.
+
+O atributo `name`, por sua vez, identifica a chave enviada ao servidor durante o envio do formulário.
+
+Em uma aplicação Flask, esses atributos cumprem funções diferentes:
+
+- `id`: identifica o elemento HTML.
+    
+- `for`: associa o rótulo ao elemento correspondente.
+    
+- `name`: identifica o dado enviado na requisição.
+    
+- `type`: define o tipo de campo e seu comportamento.
+    
+- `required`: indica que o navegador deve exigir um valor antes do envio normal do formulário.
+    
+
+A validação HTML é útil, mas não substitui a validação no servidor.
+
+---
+
+## 40. Estados visuais de validação
+
+Um formulário pode apresentar estados diferentes conforme a validade dos campos.
+
+O Tailwind oferece variantes como `invalid:` e `valid:` para aplicar estilos de acordo com as pseudoclasses CSS correspondentes.
+
+### 40.1. Utilizando `invalid:`
+
+```
+<input
+    type="email"
+    name="email"
+    required
+    placeholder="usuario@exemplo.com"
+    class="w-full rounded-lg border border-gray-300 px-3 py-2 invalid:border-red-500 focus:outline-2 focus:outline-blue-500"
+>
+```
+
+Equivalência CSS:
+
+```
+input:invalid {
+    border-color: #ef4444;
+}
+```
+
+O navegador pode considerar o campo inválido quando ele está vazio apesar do atributo `required`, ou quando o conteúdo não corresponde ao formato esperado para o tipo de campo.
+
+O momento em que o usuário vê o estilo depende também do estado do formulário e do navegador. Para evitar mostrar erros antes de o usuário interagir, pode ser útil utilizar `user-invalid:` quando disponível na versão do Tailwind utilizada.
+
+### 40.2. Utilizando `valid:`
+
+```
+<input
+    type="email"
+    name="email"
+    required
+    placeholder="usuario@exemplo.com"
+    class="w-full rounded-lg border border-gray-300 px-3 py-2 valid:border-green-500"
+>
+```
+
+Equivalência CSS:
+
+```
+input:valid {
+    border-color: #22c55e;
+}
+```
+
+A pseudoclasse `:valid` indica que o campo satisfaz as regras de validação HTML aplicáveis.
+
+**Atenção:** um endereço pode ser considerado válido pela validação sintática do navegador sem que a caixa de e-mail realmente exista. A validação de negócio deve ser implementada no backend quando necessária.
+
+### 40.3. Exibindo mensagens de erro com Jinja
+
+O Flask pode disponibilizar mensagens de validação ao template.
+
+```
+{% if error %}
+    <p class="mt-2 text-sm text-red-600" role="alert">
+        {{ error }}
+    </p>
+{% endif %}
+```
+
+Nesse exemplo:
+
+- `error` é uma variável disponibilizada pelo Flask.
+    
+- `text-red-600` aplica uma cor de texto vermelha.
+    
+- `role="alert"` permite que tecnologias assistivas identifiquem a mensagem como um alerta.
+    
+- O Jinja mantém o escape automático de conteúdo em contextos HTML normais.
+    
+
+O Tailwind cuida da apresentação. O Flask decide quando a mensagem deve ser exibida.
+
+---
+
+## 41. Estilizando campos `select`, `textarea` e `checkbox`
+
+Além dos campos de texto, formulários frequentemente utilizam listas de seleção, áreas de texto e caixas de seleção.
+
+### 41.1. Lista de seleção com `select`
+
+```
+<label for="language" class="mb-1 block text-sm font-medium text-gray-700">
+    Linguagem principal
+</label>
+
+<select
+    id="language"
+    name="language"
+    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-2 focus:outline-blue-500"
+>
+    <option value="python">Python</option>
+    <option value="javascript">JavaScript</option>
+    <option value="c">C</option>
+</select>
+```
+
+Equivalências:
+
+- `bg-white`: `background-color: white;`
+    
+- `border`: `border-width: 1px;`
+    
+- `rounded-lg`: `border-radius: 0.5rem;`
+    
+- `px-3`: `padding-inline: 0.75rem;`
+    
+- `py-2`: `padding-block: 0.5rem;`
+    
+
+O navegador continua responsável pelo comportamento básico do elemento de seleção.
+
+### 41.2. Área de texto com `textarea`
+
+```
+<label for="description" class="mb-1 block text-sm font-medium text-gray-700">
+    Descrição do projeto
+</label>
+
+<textarea
+    id="description"
+    name="description"
+    rows="4"
+    class="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-2 focus:outline-blue-500"
+></textarea>
+```
+
+A classe `resize-y` corresponde a permitir o redimensionamento vertical:
+
+```
+textarea {
+    resize: vertical;
+}
+```
+
+O atributo `rows="4"` define uma altura inicial aproximada em linhas de texto, e não um limite máximo de conteúdo.
+
+### 41.3. Caixa de seleção com `checkbox`
+
+```
+<label class="flex items-center gap-2">
+    <input
+        type="checkbox"
+        name="terms"
+        required
+        class="size-4 accent-blue-600"
+    >
+
+    <span class="text-sm text-gray-700">
+        Aceito os termos de uso.
+    </span>
+</label>
+```
+
+Equivalências:
+
+- `flex`: `display: flex;`
+    
+- `items-center`: `align-items: center;`
+    
+- `gap-2`: `gap: 0.5rem;`
+    
+- `size-4`: largura e altura de 1rem no tema padrão.
+    
+- `accent-blue-600`: `accent-color` com a cor correspondente.
+    
+
+O atributo `required` faz com que a caixa precise estar marcada para que o navegador permita o envio normal do formulário.
+
+---
+
+## 42. Criando cartões reutilizáveis
+
+Cartões são componentes visuais comuns em portfólios, dashboards e páginas de projetos.
+
+Um cartão pode reunir título, descrição, imagem e ações.
+
+```
+<article class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
+    <img
+        src="{{ url_for('static', filename='images/projeto.jpg') }}"
+        alt="Imagem de apresentação do projeto"
+        class="h-48 w-full object-cover"
+    >
+
+    <div class="p-5">
+        <h2 class="text-xl font-bold text-gray-900">
+            Ferramenta de automação
+        </h2>
+
+        <p class="mt-2 text-sm leading-6 text-gray-600">
+            Projeto desenvolvido em Python para automatizar tarefas repetitivas.
+        </p>
+
+        <a
+            href="#"
+            class="mt-4 inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+        >
+            Ver projeto
+        </a>
+    </div>
+</article>
+```
+
+### 42.1. Classes importantes do cartão
+
+|Classe|CSS equivalente ou finalidade|
+|---|---|
+|`overflow-hidden`|`overflow: hidden;`|
+|`rounded-xl`|`border-radius: 0.75rem;`|
+|`shadow-sm`|Aplica sombra pequena|
+|`hover:shadow-md`|Aplica sombra média durante `hover`|
+|`h-48`|`height: 12rem;`|
+|`object-cover`|`object-fit: cover;`|
+|`leading-6`|`line-height: 1.5rem;`|
+|`inline-flex`|`display: inline-flex;`|
+
+A classe `object-cover` faz a imagem preencher a área definida, mantendo sua proporção e recortando o excesso quando necessário.
+
+Já `overflow-hidden` impede que partes visuais que ultrapassem os limites do cartão, como imagens com cantos não arredondados, apareçam fora de seu contêiner.
+
+---
+
+## 43. Criando uma grade responsiva de cartões
+
+Quando temos vários projetos, podemos organizá-los em uma grade que se adapta à largura da tela.
+
+```
+<section class="mx-auto max-w-6xl px-4 py-8">
+    <h1 class="mb-6 text-3xl font-bold text-gray-900">
+        Meus projetos
+    </h1>
+
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold">Projeto 1</h2>
+            <p class="mt-2 text-gray-600">Descrição do projeto.</p>
+        </article>
+
+        <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold">Projeto 2</h2>
+            <p class="mt-2 text-gray-600">Descrição do projeto.</p>
+        </article>
+
+        <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold">Projeto 3</h2>
+            <p class="mt-2 text-gray-600">Descrição do projeto.</p>
+        </article>
+    </div>
+</section>
+```
+
+### 43.1. Entendendo o comportamento responsivo
+
+A classe `grid-cols-1` define uma coluna por padrão.
+
+A classe `sm:grid-cols-2` passa a definir duas colunas a partir do breakpoint `sm`.
+
+A classe `lg:grid-cols-3` passa a definir três colunas a partir do breakpoint `lg`.
+
+No tema padrão do Tailwind v4:
+
+|Classe|CSS equivalente|
+|---|---|
+|`grid`|`display: grid;`|
+|`grid-cols-1`|`grid-template-columns: repeat(1, minmax(0, 1fr));`|
+|`sm:grid-cols-2`|Aplica duas colunas a partir de 40rem|
+|`lg:grid-cols-3`|Aplica três colunas a partir de 64rem|
+|`gap-6`|`gap: 1.5rem;`|
+|`max-w-6xl`|Define largura máxima de 72rem|
+|`px-4`|`padding-inline: 1rem;`|
+|`py-8`|`padding-block: 2rem;`|
+
+Os breakpoints podem ser personalizados. Portanto, as medidas acima pressupõem o tema padrão.
+
+Essa abordagem evita criar manualmente várias media queries e permite que a estrutura se adapte a diferentes larguras de tela.
+
+---
+
+## 44. Trabalhando com listas dinâmicas do Jinja
+
+Em aplicações Flask, os projetos, usuários ou registros exibidos na página frequentemente vêm do banco de dados.
+
+O Jinja permite percorrer uma lista e gerar um cartão para cada item.
+
+```
+<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    {% for projeto in projetos %}
+        <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+            <h2 class="text-lg font-semibold text-gray-900">
+                {{ projeto.nome }}
+            </h2>
+
+            <p class="mt-2 text-sm text-gray-600">
+                {{ projeto.descricao }}
+            </p>
+
+            <a
+                href="{{ projeto.url }}"
+                class="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+                Acessar projeto
+            </a>
+        </article>
+    {% else %}
+        <p class="col-span-full text-gray-500">
+            Nenhum projeto cadastrado.
+        </p>
+    {% endfor %}
+</div>
+```
+
+O bloco `{% for projeto in projetos %}` percorre a coleção fornecida pelo Flask.
+
+O bloco `{% else %}` dentro do `for` do Jinja é executado quando a coleção não contém itens.
+
+As classes `col-span-full` fazem a mensagem ocupar todas as colunas da grade:
+
+```
+.mensagem {
+    grid-column: 1 / -1;
+}
+```
+
+Esse padrão é útil para exibir um estado vazio quando o painel ainda não possui registros.
+
+### 44.1. Responsabilidade do Flask e do Tailwind
+
+O Flask pode consultar o banco e fornecer os dados ao template:
+
+```
+@app.route("/projetos")
+def projetos():
+    lista_projetos = Projeto.query.all()
+
+    return render_template(
+        "projetos.html",
+        projetos=lista_projetos,
+    )
+```
+
+O Tailwind não consulta o banco de dados nem gera os registros. Ele estiliza o HTML produzido pelo Jinja.
+
+A separação de responsabilidades fica assim:
+
+- **Flask:** controla a rota e fornece os dados.
+    
+- **Banco de dados:** armazena os projetos.
+    
+- **Jinja:** percorre os dados e gera o HTML.
+    
+- **Tailwind CSS:** define a apresentação visual.
+    
+
+---
+
+## 45. Classes dinâmicas: um cuidado importante com o Jinja
+
+O Tailwind gera CSS analisando os arquivos-fonte e identificando as classes utilizadas. Ele não executa o Jinja para descobrir todas as combinações possíveis de classes durante a compilação.
+
+Por isso, evite construir nomes de classes por concatenação quando o nome completo não aparece em nenhum arquivo analisado.
+
+Exemplo problemático:
+
+```
+<div class="bg-{{ cor }}-600">
+    Conteúdo
+</div>
+```
+
+Se `cor` receber o valor `blue`, o HTML final conterá `bg-blue-600`. Entretanto, o Tailwind pode não gerar a regra correspondente, porque não encontrou a classe completa durante a análise dos arquivos.
+
+Uma alternativa é utilizar um mapeamento de classes completas.
+
+```
+{% set cores = {
+    "sucesso": "bg-green-600 hover:bg-green-700",
+    "erro": "bg-red-600 hover:bg-red-700",
+    "aviso": "bg-yellow-500 hover:bg-yellow-600"
+} %}
+
+<button class="rounded-lg px-4 py-2 text-white {{ cores[tipo] }}">
+    Confirmar
+</button>
+```
+
+As classes completas estão escritas no template e podem ser identificadas pelo mecanismo de detecção do Tailwind.
+
+Se `tipo` puder receber valores inesperados, trate essa situação no código para evitar um erro de acesso ao dicionário ou para definir um estilo padrão.
+
+**Regra prática:** prefira selecionar entre conjuntos de classes completos em vez de montar nomes de classes dinamicamente.
+
+---

@@ -489,3 +489,513 @@ E quando utilizarmos `login_required`, poderemos restringir o acesso a uma pági
 Esses recursos serão utilizados em conjunto para construir o fluxo de autenticação da aplicação.
 
 ---
+# 9. Entendendo o fluxo de login na prática
+
+Na parte anterior, conhecemos o `LoginManager`, o `UserMixin` e o `user_loader`. Agora vamos utilizar esses recursos para entender como funciona um login de verdade.
+
+Quando uma pessoa preenche um formulário com e-mail e senha, a aplicação precisa realizar algumas etapas:
+
+1. Receber os dados enviados pelo formulário.
+    
+2. Procurar o usuário correspondente.
+    
+3. Verificar se a senha informada está correta.
+    
+4. Registrar o usuário como autenticado.
+    
+5. Redirecionar o usuário para uma página apropriada.
+    
+
+O Flask-Login participa principalmente da quarta etapa e ajuda a manter a autenticação nas requisições seguintes. As demais etapas são responsabilidade da aplicação.
+
+O fluxo pode ser representado assim:
+
+```
+Formulário de login
+        │
+        ▼
+Recebe e-mail e senha
+        │
+        ▼
+Procura o usuário
+        │
+        ▼
+Verifica a senha
+        │
+   ┌────┴────┐
+   ▼         ▼
+ Correta   Incorreta
+   │         │
+   ▼         ▼
+login_user  Exibe erro
+   │
+   ▼
+Redireciona
+```
+
+Essa separação é importante porque autenticar alguém não é a mesma coisa que simplesmente receber um formulário.
+
+---
+
+# 10. Criando um usuário para testes
+
+Antes de integrar o login a um banco de dados, podemos utilizar usuários armazenados temporariamente em memória.
+
+Essa abordagem é útil para aprender o funcionamento do Flask-Login sem introduzir outras bibliotecas ao mesmo tempo.
+
+Crie ou adapte o arquivo `app.py`:
+
+```
+from flask import Flask, render_template, request, redirect, url_for
+from flask_login import LoginManager, UserMixin
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = "chave-apenas-para-desenvolvimento"
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+
+
+class Usuario(UserMixin):
+    def __init__(self, id, email):
+        self.id = id
+        self.email = email
+
+
+usuarios = {
+    "1": Usuario("1", "admin@example.com"),
+}
+```
+
+Aqui criamos uma classe `Usuario` e um dicionário chamado `usuarios`.
+
+O dicionário armazena objetos de usuário utilizando seus identificadores como chaves.
+
+Por exemplo:
+
+```
+usuarios["1"]
+```
+
+Retorna o objeto associado ao identificador `"1"`.
+
+Esse armazenamento é apenas didático. Os dados desaparecem quando o processo Python é reiniciado, e o exemplo ainda não implementa uma verificação de senha. Não utilize essa estrutura como sistema real de autenticação.
+
+## 10.1. Por que o identificador é uma string?
+
+O Flask-Login espera que `get_id()` retorne um identificador textual.
+
+Como estamos utilizando `UserMixin`, o método padrão utiliza o atributo `id` do objeto. Por isso, definimos o identificador como `"1"`, e não como `1`.
+
+Em aplicações que utilizam um banco de dados, o identificador pode ser convertido para o tipo apropriado durante a consulta.
+
+---
+
+# 11. Implementando o user_loader
+
+Agora precisamos ensinar ao Flask-Login como recuperar o usuário armazenado no dicionário.
+
+Adicione ao `app.py`:
+
+```
+@login_manager.user_loader
+def load_user(user_id):
+    return usuarios.get(user_id)
+```
+
+O método `dict.get()` procura uma chave no dicionário.
+
+Se encontrar o identificador, retorna o objeto de usuário correspondente. Se não encontrar, retorna `None`.
+
+Por exemplo:
+
+```
+usuarios.get("1")
+```
+
+Retorna o usuário de identificador `"1"`.
+
+Já:
+
+```
+usuarios.get("999")
+```
+
+Retorna `None` se essa chave não existir.
+
+O Flask-Login utiliza essa função quando precisa recuperar o usuário associado à sessão atual.
+
+**Atenção:** como os usuários estão em memória, o login deixa de funcionar depois que o processo é reiniciado. Em uma aplicação real, normalmente substituímos esse dicionário por uma consulta ao banco de dados.
+
+---
+
+# 12. Entendendo current_user
+
+O `current_user` permite acessar o usuário associado à requisição atual sem precisar recuperar manualmente sua identidade em cada rota.
+
+Importe o recurso:
+
+```
+from flask_login import current_user
+```
+
+Depois, podemos utilizá-lo em uma rota:
+
+```
+@app.route("/")
+def home():
+    if current_user.is_authenticated:
+        return f"Olá, {current_user.email}!"
+
+    return "Você não está autenticado."
+```
+
+Observe a propriedade:
+
+```
+current_user.is_authenticated
+```
+
+Ela informa se o usuário atual é considerado autenticado pelo Flask-Login.
+
+Se o usuário estiver autenticado, podemos acessar seus atributos, como `email`.
+
+Caso contrário, o Flask-Login disponibiliza um usuário anônimo, que não representa uma conta autenticada.
+
+## 12.1. Por que current_user é útil?
+
+Sem esse recurso, seria necessário criar manualmente um mecanismo para descobrir quem está acessando cada página.
+
+Com `current_user`, podemos consultar o usuário atual diretamente nas rotas e nos templates.
+
+Por exemplo, em um painel administrativo:
+
+```
+@app.route("/perfil")
+def perfil():
+    if current_user.is_authenticated:
+        return f"Perfil de {current_user.email}"
+
+    return "Nenhum usuário autenticado."
+```
+
+Esse exemplo demonstra a consulta à identidade, mas ainda não protege a rota com `login_required`. Na próxima seção veremos uma maneira mais direta de fazer isso.
+
+---
+
+# 13. Protegendo rotas com login_required
+
+O Flask-Login fornece o decorador `login_required`, utilizado para restringir o acesso a rotas que exigem autenticação.
+
+Importe-o:
+
+```
+from flask_login import login_required
+```
+
+Considere uma página administrativa:
+
+```
+@app.route("/admin")
+@login_required
+def admin():
+    return "Painel administrativo"
+```
+
+O decorador `@login_required` informa que o usuário precisa estar autenticado para acessar essa rota.
+
+Se uma pessoa não autenticada tentar acessar `/admin`, o Flask-Login utilizará a configuração `login_view` para encaminhá-la à página de login.
+
+No nosso exemplo:
+
+```
+login_manager.login_view = "login"
+```
+
+O endpoint `login` será utilizado como destino.
+
+## 13.1. Entendendo a diferença entre as duas abordagens
+
+Sem `login_required`, poderíamos verificar manualmente a autenticação:
+
+```
+@app.route("/admin")
+def admin():
+    if not current_user.is_authenticated:
+        return redirect(url_for("login"))
+
+    return "Painel administrativo"
+```
+
+Essa abordagem funciona, mas exige repetir a verificação em cada rota protegida.
+
+Com o decorador:
+
+```
+@app.route("/admin")
+@login_required
+def admin():
+    return "Painel administrativo"
+```
+
+A intenção fica explícita e o código fica mais simples.
+
+Para rotas que exigem apenas autenticação, prefira `login_required`. Verificações manuais continuam úteis quando a lógica de acesso é mais específica.
+
+**Importante:** `login_required` não verifica se o usuário é administrador. Ele apenas exige que esteja autenticado. As permissões administrativas precisam ser verificadas separadamente.
+
+---
+
+# 14. Implementando o formulário de login
+
+Agora vamos criar uma rota que recebe os dados de um formulário.
+
+No `app.py`, acrescente:
+
+```
+from flask import render_template, request, redirect, url_for
+```
+
+Se esses imports já estiverem presentes, não é necessário repeti-los.
+
+A rota de login pode ser escrita assim:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+
+        if email == "admin@example.com":
+            return "Usuário encontrado."
+
+        return "Usuário não encontrado."
+
+    return render_template("login.html")
+```
+
+Esse código é apenas um exercício para entender o envio de formulários. Ele verifica o e-mail, mas não valida senha e não autentica o usuário. Portanto, ainda não é um login funcional.
+
+## 14.1. Criando login.html
+
+Crie o arquivo `templates/login.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Entrar</h1>
+
+    <form method="POST">
+        <label for="email">E-mail</label>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            required
+        >
+
+        <button type="submit">Entrar</button>
+    </form>
+</body>
+</html>
+```
+
+O formulário utiliza `method="POST"` para enviar os dados ao servidor no corpo da requisição.
+
+O atributo `name` é importante porque é por meio dele que o Flask identifica os campos em `request.form`.
+
+Por exemplo:
+
+```
+email = request.form.get("email", "").strip()
+```
+
+Essa linha busca o campo `email`, utiliza uma string vazia se ele não existir e remove espaços em branco no início e no final.
+
+O atributo HTML `required` ajuda a impedir o envio de um campo vazio pelo navegador, mas não substitui a validação no servidor. Um cliente pode enviar requisições diretamente, sem utilizar o formulário visual.
+
+---
+
+# 15. Implementando login_user
+
+A função `login_user()` registra um usuário como autenticado.
+
+Entretanto, **ela não verifica a senha por conta própria**. Antes de chamá-la, a aplicação precisa verificar se as credenciais são válidas.
+
+Importe a função:
+
+```
+from flask_login import login_user
+```
+
+Podemos agora completar o fluxo didático usando o usuário armazenado em memória:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+
+        usuario = next(
+            (
+                user
+                for user in usuarios.values()
+                if user.email == email
+            ),
+            None,
+        )
+
+        if usuario is None:
+            return "Credenciais inválidas.", 401
+
+        login_user(usuario)
+
+        return redirect(url_for("admin"))
+
+    return render_template("login.html")
+```
+
+Esse exemplo localiza o usuário pelo e-mail e chama `login_user()` quando o encontra.
+
+A expressão `next(..., None)` retorna o primeiro usuário correspondente ou `None` caso nenhum seja encontrado.
+
+**Limitação importante:** esse fluxo ainda não é seguro nem adequado para produção. Como não há senha, qualquer pessoa que conheça o e-mail cadastrado poderá autenticar-se. Não utilize esse código como sistema real de login.
+
+Ele serve para demonstrar a função de `login_user()`. Na implementação completa, a aplicação deverá verificar uma senha armazenada com hash seguro antes de autenticar o usuário.
+
+## 15.1. O que acontece ao chamar login_user()?
+
+Quando executamos:
+
+```
+login_user(usuario)
+```
+
+O Flask-Login registra o usuário como autenticado para as requisições seguintes, utilizando a sessão.
+
+Depois do redirecionamento para `/admin`, o `current_user` poderá representar o usuário autenticado, desde que a função `user_loader` consiga recuperá-lo.
+
+A chamada não cria um registro no banco de dados, não cadastra o usuário e não valida suas credenciais. Ela pressupõe que a aplicação já tenha decidido que o usuário pode fazer login.
+
+---
+
+# 16. Encerrando a sessão com logout_user
+
+O logout permite que o usuário encerre sua sessão de autenticação.
+
+Importe a função:
+
+```
+from flask_login import logout_user
+```
+
+Crie uma rota:
+
+```
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+
+    return redirect(url_for("login"))
+```
+
+Ao executar `logout_user()`, o Flask-Login encerra o estado de autenticação atual.
+
+Depois, o usuário é redirecionado à página de login.
+
+## 16.1. Por que utilizar POST no logout?
+
+Encerrar uma sessão altera o estado de autenticação do usuário. Por isso, é preferível utilizar uma requisição POST em vez de GET.
+
+Isso evita que uma simples visita a um link, uma prévia automática ou outro mecanismo que faça uma requisição GET provoque o logout inesperadamente.
+
+Em aplicações reais, proteja essa operação contra CSRF. O Flask-WTF oferece ferramentas para isso, assunto que será estudado em uma anotação posterior.
+
+Um formulário para chamar a rota seria:
+
+```
+<form method="POST" action="{{ url_for('logout') }}">
+    <button type="submit">Sair</button>
+</form>
+```
+
+Esse formulário ainda precisará incluir o token CSRF quando a proteção estiver habilitada.
+
+---
+
+# 17. Resumo do fluxo implementado
+
+Agora conhecemos os principais passos para construir um fluxo básico de autenticação com Flask-Login.
+
+```
+GET /login
+    │
+    ▼
+Exibe formulário
+    │
+    ▼
+POST /login
+    │
+    ▼
+Recebe as credenciais
+    │
+    ▼
+Valida os dados
+    │
+    ▼
+login_user(usuario)
+    │
+    ▼
+Redireciona para /admin
+    │
+    ▼
+@login_required
+    │
+    ▼
+Permite o acesso autenticado
+```
+
+O fluxo de saída segue outro caminho:
+
+```
+Usuário autenticado
+        │
+        ▼
+Envia formulário de logout
+        │
+        ▼
+POST /logout
+        │
+        ▼
+logout_user()
+        │
+        ▼
+Redireciona para /login
+```
+
+A principal ideia é separar as responsabilidades:
+
+- O formulário recebe as credenciais.
+    
+- A aplicação verifica se as credenciais estão corretas.
+    
+- `login_user()` registra a autenticação.
+    
+- `current_user` permite consultar o usuário atual.
+    
+- `login_required` protege rotas.
+    
+- `logout_user()` encerra a autenticação.
+    
+
+Essa separação facilita a manutenção e evita confundir a verificação de senhas com o gerenciamento da sessão.
+
+---

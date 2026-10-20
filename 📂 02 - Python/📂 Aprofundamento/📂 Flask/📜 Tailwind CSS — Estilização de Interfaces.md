@@ -2625,3 +2625,538 @@ Se `tipo` puder receber valores inesperados, trate essa situação no código pa
 **Regra prática:** prefira selecionar entre conjuntos de classes completos em vez de montar nomes de classes dinamicamente.
 
 ---
+## 46. Quando utilizar classes utilitárias e quando criar CSS próprio
+
+O Tailwind CSS permite escrever a maior parte dos estilos diretamente no HTML. Entretanto, isso não significa que todo estilo precise ser implementado exclusivamente com classes utilitárias.
+
+Existem situações em que utilizar classes Tailwind é a melhor escolha e outras em que criar uma regra CSS própria torna o código mais claro.
+
+### 46.1. Utilitários diretamente no HTML
+
+Considere um botão simples:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700">
+    Salvar
+</button>
+```
+
+Equivalência CSS aproximada:
+
+```
+.botao {
+    border-radius: 0.5rem;
+    background-color: #2563eb;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    color: white;
+}
+
+.botao:hover {
+    background-color: #1d4ed8;
+}
+```
+
+A abordagem com Tailwind é conveniente porque as propriedades estão próximas do elemento que utiliza os estilos.
+
+Ela também facilita a criação rápida de interfaces sem precisar inventar nomes para cada combinação de propriedades.
+
+### 46.2. Quando o CSS próprio faz sentido
+
+Considere um efeito visual específico que utiliza vários seletores, pseudoelementos e regras de animação.
+
+```
+/* static/css/custom.css */
+
+.hero-background {
+    position: relative;
+    isolation: isolate;
+}
+
+.hero-background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        radial-gradient(
+            circle at top right,
+            rgb(59 130 246 / 20%),
+            transparent 55%
+        );
+    pointer-events: none;
+}
+```
+
+No HTML:
+
+```
+<section class="hero-background rounded-2xl bg-gray-950 p-8 text-white">
+    <h1 class="text-3xl font-bold">Meu portfólio</h1>
+    <p class="mt-3 text-gray-300">Projetos e experiências.</p>
+</section>
+```
+
+Nesse caso, a classe `hero-background` representa um efeito visual mais específico, implementado em CSS tradicional.
+
+Não há necessidade de tentar expressar absolutamente tudo por meio de utilitários quando isso prejudica a legibilidade.
+
+**Regra prática:** utilize Tailwind para compor estilos comuns e CSS próprio quando uma regra específica ficar mais clara, reutilizável ou fácil de manter dessa forma.
+
+---
+
+## 47. Organizando os arquivos CSS em um projeto Flask
+
+Uma estrutura simples para uma aplicação Flask com Tailwind CSS pode ser:
+
+```
+meu-projeto/
+├── app.py
+├── package.json
+├── package-lock.json
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── projetos.html
+│   └── components/
+│       └── navbar.html
+└── static/
+    ├── src/
+    │   └── input.css
+    ├── css/
+    │   ├── output.css
+    │   └── custom.css
+    ├── js/
+    │   └── theme.js
+    └── images/
+        └── perfil.png
+```
+
+Cada diretório possui uma responsabilidade:
+
+|Caminho|Responsabilidade|
+|---|---|
+|`templates/`|Templates HTML e Jinja|
+|`static/src/input.css`|Arquivo CSS de entrada do Tailwind|
+|`static/css/output.css`|CSS compilado e servido pelo Flask|
+|`static/css/custom.css`|Estilos próprios, quando necessários|
+|`static/js/`|JavaScript do navegador|
+|`static/images/`|Imagens utilizadas na aplicação|
+
+O arquivo `output.css` é gerado pelo processo de compilação. Normalmente, não é o arquivo em que você deve escrever manualmente suas alterações.
+
+### 47.1. Arquivo de entrada do Tailwind v4
+
+Exemplo de `static/src/input.css`:
+
+```
+@import "tailwindcss";
+
+@source "../../templates";
+```
+
+A diretiva `@source` informa explicitamente um caminho que contém templates a serem analisados.
+
+O caminho é relativo ao arquivo CSS de entrada. Ajuste-o à estrutura real do projeto.
+
+### 47.2. Compilando o CSS
+
+Com o pacote `@tailwindcss/cli` instalado, execute na raiz do projeto:
+
+```
+npx @tailwindcss/cli \
+    -i ./static/src/input.css \
+    -o ./static/css/output.css \
+    --watch
+```
+
+A opção `-i` indica o arquivo de entrada, `-o` indica o arquivo de saída e `--watch` mantém o processo observando alterações.
+
+Mantenha esse processo ativo durante o desenvolvimento. Quando o Tailwind detectar mudanças relevantes nos arquivos monitorados, ele poderá atualizar o CSS compilado.
+
+### 47.3. Carregando os arquivos no Flask
+
+No template base:
+
+```
+<head>
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/output.css') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/custom.css') }}"
+    >
+</head>
+```
+
+O primeiro arquivo contém os estilos gerados pelo Tailwind. O segundo contém as regras próprias.
+
+A ordem importa quando existem regras que podem competir entre si. Entretanto, a ordem dos arquivos, isoladamente, não determina sempre qual estilo vence: especificidade, camadas CSS e declarações importantes também influenciam a cascata.
+
+---
+
+## 48. Reutilização com macros Jinja, includes e componentes
+
+Uma das vantagens de combinar Flask, Jinja e Tailwind é separar a estrutura da página em partes reutilizáveis.
+
+Existem diferentes formas de fazer isso, e cada uma atende a uma necessidade.
+
+### 48.1. `include`: reutilizando uma estrutura HTML
+
+Considere um arquivo `templates/components/navbar.html`:
+
+```
+<nav class="flex items-center justify-between border-b p-4">
+    <a href="{{ url_for('home') }}" class="font-bold">
+        Meu portfólio
+    </a>
+
+    <a href="{{ url_for('projetos') }}" class="text-blue-600 hover:text-blue-800">
+        Projetos
+    </a>
+</nav>
+```
+
+Em outro template:
+
+```
+{% include "components/navbar.html" %}
+```
+
+O `include` insere o conteúdo renderizado do template incluído no local em que aparece.
+
+É útil para barras de navegação, rodapés, mensagens de alerta e outros trechos HTML.
+
+### 48.2. `extends`: reutilizando uma estrutura de página
+
+Um template base pode definir a estrutura geral:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{% block title %}Meu portfólio{% endblock %}</title>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-900">
+    {% include "components/navbar.html" %}
+
+    <main class="mx-auto max-w-6xl p-6">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
+```
+
+Uma página específica pode estender essa estrutura:
+
+```
+{% extends "base.html" %}
+
+{% block title %}Início{% endblock %}
+
+{% block content %}
+    <h1 class="text-3xl font-bold">Bem-vindo</h1>
+    <p class="mt-3 text-gray-600">Este é meu portfólio.</p>
+{% endblock %}
+```
+
+O `extends` estabelece uma relação de herança entre templates, permitindo preencher os blocos definidos no arquivo base.
+
+### 48.3. Quando utilizar cada mecanismo
+
+- `include`: quando você quer incorporar outro template.
+    
+- `extends`: quando uma página deve herdar uma estrutura base.
+    
+- `macro`: quando você quer reutilizar uma estrutura parametrizada, como um botão que recebe texto, tipo ou classes.
+    
+
+Esses mecanismos não substituem o Tailwind. Eles organizam a estrutura HTML, enquanto o Tailwind controla a apresentação visual.
+
+---
+
+## 49. Evitando a duplicação de classes
+
+Em projetos pequenos, repetir classes em vários elementos não costuma ser um problema significativo.
+
+Entretanto, quando uma interface cresce, a duplicação pode tornar alterações visuais mais trabalhosas.
+
+Considere três botões:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+    Salvar
+</button>
+
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+    Editar
+</button>
+
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+    Confirmar
+</button>
+```
+
+Uma mudança no design exigiria alterar as três ocorrências.
+
+Uma alternativa é criar uma macro Jinja:
+
+```
+{# templates/components/buttons.html #}
+
+{% macro primary_button(text, type="button") %}
+    <button
+        type="{{ type }}"
+        class="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+    >
+        {{ text }}
+    </button>
+{% endmacro %}
+```
+
+Depois:
+
+```
+{% from "components/buttons.html" import primary_button %}
+
+{{ primary_button("Salvar") }}
+{{ primary_button("Editar") }}
+{{ primary_button("Confirmar") }}
+```
+
+Agora, a estrutura e as classes ficam centralizadas na macro.
+
+Isso não significa que toda combinação de classes precisa virar uma macro. Uma abstração é útil quando existe repetição real ou quando ela representa um componente reconhecível da interface.
+
+### 49.1. Alternativa com uma classe CSS própria
+
+Também seria possível criar uma classe tradicional:
+
+```
+/* static/css/custom.css */
+
+.btn-primary {
+    border-radius: 0.5rem;
+    background-color: #2563eb;
+    padding: 0.5rem 1rem;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+}
+```
+
+E utilizá-la:
+
+```
+<button class="btn-primary">Salvar</button>
+```
+
+As duas abordagens são válidas. A escolha depende da arquitetura do projeto e de como a equipe prefere organizar os componentes.
+
+---
+
+## 50. Otimização e tamanho do CSS compilado
+
+Uma preocupação comum ao começar com Tailwind é imaginar que todas as classes existentes no framework serão enviadas ao navegador.
+
+O Tailwind moderno analisa os arquivos-fonte e gera CSS para as classes identificadas durante a compilação, em vez de incluir indiscriminadamente todos os utilitários possíveis.
+
+Isso ajuda a manter a folha de estilos produzida menor do que uma distribuição que carregasse todos os utilitários não utilizados.
+
+### 50.1. Detecção das classes
+
+Considere o HTML:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white">
+    Salvar
+</button>
+```
+
+O Tailwind identifica as classes utilizadas e gera as regras correspondentes no arquivo de saída.
+
+Se uma classe não for detectada nos arquivos analisados, a regra correspondente poderá não ser gerada.
+
+Isso explica por que classes construídas dinamicamente podem causar problemas:
+
+```
+<div class="bg-{{ cor }}-600">
+    Conteúdo
+</div>
+```
+
+O compilador não executa o template Jinja para descobrir todos os valores possíveis de `cor`.
+
+Prefira classes completas:
+
+```
+{% set cores = {
+    "azul": "bg-blue-600",
+    "verde": "bg-green-600",
+    "vermelho": "bg-red-600"
+} %}
+
+<div class="{{ cores[cor] }}">
+    Conteúdo
+</div>
+```
+
+Se houver possibilidade de `cor` não existir no dicionário, defina um comportamento padrão ou valide o valor antes de renderizar o template.
+
+### 50.2. Evitando configurações desnecessárias
+
+Para manter um projeto organizado:
+
+- Inclua os diretórios relevantes na detecção de fontes.
+    
+- Evite adicionar caminhos que contenham grandes quantidades de arquivos irrelevantes.
+    
+- Não edite manualmente o CSS gerado esperando que as mudanças permaneçam após a próxima compilação.
+    
+- Mantenha as dependências de desenvolvimento separadas das dependências de execução quando isso fizer sentido para o processo de implantação.
+    
+- Verifique o arquivo compilado quando uma classe parecer não funcionar.
+    
+
+### 50.3. `@source inline()` no Tailwind v4
+
+Em situações específicas, pode ser necessário registrar utilitários que não aparecem como classes completas nos arquivos-fonte.
+
+O Tailwind CSS v4 permite registrar candidatos explicitamente com `@source inline()`.
+
+Exemplo:
+
+```
+@import "tailwindcss";
+
+@source inline("bg-blue-600 bg-green-600 bg-red-600");
+```
+
+Isso solicita a geração dos utilitários indicados, mesmo que eles não sejam encontrados nos arquivos analisados.
+
+Utilize esse recurso de forma intencional. Para aplicações comuns, é preferível estruturar o código de modo que as classes utilizadas estejam presentes nos templates.
+
+---
+
+## 51. Boas práticas de manutenção em projetos Flask
+
+Ao desenvolver uma aplicação Flask com Tailwind, a organização do código é tão importante quanto a aparência da interface.
+
+### 51.1. Separe as responsabilidades
+
+Uma estrutura bem organizada pode seguir esta divisão:
+
+- **Flask:** rotas, regras de negócio e respostas HTTP.
+    
+- **Banco de dados:** persistência e consultas.
+    
+- **Jinja:** composição dos templates.
+    
+- **Tailwind:** utilitários para apresentação.
+    
+- **CSS próprio:** efeitos ou regras específicas.
+    
+- **JavaScript:** interações que precisam acontecer no navegador.
+    
+
+Evite colocar regras de negócio no template ou depender de classes CSS para implementar validações de segurança.
+
+### 51.2. Evite templates gigantes
+
+Quando um arquivo HTML acumula muitos elementos e blocos, a manutenção se torna difícil.
+
+Separe componentes que possuem uma responsabilidade clara, como:
+
+```
+templates/
+├── base.html
+├── index.html
+├── projetos.html
+└── components/
+    ├── navbar.html
+    ├── footer.html
+    ├── project_card.html
+    └── alert.html
+```
+
+Essa organização não é obrigatória. Ela serve como exemplo de como dividir a interface conforme o projeto cresce.
+
+### 51.3. Mantenha o design consistente
+
+Escolha padrões para:
+
+- Cores principais e secundárias.
+    
+- Espaçamento entre elementos.
+    
+- Bordas e arredondamentos.
+    
+- Tamanhos de títulos.
+    
+- Estilos de botões.
+    
+- Estados de foco, erro e sucesso.
+    
+
+Se cada página utilizar valores aleatórios, a interface pode parecer inconsistente mesmo quando cada elemento está tecnicamente bem estilizado.
+
+As variáveis de tema do Tailwind v4 podem ajudar a centralizar valores compartilhados.
+
+### 51.4. Teste em diferentes larguras
+
+Uma página que funciona no monitor pode apresentar problemas em telas menores.
+
+Teste pelo menos:
+
+- Uma largura de celular.
+    
+- Uma largura intermediária, como tablet.
+    
+- Uma largura de desktop.
+    
+
+Observe se os elementos ultrapassam o contêiner, se os textos ficam difíceis de ler e se as ações continuam acessíveis.
+
+### 51.5. Não confunda aparência com funcionalidade
+
+Um botão com `hover:bg-blue-700` pode parecer interativo, mas isso não garante que execute uma ação.
+
+Da mesma forma:
+
+- Um formulário estilizado não valida automaticamente todos os dados no servidor.
+    
+- Um botão de login não implementa autenticação.
+    
+- Um link com aparência de botão ainda precisa de um destino válido.
+    
+- Um elemento visualmente desabilitado não está necessariamente desabilitado no HTML.
+    
+
+A interface precisa estar conectada ao comportamento real da aplicação.
+
+---
+
+## 52. Referência de diagnóstico rápido
+
+|Problema|O que verificar|
+|---|---|
+|Uma classe não produz efeito|Se a classe está correta e existe no CSS compilado|
+|`dark:` não funciona|Se o modo escuro está configurado para a preferência do sistema ou para a classe `.dark`|
+|Uma classe funciona em uma página, mas não em outra|Se os dois templates estão sendo analisados pelo Tailwind|
+|O CSS personalizado não aparece|Se o arquivo está sendo carregado pelo template|
+|As classes dinâmicas não são geradas|Se os nomes completos aparecem nas fontes ou foram registrados explicitamente|
+|O layout quebra no celular|Os breakpoints, as larguras, o `overflow` e a estrutura de Flexbox ou Grid|
+|Um botão não executa a ação esperada|O HTML, o JavaScript ou a rota Flask responsável|
+|O CSS parece desatualizado|Se o processo de compilação está ativo e se o navegador está usando a versão atual do arquivo|
+
+O objetivo do diagnóstico é identificar em qual camada o problema está: geração do CSS, carregamento do arquivo, regra CSS, template Jinja ou comportamento da aplicação.
+
+---

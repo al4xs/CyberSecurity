@@ -2207,3 +2207,5 @@ Considere estas recomendações:
     
 
 Em um portfólio pessoal com painel administrativo, por exemplo, o acesso ao painel pode exigir login normalmente, enquanto a alteração de senha ou de credenciais pode exigir uma nova confirmação da identidade.
+
+---

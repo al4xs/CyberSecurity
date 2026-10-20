@@ -2209,3 +2209,341 @@ Considere estas recomendações:
 Em um portfólio pessoal com painel administrativo, por exemplo, o acesso ao painel pode exigir login normalmente, enquanto a alteração de senha ou de credenciais pode exigir uma nova confirmação da identidade.
 
 ---
+# 40. Configurando a proteção de sessão do Flask-Login
+
+O Flask-Login possui um recurso chamado _session protection_, que ajuda a identificar mudanças em características da requisição associadas à sessão autenticada.
+
+Por padrão, o Flask-Login utiliza o modo `basic` quando a proteção de sessão não foi desativada explicitamente.
+
+Podemos configurar esse comportamento no `LoginManager`:
+
+```
+login_manager.session_protection = "basic"
+```
+
+Existem dois modos principais:
+
+|Modo|Comportamento|
+|---|---|
+|`basic`|Verifica mudanças no identificador de sessão calculado pelo Flask-Login e pode marcar a sessão como não recente.|
+|`strong`|Aplica verificações mais rigorosas e pode remover dados da sessão e invalidar o cookie Remember Me quando identifica uma mudança suspeita, conforme o tipo de sessão.|
+
+Também é possível desativar esse recurso:
+
+```
+login_manager.session_protection = None
+```
+
+Isso desativa a proteção adicional do Flask-Login. Em geral, não é necessário fazer isso sem um motivo específico.
+
+## 40.1. Como funciona essa verificação?
+
+O Flask-Login utiliza características da requisição, incluindo informações do navegador, para calcular um identificador associado à sessão.
+
+Se essas características mudarem, o mecanismo pode interpretar a mudança como suspeita.
+
+Por exemplo, imagine que alguém faça login utilizando determinado navegador. Depois, uma requisição autenticada chega com características diferentes das utilizadas anteriormente.
+
+O Flask-Login poderá aplicar as medidas correspondentes ao modo de proteção configurado.
+
+Entretanto, essa verificação possui limitações:
+
+- Um usuário legítimo pode mudar de rede ou de navegador.
+    
+- Um invasor pode reproduzir algumas características da requisição original.
+    
+- A verificação não substitui HTTPS, proteção CSRF ou uma política adequada de sessões.
+    
+
+Portanto, _session protection_ é uma camada adicional, não uma solução completa de segurança.
+
+---
+
+# 41. Configurando os cookies da aplicação
+
+O Flask utiliza cookies para manter a sessão do usuário entre as requisições. Algumas configurações ajudam a reduzir riscos relacionados ao acesso e ao envio desses cookies.
+
+Podemos configurar as propriedades do cookie de sessão:
+
+```
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+```
+
+Cada opção tem uma finalidade específica.
+
+|Configuração|Função|
+|---|---|
+|`SESSION_COOKIE_HTTPONLY`|Impede o acesso direto ao cookie por JavaScript comum.|
+|`SESSION_COOKIE_SECURE`|Restringe o envio do cookie a conexões HTTPS.|
+|`SESSION_COOKIE_SAMESITE`|Controla o envio do cookie em determinadas requisições entre sites.|
+
+Essas opções dizem respeito ao cookie de sessão do Flask. O cookie Remember Me do Flask-Login possui configurações próprias, como vimos anteriormente.
+
+## 41.1. Por que HttpOnly é importante?
+
+Imagine uma aplicação vulnerável a XSS, em que um invasor consiga executar JavaScript injetado em uma página.
+
+Sem `HttpOnly`, scripts executados na origem da aplicação podem conseguir ler o cookie por meio de `document.cookie`, dependendo de como ele foi configurado.
+
+Com `HttpOnly=True`, o navegador impede esse acesso direto por JavaScript.
+
+Isso reduz uma possibilidade de exposição do cookie, mas não elimina o XSS. Um script malicioso ainda pode tentar executar ações em nome do usuário dentro da página comprometida.
+
+## 41.2. Por que Secure depende de HTTPS?
+
+Quando configuramos:
+
+```
+SESSION_COOKIE_SECURE=True
+```
+
+o navegador envia o cookie somente por HTTPS.
+
+Isso ajuda a impedir que o cookie seja transmitido em uma conexão HTTP sem criptografia.
+
+Em produção, a aplicação deve utilizar HTTPS corretamente. Durante o desenvolvimento local, caso o servidor esteja disponível apenas por HTTP, essa configuração pode impedir que o navegador envie o cookie normalmente.
+
+Não desative essa proteção em produção apenas para contornar um problema de configuração HTTPS.
+
+## 41.3. O que SameSite faz?
+
+A configuração:
+
+```
+SESSION_COOKIE_SAMESITE="Lax"
+```
+
+restringe o envio do cookie em determinados contextos de navegação entre sites.
+
+Os valores mais comuns são:
+
+- `Strict`: aplica uma restrição mais rigorosa ao envio entre sites.
+    
+- `Lax`: permite determinados usos de navegação, restringindo outros contextos entre sites.
+    
+- `None`: permite o envio em contextos entre sites, mas exige `Secure` nos navegadores modernos que seguem esse requisito.
+    
+
+A escolha depende do funcionamento da aplicação. `SameSite` ajuda a reduzir alguns cenários de CSRF, mas não deve ser tratado como substituto universal de tokens CSRF.
+
+---
+
+# 42. Evitando que uma sessão continue válida após mudanças importantes
+
+Imagine que um usuário altere sua senha porque acredita que outra pessoa teve acesso à conta.
+
+Se a aplicação não tiver uma estratégia para invalidar outras sessões, credenciais de sessão anteriormente obtidas podem continuar representando um risco.
+
+O Flask-Login, por si só, não fornece um painel completo de gerenciamento e revogação de todas as sessões de todos os dispositivos.
+
+Para aplicações que precisam desse controle, podemos implementar uma estratégia adicional.
+
+Uma possibilidade é armazenar no banco de dados um identificador de autenticação ou uma versão de sessão associada ao usuário.
+
+Por exemplo, o modelo poderia possuir:
+
+```
+class Usuario(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    senha_hash = db.Column(db.String(255), nullable=False)
+    auth_version = db.Column(
+        db.Integer,
+        nullable=False,
+        default=1,
+    )
+```
+
+O campo `auth_version` representa uma versão da autenticação do usuário.
+
+A aplicação precisaria registrar a versão correspondente à autenticação e verificar se ela continua válida nas requisições protegidas.
+
+Quando o usuário alterasse a senha, por exemplo, poderíamos incrementar o campo:
+
+```
+usuario.auth_version += 1
+db.session.commit()
+```
+
+A partir daí, as sessões que carregassem uma versão anterior poderiam ser recusadas pela lógica adicional da aplicação.
+
+**Importante:** esse modelo, isoladamente, não invalida sessões. É necessário implementar a gravação e a verificação da versão, além de decidir como tratar os cookies Remember Me e outras formas de autenticação.
+
+Para projetos pequenos, esse mecanismo pode ser desnecessário. Ele passa a fazer mais sentido quando existe uma exigência real de revogar sessões em diferentes dispositivos.
+
+---
+
+# 43. Mantendo as rotas de autenticação organizadas
+
+À medida que a aplicação cresce, é comum que o arquivo principal acumule rotas de login, logout, perfil, administração e outras funcionalidades.
+
+O Flask permite organizar essas rotas em um `Blueprint`.
+
+Um _Blueprint_ agrupa rotas relacionadas para que possam ser registradas na aplicação de maneira organizada.
+
+Podemos criar uma pasta para a autenticação:
+
+```
+meu_projeto/
+├── app.py
+├── extensions.py
+├── models.py
+├── auth/
+│   ├── __init__.py
+└── templates/
+    └── login.html
+```
+
+Nesse exemplo, `auth/` será responsável pelas rotas relacionadas à autenticação.
+
+## 43.1. Criando o Blueprint
+
+No arquivo `auth/__init__.py`:
+
+```
+from flask import Blueprint
+
+auth_bp = Blueprint("auth", __name__)
+
+from auth import routes
+```
+
+A variável `auth_bp` representa o Blueprint.
+
+O nome `"auth"` é usado como identificação do Blueprint e também participa da criação dos endpoints.
+
+O import de `routes` registra o módulo de rotas associado ao Blueprint. Esse padrão funciona, mas deve ser organizado com cuidado para evitar importações circulares em projetos maiores.
+
+## 43.2. Criando as rotas de autenticação
+
+Crie `auth/routes.py`:
+
+```
+from flask import render_template, redirect, url_for
+from flask_login import current_user, login_required, logout_user
+
+from auth import auth_bp
+
+
+@auth_bp.route("/perfil")
+@login_required
+def perfil():
+    return render_template(
+        "perfil.html",
+        usuario=current_user,
+    )
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("auth.login"))
+```
+
+O código demonstra como agrupar rotas de perfil e logout.
+
+A referência `url_for("auth.login")` pressupõe que exista uma rota de login registrada nesse mesmo Blueprint, com a função chamada `login`.
+
+Por exemplo:
+
+```
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+    ...
+```
+
+Se o endpoint for registrado dessa forma, seu nome será `auth.login`.
+
+## 43.3. Registrando o Blueprint na aplicação
+
+No arquivo `app.py`:
+
+```
+from flask import Flask
+
+from auth import auth_bp
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = "chave-apenas-para-desenvolvimento"
+
+app.register_blueprint(auth_bp)
+```
+
+Ao chamar `register_blueprint()`, as rotas do Blueprint passam a fazer parte da aplicação.
+
+Em um projeto real, o `LoginManager` também deve ser inicializado na aplicação, e a configuração de `SECRET_KEY` deve vir de uma fonte segura.
+
+Para uma aplicação maior, é comum separar a criação da aplicação, a inicialização das extensões, os modelos e as rotas em módulos próprios.
+
+---
+
+# 44. Entendendo os endpoints com Blueprint
+
+Sem Blueprint, uma rota pode ter um endpoint como:
+
+```
+@app.route("/login")
+def login():
+    ...
+```
+
+O endpoint padrão é:
+
+```
+url_for("login")
+```
+
+Com um Blueprint chamado `auth`, a mesma rota pode ter o endpoint:
+
+```
+url_for("auth.login")
+```
+
+Essa diferença é importante porque o Flask-Login utiliza o nome do endpoint configurado em `login_manager.login_view`.
+
+Se a rota de login estiver dentro do Blueprint `auth`, podemos configurar:
+
+```
+login_manager.login_view = "auth.login"
+```
+
+Caso seja configurado apenas `"login"`, mas não exista um endpoint com esse nome, o redirecionamento poderá falhar.
+
+O nome do endpoint não é necessariamente igual ao caminho da URL. Ele é o identificador usado pelo Flask para localizar a função associada à rota.
+
+---
+
+# 45. Cuidados ao concluir a autenticação
+
+Antes de considerar a autenticação de uma aplicação pronta, verifique se os pontos abaixo estão contemplados.
+
+- As rotas privadas utilizam `login_required`.
+    
+- As rotas administrativas também verificam permissões.
+    
+- As credenciais são verificadas antes de chamar `login_user()`.
+    
+- O parâmetro `next` é validado antes de ser utilizado em um redirecionamento.
+    
+- As sessões e os cookies estão configurados de acordo com o ambiente.
+    
+- Os formulários que alteram estado possuem proteção CSRF.
+    
+- A aplicação não utiliza uma `SECRET_KEY` previsível em produção.
+    
+- As operações sensíveis podem exigir reautenticação.
+    
+- O logout é realizado por uma requisição apropriada e protegida contra CSRF.
+    
+- O comportamento de Remember Me está alinhado com o nível de risco da aplicação.
+    
+
+O Flask-Login fornece ferramentas para lidar com a identidade e o estado de autenticação do usuário. A aplicação continua responsável por decidir quem pode executar cada operação e por configurar as proteções necessárias ao seu contexto.
+
+---

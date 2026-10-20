@@ -42,14 +42,14 @@ Com Tailwind CSS, podemos alcançar o mesmo resultado diretamente no HTML:
 
 Observe as classes utilizadas:
 
-|Classe|Função|
-|---|---|
-|`bg-blue-600`|Define a cor de fundo azul|
-|`text-white`|Define a cor do texto como branco|
-|`px-6`|Adiciona espaçamento horizontal interno|
-|`py-3`|Adiciona espaçamento vertical interno|
-|`rounded-lg`|Arredonda as bordas|
-|`border-0`|Remove a borda|
+| Classe        | Função                                  |
+| ------------- | --------------------------------------- |
+| `bg-blue-600` | Define a cor de fundo azul              |
+| `text-white`  | Define a cor do texto como branco       |
+| `px-6`        | Adiciona espaçamento horizontal interno |
+| `py-3`        | Adiciona espaçamento vertical interno   |
+| `rounded-lg`  | Arredonda as bordas                     |
+| `border-0`    | Remove a borda                          |
 
 Cada classe representa uma utilidade específica de CSS.
 

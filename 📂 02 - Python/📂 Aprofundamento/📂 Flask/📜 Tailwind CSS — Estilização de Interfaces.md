@@ -6703,3 +6703,266 @@ A separação de responsabilidades continua sendo importante: Flask administra a
 O Tailwind simplifica a construção visual, mas não substitui a organização dos templates, a validação dos dados, os testes de acessibilidade nem as verificações necessárias antes da publicação.
 
 ---
+# 100. Estrutura recomendada para um projeto Flask com Tailwind CSS
+
+Ao desenvolver uma aplicação Flask, é importante manter uma separação clara entre a lógica Python, os templates HTML, os estilos e os arquivos estáticos.
+
+Uma estrutura possível para um projeto de portfólio com painel administrativo é:
+
+```
+meu_portfolio/
+│
+├── app.py
+├── db.py
+├── models.py
+├── package.json
+├── package-lock.json
+│
+├── templates/
+│   ├── base.html
+│   ├── home.html
+│   │
+│   ├── components/
+│   │   ├── navbar.html
+│   │   └── flash_messages.html
+│   │
+│   └── admin/
+│       ├── base.html
+│       ├── dashboard.html
+│       └── projects/
+│           ├── list.html
+│           └── form.html
+│
+└── static/
+    ├── src/
+    │   └── input.css
+    │
+    ├── dist/
+    │   └── output.css
+    │
+    └── js/
+        └── main.js
+```
+
+Essa estrutura é ilustrativa. Em aplicações maiores, pode ser conveniente utilizar Blueprints para separar as rotas públicas e administrativas, além de organizar os modelos e os serviços em módulos próprios.
+
+As responsabilidades ficam distribuídas da seguinte maneira:
+
+|Diretório ou arquivo|Responsabilidade|
+|---|---|
+|`app.py`|Inicialização da aplicação e registro de rotas ou Blueprints.|
+|`db.py`|Configuração e inicialização da integração com o banco de dados.|
+|`models.py`|Modelos de dados e estrutura das entidades.|
+|`templates/`|HTML e templates Jinja.|
+|`templates/components/`|Componentes reutilizáveis de interface.|
+|`templates/admin/`|Templates do painel administrativo.|
+|`static/src/input.css`|Entrada do processo de compilação do Tailwind.|
+|`static/dist/output.css`|CSS compilado servido pelo Flask.|
+|`static/js/`|JavaScript utilizado pela interface.|
+|`package.json`|Dependências e scripts de build do frontend.|
+
+A pasta `static/dist/` é uma escolha de organização, não uma exigência do Tailwind. O importante é que o caminho configurado no comando de build corresponda ao caminho utilizado pelo template.
+
+---
+
+# 101. Exemplo integrado: componente de projeto reutilizável
+
+Considere um portfólio que apresenta projetos cadastrados no banco de dados. Cada projeto possui título, descrição e um endereço para acesso.
+
+Em vez de repetir o mesmo HTML em todas as páginas, podemos criar um macro Jinja.
+
+Arquivo `templates/components/project_card.html`:
+
+```
+{% macro project_card(project) %}
+    <article class="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+        <h2 class="text-lg font-semibold text-slate-900">
+            {{ project.title }}
+        </h2>
+
+        <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">
+            {{ project.description }}
+        </p>
+
+        {% if project.url %}
+            <a
+                href="{{ project.url }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-5 inline-flex w-fit items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+                Ver projeto
+            </a>
+        {% endif %}
+    </article>
+{% endmacro %}
+```
+
+O macro recebe um objeto `project` e utiliza seus atributos para preencher o componente.
+
+Observe alguns detalhes:
+
+- `flex flex-col` organiza os elementos verticalmente.
+    
+- `flex-1` permite que a descrição ocupe o espaço disponível, ajudando a alinhar os botões entre cartões de alturas semelhantes.
+    
+- `transition`, `hover:-translate-y-1` e `hover:shadow-md` criam um efeito visual de interação.
+    
+- `focus-visible:outline-*` fornece um indicador de foco para navegação por teclado.
+    
+- O bloco condicional evita mostrar um link quando o projeto não possui endereço.
+    
+
+O uso de `target="_blank"` abre o destino em outra aba. O atributo `rel="noopener noreferrer"` evita que a página de destino tenha acesso à janela de origem e também impede o envio do cabeçalho de referência.
+
+Como o macro recebe dados do banco, a URL deve ser validada de acordo com as regras da aplicação. A renderização automática de strings pelo Jinja ajuda a evitar a interpretação de texto como HTML, mas não substitui a validação de URLs nem a proteção contra esquemas perigosos.
+
+## 101.1. Utilizando o componente
+
+Arquivo `templates/home.html`:
+
+```
+{% extends "base.html" %}
+{% from "components/project_card.html" import project_card %}
+
+{% block title %}Portfólio{% endblock %}
+
+{% block content %}
+    <section>
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900">
+                Meus projetos
+            </h1>
+
+            <p class="mt-2 text-slate-600">
+                Projetos desenvolvidos durante meus estudos.
+            </p>
+        </div>
+
+        {% if projects %}
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {% for project in projects %}
+                    {{ project_card(project) }}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                <h2 class="text-lg font-semibold text-slate-900">
+                    Nenhum projeto publicado
+                </h2>
+
+                <p class="mt-2 text-sm text-slate-600">
+                    Os projetos aparecerão aqui quando forem publicados.
+                </p>
+            </div>
+        {% endif %}
+    </section>
+{% endblock %}
+```
+
+A condição `{% if projects %}` verifica se a coleção possui elementos. Se estiver vazia, a página exibe um estado vazio em vez de deixar uma área sem conteúdo.
+
+O macro mantém a estrutura visual de cada cartão em um único lugar. Se o estilo mudar, basta alterar o componente, sem precisar atualizar manualmente todas as páginas que o utilizam.
+
+---
+
+# 102. Como escolher entre classes utilitárias, macros e CSS personalizado
+
+Esses recursos resolvem problemas diferentes e podem ser utilizados juntos.
+
+|Necessidade|Abordagem recomendada|
+|---|---|
+|Ajustar espaçamento, cores, tipografia e layout|Classes utilitárias do Tailwind.|
+|Reutilizar a mesma estrutura HTML com dados diferentes|Macros Jinja.|
+|Compartilhar uma estrutura completa entre páginas|`extends` e `block`.|
+|Inserir um fragmento HTML reutilizável|`include`.|
+|Criar um padrão de estilo específico e recorrente|`@utility` ou CSS personalizado, conforme a necessidade.|
+|Integrar uma biblioteca CSS existente|CSS convencional, respeitando a cascata.|
+|Controlar comportamento, estado e eventos da interface|JavaScript.|
+|Validar dados, autenticar usuários e aplicar permissões|Flask e a lógica do servidor.|
+
+Uma interface bem organizada não exige que tudo seja transformado em componente, nem que todo estilo seja escrito em CSS convencional.
+
+Por exemplo, uma pequena seção com poucas classes pode continuar diretamente no template. Já um cartão repetido em várias páginas pode justificar um macro.
+
+O objetivo é evitar duplicação desnecessária sem criar abstrações difíceis de entender.
+
+---
+
+# 103. Erros comuns e como diagnosticá-los
+
+A tabela a seguir reúne problemas que podem surgir durante o desenvolvimento.
+
+|Sintoma|Causa possível|Verificação|
+|---|---|---|
+|A página aparece sem estilos|CSS ausente ou não carregado|Verifique a requisição de `output.css` na aba Network.|
+|Algumas classes não funcionam|Classes não detectadas ou nomes construídos dinamicamente|Confira as fontes analisadas e o conteúdo do CSS compilado.|
+|As alterações no template não aparecem visualmente|Cache do navegador ou classe não incluída no build|Recompile o CSS e faça uma recarga forçada.|
+|Um estilo é sobrescrito|Cascata, especificidade ou ordem das regras|Inspecione a propriedade no painel Computed do navegador.|
+|O layout quebra em telas pequenas|Classes responsivas inadequadas ou conteúdo sem limites|Teste larguras diferentes e revise o layout mobile-first.|
+|Um macro não é encontrado|Caminho incorreto ou arquivo fora de `templates/`|Confira a localização do arquivo e a importação Jinja.|
+|O CSS retorna `404`|Caminho de saída diferente do caminho utilizado no template|Compare o comando de build com o valor de `filename` em `url_for`.|
+|O build não reconhece uma diretiva|Versão incompatível ou dependência incorreta|Confira a versão instalada e a documentação correspondente.|
+
+Uma sequência de diagnóstico eficiente é:
+
+1. Confirmar que o HTML gerado contém as classes esperadas.
+    
+2. Verificar se o arquivo CSS foi carregado com sucesso.
+    
+3. Conferir se as classes aparecem no CSS compilado.
+    
+4. Inspecionar a propriedade CSS no navegador.
+    
+5. Investigar a cascata e a especificidade somente depois de confirmar que a regra existe.
+    
+
+Essa ordem evita tentar corrigir a cascata quando o problema real é a ausência da classe no arquivo compilado.
+
+---
+
+# 104. Referências oficiais para consulta
+
+Como o Tailwind CSS evolui entre versões, a documentação oficial deve ser a referência principal para confirmar sintaxe, compatibilidade e mudanças de comportamento.
+
+- [Tailwind CSS — documentação oficial](https://tailwindcss.com/docs): utilitários, variantes, temas e recursos do framework.
+    
+- [Tailwind CSS — instalação com CLI](https://tailwindcss.com/docs/installation/tailwind-cli): instalação e compilação utilizando a CLI.
+    
+- [Tailwind CSS — detecção de classes](https://tailwindcss.com/docs/detecting-classes-in-source-files): funcionamento da detecção de classes e configuração de fontes.
+    
+- [Tailwind CSS — diretivas de tema](https://tailwindcss.com/docs/theme): personalização de variáveis de tema.
+    
+- [Flask — documentação oficial](https://flask.palletsprojects.com/): rotas, templates, arquivos estáticos e organização da aplicação.
+    
+- [Jinja — documentação oficial](https://jinja.palletsprojects.com/): herança de templates, macros, filtros e estruturas de controle.
+    
+
+Ao consultar exemplos externos, confira a versão do Tailwind utilizada. Uma solução escrita para a versão 3 pode exigir adaptações para a versão 4.
+
+---
+
+# 105. Princípios finais de manutenção
+
+Ao manter uma aplicação Flask com Tailwind CSS, alguns princípios ajudam a preservar a qualidade do projeto:
+
+- **Consistência:** utilize padrões visuais semelhantes para botões, formulários, alertas, cartões e tabelas.
+    
+- **Reutilização:** aproveite a herança de templates e os macros Jinja para componentes que realmente se repetem.
+    
+- **Separação de responsabilidades:** mantenha a lógica de negócio no Python, a estrutura nos templates e a apresentação no CSS.
+    
+- **Clareza:** prefira classes explícitas e código fácil de entender a construções dinâmicas difíceis de depurar.
+    
+- **Acessibilidade:** preserve contraste, foco visível, rótulos e navegação por teclado.
+    
+- **Validação:** teste o HTML renderizado, o CSS compilado e o comportamento da interface em diferentes dispositivos.
+    
+- **Compatibilidade:** confira a documentação correspondente à versão instalada antes de aplicar configurações encontradas em tutoriais.
+    
+- **Segurança:** nunca utilize classes CSS como mecanismo de autorização ou controle de acesso. Ocultar um botão não impede que alguém tente acessar diretamente a rota correspondente.
+    
+
+O Tailwind CSS é uma ferramenta de estilização. Ele ajuda a construir interfaces consistentes e responsivas, mas a qualidade final depende também da organização do código, da acessibilidade, dos testes e das decisões tomadas na arquitetura da aplicação.
+
+---

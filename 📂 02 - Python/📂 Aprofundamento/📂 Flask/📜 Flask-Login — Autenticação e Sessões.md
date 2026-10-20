@@ -2931,3 +2931,483 @@ Em uma aplicação real, também seria importante testar:
 Os testes devem acompanhar o comportamento efetivamente implementado. Não basta criar testes que passam: é necessário garantir que as verificações representem os requisitos de segurança da aplicação.
 
 ---
+# 55. Organizando o fluxo completo
+
+Nesta parte, vamos reunir os principais conceitos estudados em um exemplo de autenticação com Flask-Login.
+
+A aplicação terá:
+
+- Uma página de login.
+    
+- Verificação de senha por hash.
+    
+- Uma página de perfil protegida.
+    
+- Uma página administrativa com verificação de permissão.
+    
+- Uma rota de logout por POST.
+    
+- Um `user_loader` para recuperar o usuário autenticado.
+    
+
+Para manter o exemplo focado no Flask-Login, os usuários ficarão armazenados em memória. Isso significa que serão recriados quando o processo Python for reiniciado. Em uma aplicação real, os usuários devem ser armazenados em um banco de dados.
+
+## 55.1. Estrutura do projeto
+
+```
+flask-login-exemplo/
+├── app.py
+└── templates/
+    ├── login.html
+    ├── perfil.html
+    └── admin.html
+```
+
+Instale as dependências no ambiente virtual:
+
+```
+python -m pip install flask flask-login
+```
+
+O Flask-Login utiliza a sessão do Flask para manter a autenticação entre requisições.
+
+---
+
+# 56. Criando a aplicação
+
+Crie o arquivo `app.py`:
+
+```
+import os
+
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash,
+)
+
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
+
+if not app.config["SECRET_KEY"]:
+    raise RuntimeError(
+        "Configure a variável de ambiente FLASK_SECRET_KEY."
+    )
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+
+
+class Usuario(UserMixin):
+    def __init__(self, id, email, senha_hash, is_admin=False):
+        self.id = str(id)
+        self.email = email
+        self.senha_hash = senha_hash
+        self.is_admin = is_admin
+
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+
+
+usuarios = {
+    "1": Usuario(
+        id="1",
+        email="admin@example.com",
+        senha_hash=generate_password_hash("SenhaAdmin123!"),
+        is_admin=True,
+    ),
+    "2": Usuario(
+        id="2",
+        email="usuario@example.com",
+        senha_hash=generate_password_hash("SenhaUsuario123!"),
+    ),
+}
+
+
+@login_manager.user_loader
+def carregar_usuario(user_id):
+    return usuarios.get(str(user_id))
+
+
+@app.route("/")
+def home():
+    if current_user.is_authenticated:
+        return redirect(url_for("perfil"))
+
+    return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("perfil"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+
+        usuario = next(
+            (
+                usuario
+                for usuario in usuarios.values()
+                if usuario.email == email
+            ),
+            None,
+        )
+
+        if usuario is None or not usuario.verificar_senha(senha):
+            flash("E-mail ou senha inválidos.")
+            return render_template("login.html"), 401
+
+        login_user(usuario)
+
+        return redirect(url_for("perfil"))
+
+    return render_template("login.html")
+
+
+@app.route("/perfil")
+@login_required
+def perfil():
+    return render_template(
+        "perfil.html",
+        usuario=current_user,
+    )
+
+
+@app.route("/admin")
+@login_required
+def admin():
+    if not current_user.is_admin:
+        abort(403)
+
+    return render_template("admin.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+---
+
+# 57. Entendendo as partes principais
+
+## 57.1. Configuração da chave secreta
+
+```
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
+```
+
+A aplicação busca a chave secreta na variável de ambiente `FLASK_SECRET_KEY`.
+
+Ela é necessária para proteger a integridade da sessão do Flask e para recursos que dependem da chave secreta, como mensagens flash.
+
+Não coloque uma chave previsível diretamente no código de produção. Também não envie essa variável para um repositório público.
+
+## 57.2. Classe Usuario
+
+```
+class Usuario(UserMixin):
+```
+
+A classe representa um usuário reconhecido pelo Flask-Login.
+
+O `UserMixin` fornece propriedades e métodos esperados pela extensão, incluindo `is_authenticated` e `get_id()`.
+
+O atributo `id` identifica o usuário. O `senha_hash` armazena o hash da senha, e `is_admin` representa uma permissão administrativa do exemplo.
+
+O método:
+
+```
+def verificar_senha(self, senha):
+    return check_password_hash(self.senha_hash, senha)
+```
+
+compara a senha informada com o hash armazenado, sem guardar a senha original em texto puro.
+
+## 57.3. Recuperando o usuário da sessão
+
+```
+@login_manager.user_loader
+def carregar_usuario(user_id):
+    return usuarios.get(str(user_id))
+```
+
+O Flask-Login chama essa função quando precisa recuperar o usuário associado à identidade registrada na sessão.
+
+Se o identificador não existir no dicionário, o método retorna `None`, indicando que o usuário não foi encontrado.
+
+Em uma aplicação com banco de dados, esse método normalmente consultaria a tabela de usuários.
+
+## 57.4. Verificando as credenciais
+
+```
+if usuario is None or not usuario.verificar_senha(senha):
+    flash("E-mail ou senha inválidos.")
+    return render_template("login.html"), 401
+```
+
+A aplicação verifica se o usuário existe e se a senha corresponde ao hash.
+
+O uso de `or` faz com que a segunda condição só seja avaliada se a primeira for falsa. Assim, se o usuário não existir, não tentamos acessar um método de um objeto inexistente.
+
+A mensagem é a mesma para os dois casos, evitando informar diretamente se determinado e-mail está cadastrado.
+
+## 57.5. Protegendo o perfil
+
+```
+@app.route("/perfil")
+@login_required
+def perfil():
+    ...
+```
+
+O decorador impede o acesso de visitantes não autenticados.
+
+Dentro da função, `current_user` representa o usuário autenticado naquela requisição.
+
+## 57.6. Protegendo a área administrativa
+
+```
+@app.route("/admin")
+@login_required
+def admin():
+    if not current_user.is_admin:
+        abort(403)
+```
+
+Primeiro, o Flask-Login exige autenticação. Depois, a própria aplicação verifica se o usuário possui permissão administrativa.
+
+O erro `403 Forbidden` indica que a requisição foi compreendida, mas o acesso não é permitido.
+
+A permissão administrativa precisa vir de uma fonte confiável. Não permita que o usuário escolha livremente seu próprio valor de `is_admin`.
+
+---
+
+# 58. Criando o template de login
+
+Crie `templates/login.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Entrar</h1>
+
+    {% with mensagens = get_flashed_messages() %}
+        {% if mensagens %}
+            <ul>
+                {% for mensagem in mensagens %}
+                    <li>{{ mensagem }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+        <div>
+            <label for="email">E-mail</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                autocomplete="username"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="senha">Senha</label>
+            <input
+                type="password"
+                id="senha"
+                name="senha"
+                autocomplete="current-password"
+                required
+            >
+        </div>
+
+        <button type="submit">Entrar</button>
+    </form>
+</body>
+</html>
+```
+
+O template utiliza Jinja para exibir mensagens flash e gerar a URL da rota de login.
+
+**Atenção:** este formulário ainda não possui proteção CSRF. Antes de utilizá-lo em uma aplicação real, adicione Flask-WTF ou outra proteção CSRF adequada. Esse será um dos assuntos da próxima anotação.
+
+---
+
+# 59. Criando o template do perfil
+
+Crie `templates/perfil.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Meu perfil</title>
+</head>
+<body>
+    <h1>Meu perfil</h1>
+
+    <p>Bem-vindo, {{ usuario.email }}!</p>
+
+    <p>
+        <a href="{{ url_for('admin') }}">
+            Área administrativa
+        </a>
+    </p>
+
+    <form method="POST" action="{{ url_for('logout') }}">
+        <button type="submit">Sair</button>
+    </form>
+</body>
+</html>
+```
+
+O template apresenta o e-mail do usuário e um formulário para encerrar a sessão.
+
+O link para a área administrativa pode ser exibido a todos os usuários neste exemplo, mas a rota continua protegida no servidor. Ocultar um link na interface não é uma forma suficiente de controlar permissões.
+
+---
+
+# 60. Criando o template administrativo
+
+Crie `templates/admin.html`:
+
+```
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Administração</title>
+</head>
+<body>
+    <h1>Painel administrativo</h1>
+
+    <p>Você possui permissão para acessar esta área.</p>
+
+    <a href="{{ url_for('perfil') }}">Voltar ao perfil</a>
+
+    <form method="POST" action="{{ url_for('logout') }}">
+        <button type="submit">Sair</button>
+    </form>
+</body>
+</html>
+```
+
+A autorização não depende do template. Mesmo que alguém digite `/admin` diretamente na barra de endereço, a função da rota verificará `current_user.is_admin`.
+
+---
+
+# 61. Executando o projeto
+
+No Ubuntu, entre na pasta do projeto e ative seu ambiente virtual:
+
+```
+source .venv/bin/activate
+```
+
+Configure uma chave secreta para o ambiente de desenvolvimento:
+
+```
+export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+```
+
+Essa variável permanece disponível no shell atual. Se abrir outro terminal, será necessário configurá-la novamente ou utilizar um mecanismo apropriado de configuração local.
+
+Inicie a aplicação:
+
+```
+python app.py
+```
+
+Abra no navegador o endereço local informado pelo Flask, normalmente `http://127.0.0.1:5000`.
+
+Para testar o exemplo, use uma destas contas fictícias:
+
+|E-mail|Senha|Permissão|
+|---|---|---|
+|`admin@example.com`|`SenhaAdmin123!`|Administrador|
+|`usuario@example.com`|`SenhaUsuario123!`|Usuário comum|
+
+Essas credenciais são exclusivamente didáticas. Não as reutilize em contas reais.
+
+Teste os seguintes comportamentos:
+
+1. Acesse `/perfil` sem estar autenticado.
+    
+2. Faça login com credenciais incorretas.
+    
+3. Entre como usuário comum e tente acessar `/admin`.
+    
+4. Saia da conta e tente acessar novamente o perfil.
+    
+5. Entre como administrador e acesse `/admin`.
+    
+
+---
+
+# 62. Limitações do exemplo e próximos ajustes
+
+O exemplo reúne o funcionamento básico do Flask-Login, mas ainda não é um sistema de autenticação pronto para produção.
+
+Antes de utilizá-lo em um projeto real, será necessário:
+
+- Persistir os usuários em um banco de dados.
+    
+- Adicionar proteção CSRF aos formulários.
+    
+- Remover o modo de depuração em produção.
+    
+- Configurar HTTPS e os cookies de sessão adequadamente.
+    
+- Implementar uma política para senhas, recuperação de conta e tentativas de login.
+    
+- Validar redirecionamentos, caso a aplicação utilize o parâmetro `next`.
+    
+- Definir regras de autorização conforme os recursos da aplicação.
+    
+- Criar testes automatizados que cubram os fluxos reais.
+    
+
+O Flask-Login cuida principalmente do estado de autenticação. Ele não fornece, sozinho, cadastro completo, armazenamento de usuários, recuperação de senha, proteção CSRF ou um sistema de permissões.
+
+---

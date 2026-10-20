@@ -3160,3 +3160,747 @@ A interface precisa estar conectada ao comportamento real da aplicação.
 O objetivo do diagnóstico é identificar em qual camada o problema está: geração do CSS, carregamento do arquivo, regra CSS, template Jinja ou comportamento da aplicação.
 
 ---
+# 📜 Tailwind CSS — Estilização de Interfaces
+
+---
+
+# Parte 7 — Recursos avançados do Tailwind CSS
+
+## 53. Valores arbitrários no Tailwind CSS
+
+O Tailwind possui um sistema de utilitários baseado em valores predefinidos. Por exemplo:
+
+```
+<div class="w-64 bg-blue-500 p-4">
+    Conteúdo
+</div>
+```
+
+Nesse exemplo:
+
+- `w-64` define uma largura usando a escala de espaçamento do Tailwind.
+    
+- `bg-blue-500` define uma cor de fundo predefinida.
+    
+- `p-4` aplica espaçamento interno usando a escala do framework.
+    
+
+Entretanto, nem sempre os valores disponíveis atendem exatamente à necessidade do projeto.
+
+Para esses casos, o Tailwind permite utilizar **valores arbitrários**, que são valores escritos diretamente entre colchetes.
+
+### 53.1. Definindo valores personalizados
+
+Exemplo:
+
+```
+<div class="w-[37rem] bg-[#316ff6] p-[23px]">
+    Conteúdo personalizado
+</div>
+```
+
+Nesse código:
+
+- `w-[37rem]`: define a largura como `37rem`.
+    
+- `bg-[#316ff6]`: define a cor de fundo com um hexadecimal específico.
+    
+- `p-[23px]`: define o espaçamento interno como `23px`.
+    
+
+O CSS equivalente é:
+
+```
+div {
+    width: 37rem;
+    background-color: #316ff6;
+    padding: 23px;
+}
+```
+
+O exemplo CSS acima representa conceitualmente os estilos aplicados, não uma regra que o Tailwind gera necessariamente com esse seletor.
+
+### 53.2. Quando utilizar valores arbitrários
+
+Eles são úteis quando:
+
+- Um layout exige uma dimensão específica.
+    
+- Uma cor não existe na paleta configurada.
+    
+- Uma propriedade precisa de um valor fora da escala padrão.
+    
+- Um protótipo exige um ajuste pontual.
+    
+
+Exemplo com largura máxima:
+
+```
+<div class="max-w-[850px]">
+    Conteúdo com largura máxima personalizada.
+</div>
+```
+
+Equivalente em CSS:
+
+```
+.conteudo {
+    max-width: 850px;
+}
+```
+
+### 53.3. Valores arbitrários não substituem um tema bem definido
+
+Imagine que várias páginas utilizem a mesma cor institucional.
+
+Uma solução seria repetir:
+
+```
+<div class="bg-[#316ff6]">...</div>
+<button class="bg-[#316ff6]">...</button>
+<header class="bg-[#316ff6]">...</header>
+```
+
+Isso funciona, mas dificulta a manutenção caso a cor precise ser alterada.
+
+Se a cor for uma identidade visual recorrente, é preferível criar um token de tema.
+
+No Tailwind CSS v4:
+
+```
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #316ff6;
+}
+```
+
+Depois, a cor pode ser utilizada assim:
+
+```
+<div class="bg-brand text-white">
+    Conteúdo
+</div>
+
+<button class="bg-brand hover:bg-brand/80">
+    Salvar
+</button>
+```
+
+O Tailwind utiliza o token `--color-brand` para disponibilizar utilitários relacionados à cor.
+
+A regra geral é simples: **valores arbitrários para exceções pontuais; tokens para valores reutilizados e importantes para o projeto.**
+
+---
+
+## 54. Propriedades CSS arbitrárias
+
+Além de aceitar valores arbitrários em utilitários conhecidos, o Tailwind permite definir propriedades CSS diretamente.
+
+Isso é útil quando não existe um utilitário específico para determinada propriedade.
+
+### 54.1. Sintaxe
+
+A estrutura básica é:
+
+```
+<div class="[propriedade:valor]">
+    Conteúdo
+</div>
+```
+
+Por exemplo:
+
+```
+<div class="[mask-type:luminance]">
+    Conteúdo
+</div>
+```
+
+O CSS equivalente é:
+
+```
+.elemento {
+    mask-type: luminance;
+}
+```
+
+Outro exemplo:
+
+```
+<div class="[text-wrap:balance]">
+    Um título com distribuição equilibrada das linhas.
+</div>
+```
+
+Equivalente em CSS:
+
+```
+.elemento {
+    text-wrap: balance;
+}
+```
+
+O navegador precisa oferecer suporte à propriedade utilizada para que o efeito esperado aconteça.
+
+### 54.2. Quando usar propriedades arbitrárias
+
+São úteis quando:
+
+- A propriedade é válida em CSS, mas não possui um utilitário direto no Tailwind.
+    
+- O estilo é pontual e não justifica a criação de uma abstração.
+    
+- É necessário experimentar uma propriedade sem modificar a folha CSS.
+    
+
+Entretanto, se a mesma propriedade e o mesmo valor aparecerem em vários componentes, pode ser melhor criar uma utilidade personalizada ou uma classe CSS convencional.
+
+---
+
+## 55. Variantes arbitrárias
+
+As variantes permitem aplicar estilos em condições específicas, como estados de interação, breakpoints e características dos elementos.
+
+Por exemplo:
+
+```
+<button class="bg-blue-600 hover:bg-blue-800">
+    Enviar
+</button>
+```
+
+A classe `hover:bg-blue-800` aplica o estilo quando o ponteiro está sobre o botão.
+
+O Tailwind também permite criar variantes diretamente na classe por meio de **variantes arbitrárias**.
+
+### 55.1. Selecionando elementos descendentes
+
+Considere o seguinte HTML:
+
+```
+<article class="[&>p]:text-gray-700">
+    <h2>Título</h2>
+    <p>Primeiro parágrafo.</p>
+    <p>Segundo parágrafo.</p>
+
+    <div>
+        <p>Parágrafo dentro de uma div.</p>
+    </div>
+</article>
+```
+
+A expressão `[&>p]:text-gray-700` utiliza um seletor CSS personalizado.
+
+- `&` representa o elemento ao qual a variante está sendo aplicada.
+    
+- `>p` seleciona os elementos `p` que são filhos diretos desse elemento.
+    
+- `text-gray-700` define a cor do texto.
+    
+
+O CSS equivalente é:
+
+```
+article > p {
+    color: var(--color-gray-700);
+}
+```
+
+O parágrafo que está dentro da `div` não é um filho direto do `article`; portanto, não corresponde ao seletor `article > p`.
+
+### 55.2. Selecionando descendentes
+
+Para atingir parágrafos em qualquer profundidade, pode-se utilizar um seletor de descendentes:
+
+```
+<article class="[&_p]:text-gray-700">
+    <p>Parágrafo direto.</p>
+
+    <div>
+        <p>Parágrafo aninhado.</p>
+    </div>
+</article>
+```
+
+O seletor `&_p` corresponde conceitualmente a:
+
+```
+article p {
+    color: var(--color-gray-700);
+}
+```
+
+A diferença é importante:
+
+- `&>p`: seleciona filhos diretos.
+    
+- `&_p`: seleciona descendentes em qualquer profundidade.
+    
+
+### 55.3. Selecionando estados e atributos
+
+Variantes arbitrárias também permitem selecionar elementos por atributos.
+
+Exemplo:
+
+```
+<input
+    type="text"
+    class="border border-gray-300 [&[aria-invalid=true]]:border-red-500"
+/>
+```
+
+A variante aplica a borda vermelha quando o próprio elemento corresponde ao seletor de atributo especificado.
+
+A forma mais simples de entender a expressão é separar suas partes:
+
+- `&`: o próprio elemento.
+    
+- `[aria-invalid=true]`: a condição do atributo.
+    
+- `border-red-500`: a utilidade que será aplicada quando o seletor corresponder.
+    
+
+Em situações comuns, prefira variantes já disponíveis, como `invalid:border-red-500`, quando elas atenderem à necessidade. Variantes arbitrárias são especialmente úteis para seletores mais específicos.
+
+---
+
+## 56. Cascata CSS, especificidade e conflitos entre classes
+
+O Tailwind gera CSS convencional. Portanto, seus estilos continuam sujeitos às regras da cascata, da especificidade e da ordem de origem do CSS.
+
+Isso significa que conhecer as classes não elimina a necessidade de entender CSS.
+
+### 56.1. A ordem das classes no HTML não determina necessariamente o resultado
+
+Considere:
+
+```
+<div class="bg-red-500 bg-blue-500">
+    Conteúdo
+</div>
+```
+
+Não é correto concluir que o fundo será azul simplesmente porque `bg-blue-500` aparece por último no atributo `class`.
+
+O navegador não decide o vencedor com base na ordem textual das classes no HTML. O resultado depende das regras CSS geradas, de sua ordem, das camadas e da especificidade.
+
+Por isso, quando duas utilidades conflitantes aparecem no mesmo elemento, evite depender de uma ordem visualmente intuitiva.
+
+Prefira remover a classe desnecessária:
+
+```
+<div class="bg-blue-500">
+    Conteúdo
+</div>
+```
+
+### 56.2. Conflitos entre Tailwind e CSS personalizado
+
+Imagine que exista esta regra:
+
+```
+.card {
+    background-color: red;
+}
+```
+
+E o HTML:
+
+```
+<div class="card bg-blue-500">
+    Conteúdo
+</div>
+```
+
+O fundo final depende de como as regras são organizadas e de sua prioridade na cascata. Não é possível afirmar que uma classe sempre vencerá a outra apenas observando o HTML.
+
+No Tailwind CSS v4, as utilidades são organizadas em camadas de cascata. CSS personalizado fora de uma camada pode ter prioridade sobre regras que estejam dentro de uma camada, mesmo quando o seletor personalizado não parece mais específico.
+
+Quando houver um conflito, investigue:
+
+1. Qual regra está definindo a propriedade.
+    
+2. Qual seletor está sendo utilizado.
+    
+3. Em qual camada a regra está inserida.
+    
+4. Se há declarações `!important`.
+    
+5. Se alguma regra está sendo sobrescrita por outra folha CSS.
+    
+
+As ferramentas de desenvolvedor do navegador permitem inspecionar o elemento e identificar quais declarações estão ativas e quais foram sobrescritas.
+
+### 56.3. Evitando conflitos
+
+Uma boa organização reduz a necessidade de sobrescrever estilos repetidamente.
+
+- Evite definir a mesma propriedade em vários lugares sem necessidade.
+    
+- Não misture utilitários conflitantes esperando que a última classe escrita vença.
+    
+- Use tokens para valores compartilhados.
+    
+- Separe estilos globais de estilos específicos dos componentes.
+    
+- Utilize variantes para estados e condições previsíveis.
+    
+
+---
+
+## 57. Modificador `!important`
+
+O `!important` modifica a prioridade de uma declaração CSS na cascata.
+
+No CSS convencional:
+
+```
+.botao {
+    background-color: blue !important;
+}
+```
+
+Essa declaração recebe prioridade sobre declarações normais concorrentes, embora ainda existam regras específicas sobre origem, camadas, importância e ordem.
+
+### 57.1. Sintaxe no Tailwind CSS v4
+
+No Tailwind CSS v4, o modificador de importância é normalmente colocado no final da utilidade:
+
+```
+<button class="bg-red-500!">
+    Botão
+</button>
+```
+
+O CSS gerado aplica a cor de fundo com importância:
+
+```
+background-color: var(--color-red-500) !important;
+```
+
+Na sintaxe tradicional do Tailwind CSS v3, era comum escrever o modificador antes da utilidade:
+
+```
+<button class="!bg-red-500">
+    Botão
+</button>
+```
+
+Ao consultar exemplos na internet, verifique a versão do Tailwind usada pelo projeto, pois a sintaxe pode variar.
+
+### 57.2. Quando usar
+
+O modificador pode ser necessário em casos específicos, como a integração com uma biblioteca externa que aplica estilos difíceis de controlar.
+
+Entretanto, não deve ser utilizado como solução padrão para qualquer conflito.
+
+Se muitas classes precisam de `!important`, investigue a origem dos estilos concorrentes e reorganize a cascata.
+
+---
+
+## 58. Diretiva `@apply`
+
+A diretiva `@apply` permite incorporar utilitários do Tailwind dentro de uma regra CSS personalizada.
+
+Isso pode ser útil quando é necessário manter uma classe CSS reutilizável, mas aproveitar utilitários existentes.
+
+### 58.1. Exemplo básico
+
+Considere um projeto Flask com um botão usado em diversas páginas.
+
+No arquivo CSS de entrada:
+
+```
+@import "tailwindcss";
+
+.botao-principal {
+    @apply rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white;
+}
+
+.botao-principal:hover {
+    @apply bg-blue-800;
+}
+```
+
+No HTML:
+
+```
+<button class="botao-principal">
+    Salvar
+</button>
+```
+
+Conceitualmente, a primeira regra reúne propriedades equivalentes a:
+
+```
+.botao-principal {
+    border-radius: 0.5rem;
+    background-color: var(--color-blue-600);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    color: white;
+}
+```
+
+O exemplo é conceitual: os valores finais dependem do tema e das definições utilizadas pelo Tailwind.
+
+### 58.2. `@apply` não é necessário para todo componente reutilizável
+
+Considere um botão usado apenas em uma página:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-800">
+    Salvar
+</button>
+```
+
+Nesse caso, criar uma regra CSS separada apenas para agrupar as mesmas classes pode adicionar complexidade sem trazer benefício real.
+
+Por outro lado, se um componente precisa de uma classe semântica estável por motivos de integração com CSS legado ou outras ferramentas, `@apply` pode ser útil.
+
+### 58.3. Quando preferir outras abordagens
+
+Considere estas alternativas:
+
+- **Classes utilitárias:** para estilos específicos de cada elemento.
+    
+- **Macros ou componentes Jinja:** para reutilizar a estrutura HTML e os atributos de um componente.
+    
+- **CSS personalizado:** para comportamentos complexos ou regras que não se encaixam bem nas utilidades.
+    
+- `**@apply**`**:** para agrupar utilitários em uma classe CSS quando isso realmente simplifica a manutenção.
+    
+
+Atenção: `@apply` não transforma uma estrutura HTML repetida em um componente. Ele agrupa declarações de estilo; a reutilização do HTML continua sendo responsabilidade de Jinja ou de outra camada de componentes.
+
+---
+
+## 59. Criando utilitários personalizados com `@utility`
+
+No Tailwind CSS v4, a diretiva `@utility` permite registrar utilitários personalizados para que possam ser utilizados no HTML e participar do sistema de variantes do framework.
+
+### 59.1. Criando um utilitário
+
+No CSS de entrada:
+
+```
+@import "tailwindcss";
+
+@utility content-auto {
+    content-visibility: auto;
+}
+```
+
+Depois, o utilitário pode ser aplicado:
+
+```
+<section class="content-auto">
+    Conteúdo da seção
+</section>
+```
+
+O CSS correspondente é:
+
+```
+.content-auto {
+    content-visibility: auto;
+}
+```
+
+A propriedade `content-visibility` pode permitir que o navegador adie parte do trabalho de renderização de conteúdo fora da área visível. O benefício depende da estrutura da página e do navegador.
+
+### 59.2. Utilizando variantes
+
+Como o utilitário foi registrado com `@utility`, ele pode ser combinado com variantes:
+
+```
+<section class="content-auto lg:content-auto">
+    Conteúdo
+</section>
+```
+
+Nesse exemplo, a mesma utilidade é aplicada normalmente e também na condição de breakpoint `lg`. Como o utilitário já está aplicado sem condição, a segunda declaração não acrescenta um efeito prático ao exemplo; ela apenas demonstra a composição sintática.
+
+Um uso mais útil é combinar o utilitário com outras condições ou com utilitários de layout, de acordo com a necessidade real do componente.
+
+### 59.3. Quando criar um utilitário personalizado
+
+Utilize `@utility` quando:
+
+- Uma propriedade CSS recorrente não possui um utilitário adequado.
+    
+- A mesma regra precisa participar do sistema de variantes do Tailwind.
+    
+- A abstração possui um significado claro no projeto.
+    
+
+Não crie um utilitário personalizado para cada declaração CSS isolada. A abstração deve reduzir repetição ou tornar a intenção do código mais clara.
+
+---
+
+## 60. Exemplo integrado em Flask com Jinja e Tailwind
+
+Considere um projeto Flask em que o painel administrativo lista projetos cadastrados.
+
+A estrutura pode ser:
+
+```
+meu_portfolio/
+├── app.py
+├── templates/
+│   ├── base.html
+│   └── projetos.html
+└── static/
+    ├── src/
+    │   └── input.css
+    └── css/
+        └── output.css
+```
+
+O arquivo `static/src/input.css` contém:
+
+```
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #316ff6;
+}
+
+@utility content-auto {
+    content-visibility: auto;
+}
+
+.card-projeto {
+    @apply rounded-xl border border-gray-200 bg-white p-5 shadow-sm;
+}
+
+.card-projeto:hover {
+    @apply shadow-md;
+}
+```
+
+O arquivo `templates/base.html` pode carregar o CSS compilado:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{% block title %}Meu portfólio{% endblock %}</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/output.css') }}"
+    >
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-900">
+    <header class="bg-brand px-6 py-4 text-white">
+        <h1 class="text-xl font-bold">Meu portfólio</h1>
+    </header>
+
+    <main class="mx-auto max-w-6xl p-6">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
+```
+
+O arquivo `templates/projetos.html`:
+
+```
+{% extends "base.html" %}
+
+{% block title %}Projetos{% endblock %}
+
+{% block content %}
+    <section>
+        <h2 class="mb-6 text-2xl font-bold">
+            Projetos publicados
+        </h2>
+
+        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {% for projeto in projetos %}
+                <article class="card-projeto">
+                    <h3 class="mb-2 text-lg font-semibold">
+                        {{ projeto.titulo }}
+                    </h3>
+
+                    <p class="text-sm text-gray-600">
+                        {{ projeto.descricao }}
+                    </p>
+
+                    <a
+                        href="{{ projeto.url }}"
+                        class="mt-4 inline-block font-medium text-brand hover:underline"
+                    >
+                        Ver projeto
+                    </a>
+                </article>
+            {% else %}
+                <p class="text-gray-500">
+                    Nenhum projeto foi publicado ainda.
+                </p>
+            {% endfor %}
+        </div>
+    </section>
+{% endblock %}
+```
+
+### 60.1. Responsabilidade de cada tecnologia
+
+- **Flask:** fornece a rota e os dados dos projetos.
+    
+- **Jinja:** percorre a lista e gera o HTML.
+    
+- **Tailwind:** aplica as classes utilitárias ao HTML.
+    
+- **CSS personalizado:** define a classe reutilizável `card-projeto`.
+    
+- `**@theme**`**:** registra a cor institucional `brand`.
+    
+- `**@utility**`**:** registra o utilitário `content-auto`.
+    
+
+A compilação do CSS precisa acontecer antes de o navegador utilizar `output.css`. O arquivo de entrada não deve ser confundido com o arquivo compilado servido pela aplicação.
+
+### 60.2. Observação sobre detecção de classes
+
+O Tailwind precisa detectar as classes presentes nos arquivos-fonte para gerar as utilidades correspondentes.
+
+As classes literais do exemplo, como `text-gray-600`, `grid-cols-1` e `lg:grid-cols-3`, podem ser identificadas pelo mecanismo de detecção quando os arquivos estão incluídos nas fontes analisadas.
+
+Evite construir nomes de classes dinamicamente com fragmentos de texto, por exemplo:
+
+```
+<div class="bg-{{ cor }}-500">
+    Conteúdo
+</div>
+```
+
+O Tailwind não consegue necessariamente deduzir todas as combinações possíveis dessa expressão Jinja durante a compilação.
+
+Prefira mapear valores para classes completas:
+
+```
+cores = {
+    "sucesso": "bg-green-500",
+    "erro": "bg-red-500",
+    "aviso": "bg-yellow-500",
+}
+```
+
+No template, utilize a classe completa disponibilizada pela aplicação:
+
+```
+<div class="{{ cores[status] }}">
+    {{ mensagem }}
+</div>
+```
+
+As classes possíveis precisam estar disponíveis nos arquivos que o Tailwind examina. Em projetos com caminhos não detectados automaticamente, configure as fontes conforme a versão do Tailwind e a estrutura do projeto.
+
+---

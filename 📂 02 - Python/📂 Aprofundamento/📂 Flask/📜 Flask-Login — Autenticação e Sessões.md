@@ -2547,3 +2547,387 @@ Antes de considerar a autenticação de uma aplicação pronta, verifique se os 
 O Flask-Login fornece ferramentas para lidar com a identidade e o estado de autenticação do usuário. A aplicação continua responsável por decidir quem pode executar cada operação e por configurar as proteções necessárias ao seu contexto.
 
 ---
+# 46. Por que testar a autenticação?
+
+Uma aplicação pode funcionar corretamente quando testamos manualmente e, mesmo assim, apresentar falhas em situações específicas.
+
+Por exemplo:
+
+- Um usuário não autenticado consegue acessar uma rota privada.
+    
+- Uma senha incorreta permite entrar na conta.
+    
+- O logout não encerra a autenticação como esperado.
+    
+- Um usuário comum consegue acessar uma rota administrativa.
+    
+- Uma alteração na aplicação quebra o fluxo de login.
+    
+
+Para reduzir esses problemas, podemos utilizar o `pytest` para testar o comportamento das rotas sem precisar abrir o navegador a cada alteração.
+
+Os testes do Flask podem utilizar um cliente de teste que simula requisições HTTP à aplicação.
+
+## 46.1. Instalando o pytest
+
+No ambiente virtual do projeto:
+
+```
+python -m pip install pytest
+```
+
+Se você mantém as dependências em `requirements.txt`, registre também:
+
+```
+pytest
+```
+
+O `pytest` executa os testes encontrados nos arquivos correspondentes, normalmente com nomes como `test_auth.py` ou `test_app.py`.
+
+---
+
+# 47. Criando uma aplicação simples para os testes
+
+Para compreender os testes, vamos utilizar uma aplicação pequena com usuários em memória.
+
+Em um projeto real, os usuários normalmente seriam armazenados em um banco de dados. Aqui, o objetivo é testar o comportamento do Flask-Login sem introduzir outras dependências.
+
+Crie `test_auth.py`:
+
+```
+import pytest
+
+from flask import Flask, abort
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+
+
+class Usuario(UserMixin):
+    def __init__(self, id, email, is_admin=False):
+        self.id = str(id)
+        self.email = email
+        self.is_admin = is_admin
+
+
+usuarios = {
+    "1": Usuario("1", "admin@example.com", is_admin=True),
+    "2": Usuario("2", "user@example.com"),
+}
+
+
+def criar_app():
+    app = Flask(__name__)
+    app.config.update(
+        SECRET_KEY="chave-de-teste",
+        TESTING=True,
+    )
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = "login"
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return usuarios.get(user_id)
+
+    @app.route("/login/<user_id>")
+    def login(user_id):
+        usuario = usuarios.get(user_id)
+
+        if usuario is None:
+            abort(404)
+
+        login_user(usuario)
+        return "Login realizado"
+
+    @app.route("/logout", methods=["POST"])
+    @login_required
+    def logout():
+        logout_user()
+        return "Logout realizado"
+
+    @app.route("/perfil")
+    @login_required
+    def perfil():
+        return current_user.email
+
+    @app.route("/admin")
+    @login_required
+    def admin():
+        if not current_user.is_admin:
+            abort(403)
+
+        return "Área administrativa"
+
+    return app
+```
+
+Esse código cria quatro rotas relevantes:
+
+|Rota|Comportamento|
+|---|---|
+|`/login/1`|Autentica o usuário de identificador `1`.|
+|`/logout`|Encerra a autenticação por POST.|
+|`/perfil`|Exige autenticação.|
+|`/admin`|Exige autenticação e permissão administrativa.|
+
+**Atenção:** a rota `/login/<user_id>` é propositalmente simplificada para os testes. Ela não verifica senha e não deve ser utilizada dessa forma em uma aplicação real.
+
+A chave `SECRET_KEY` também é exclusiva do exemplo de testes. Em produção, ela deve ser configurada de maneira segura.
+
+---
+
+# 48. Criando o cliente de teste
+
+O Flask fornece um cliente de teste que permite enviar requisições à aplicação sem iniciar um servidor HTTP externo.
+
+No mesmo arquivo, depois do código anterior, adicione:
+
+```
+@pytest.fixture
+def client():
+    app = criar_app()
+
+    with app.test_client() as client:
+        yield client
+```
+
+O decorador `@pytest.fixture` define uma preparação reutilizável para os testes.
+
+Quando um teste recebe o argumento `client`, o pytest executa essa fixture e fornece o cliente de teste.
+
+O bloco `with` mantém o contexto necessário durante a execução do teste.
+
+Podemos, então, simular requisições:
+
+```
+response = client.get("/perfil")
+```
+
+A variável `response` contém a resposta produzida pela aplicação.
+
+Entre outras informações, podemos consultar:
+
+```
+response.status_code
+response.data
+response.headers
+```
+
+O atributo `status_code` contém o código HTTP. Já `data` contém o corpo da resposta em bytes.
+
+---
+
+# 49. Testando o acesso sem autenticação
+
+Adicione ao arquivo `test_auth.py`:
+
+```
+def test_perfil_exige_login(client):
+    response = client.get("/perfil")
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+```
+
+O teste faz uma requisição para `/perfil` sem autenticar um usuário.
+
+Como a rota utiliza `@login_required`, o Flask-Login redireciona o visitante para a página de login configurada.
+
+O código HTTP `302` indica um redirecionamento temporário.
+
+A asserção:
+
+```
+assert response.status_code == 302
+```
+
+verifica se o status corresponde ao esperado.
+
+A segunda asserção verifica se o destino do redirecionamento contém `/login`.
+
+Esse teste ajuda a detectar se uma rota que deveria exigir autenticação deixou de utilizar o decorador necessário.
+
+---
+
+# 50. Testando o login e o acesso ao perfil
+
+Agora vamos testar o fluxo de autenticação.
+
+```
+def test_usuario_autenticado_acessa_perfil(client):
+    resposta_login = client.get("/login/2")
+
+    assert resposta_login.status_code == 200
+
+    resposta_perfil = client.get("/perfil")
+
+    assert resposta_perfil.status_code == 200
+    assert resposta_perfil.data == b"user@example.com"
+```
+
+A primeira requisição autentica o usuário de identificador `2`.
+
+O cliente de teste mantém os cookies recebidos nas respostas, permitindo que a próxima requisição utilize a sessão correspondente.
+
+Depois do login, o teste acessa `/perfil`.
+
+Como a autenticação foi estabelecida, a rota deve responder com o e-mail do usuário.
+
+A comparação:
+
+```
+assert resposta_perfil.data == b"user@example.com"
+```
+
+utiliza bytes porque o corpo da resposta é disponibilizado dessa forma pelo cliente de teste.
+
+Também seria possível converter o conteúdo para texto:
+
+```
+assert resposta_perfil.get_data(as_text=True) == "user@example.com"
+```
+
+Essa segunda forma costuma ser mais legível quando estamos comparando texto.
+
+---
+
+# 51. Testando o logout
+
+Adicione o seguinte teste:
+
+```
+def test_logout_encerra_autenticacao(client):
+    client.get("/login/2")
+
+    resposta_logout = client.post("/logout")
+
+    assert resposta_logout.status_code == 200
+
+    resposta_perfil = client.get("/perfil")
+
+    assert resposta_perfil.status_code == 302
+    assert "/login" in resposta_perfil.headers["Location"]
+```
+
+O teste segue esta sequência:
+
+1. Autentica o usuário.
+    
+2. Envia uma requisição POST para `/logout`.
+    
+3. Tenta acessar o perfil novamente.
+    
+4. Verifica se o acesso exige login outra vez.
+    
+
+A última verificação é importante porque não basta a rota de logout responder com sucesso: a autenticação precisa deixar de ser reconhecida nas requisições seguintes.
+
+Neste exemplo simplificado, o logout não utiliza token CSRF. Em uma aplicação com Flask-WTF e proteção CSRF habilitada, o teste precisará enviar um token válido para a requisição POST.
+
+---
+
+# 52. Testando a autorização administrativa
+
+Autenticação e autorização são verificações diferentes. Por isso, devemos testar as duas.
+
+Primeiro, um usuário comum tenta acessar a área administrativa:
+
+```
+def test_usuario_comum_nao_acessa_admin(client):
+    client.get("/login/2")
+
+    response = client.get("/admin")
+
+    assert response.status_code == 403
+```
+
+O usuário está autenticado, mas não possui permissão administrativa.
+
+Por isso, a aplicação retorna `403 Forbidden`.
+
+Agora, vamos testar um administrador:
+
+```
+def test_admin_acessa_area_administrativa(client):
+    client.get("/login/1")
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "Área administrativa"
+```
+
+O usuário de identificador `1` possui `is_admin=True`, portanto consegue acessar a rota.
+
+Esses testes ajudam a verificar se a aplicação não está confundindo estar conectado com possuir autorização para executar uma operação.
+
+---
+
+# 53. Executando os testes
+
+Na pasta em que o arquivo `test_auth.py` está localizado, execute:
+
+```
+python -m pytest -v
+```
+
+O argumento `-v` apresenta os nomes dos testes e seus resultados.
+
+Se tudo estiver funcionando conforme o exemplo, os testes devem verificar:
+
+- Redirecionamento de visitantes não autenticados.
+    
+- Acesso ao perfil depois do login.
+    
+- Encerramento da autenticação pelo logout.
+    
+- Bloqueio de usuários comuns na área administrativa.
+    
+- Acesso administrativo permitido para o usuário autorizado.
+    
+
+Para executar apenas esse arquivo:
+
+```
+python -m pytest -v test_auth.py
+```
+
+Se um teste falhar, examine o traceback e confirme se o comportamento esperado corresponde à configuração real da aplicação.
+
+---
+
+# 54. Limites desses testes
+
+Os exemplos anteriores são testes de comportamento, não uma validação completa da segurança da autenticação.
+
+A rota de login usada no exercício não verifica senha, os usuários ficam em memória e a aplicação não utiliza um banco de dados.
+
+Em uma aplicação real, também seria importante testar:
+
+- Senha correta e senha incorreta.
+    
+- Usuário inexistente.
+    
+- Hash de senha inválido ou ausente.
+    
+- Logout com proteção CSRF.
+    
+- Redirecionamento seguro com o parâmetro `next`.
+    
+- Permissões para diferentes funções de usuário.
+    
+- Recuperação de sessão por Remember Me, se esse recurso for utilizado.
+    
+- Tratamento de erros sem revelar informações sensíveis.
+    
+
+Os testes devem acompanhar o comportamento efetivamente implementado. Não basta criar testes que passam: é necessário garantir que as verificações representem os requisitos de segurança da aplicação.
+
+---

@@ -802,3 +802,825 @@ A documentação oficial é a referência principal para confirmar o comportamen
     
 
 ---
+## 21. Estados interativos no Tailwind CSS
+
+Até agora, vimos como utilizar classes utilitárias para definir cores, espaçamentos, dimensões e layouts responsivos. Entretanto, interfaces também precisam reagir às ações do usuário.
+
+Um botão pode mudar de cor quando o cursor passa sobre ele, um campo pode receber destaque quando ganha foco e um elemento pode apresentar uma aparência diferente quando está desabilitado.
+
+No CSS tradicional, esses comportamentos são definidos com pseudoclasses:
+
+```
+button:hover {
+    background-color: #1d4ed8;
+}
+
+input:focus {
+    outline: 2px solid #2563eb;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+```
+
+No Tailwind CSS, utilizamos variantes que aplicam classes utilitárias quando determinadas condições são atendidas.
+
+|Variante Tailwind|CSS equivalente|
+|---|---|
+|`hover:bg-blue-700`|`:hover { background-color: #1d4ed8; }`|
+|`focus:ring-2`|Aplica um anel visual quando o elemento recebe foco|
+|`active:scale-95`|`:active { transform: scale(0.95); }`|
+|`disabled:opacity-50`|`:disabled { opacity: 0.5; }`|
+|`first:rounded-t-lg`|`:first-child { border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; }`|
+|`last:border-b-0`|`:last-child { border-bottom-width: 0; }`|
+
+As equivalências são conceituais: a saída CSS exata depende da versão do Tailwind e das classes utilizadas.
+
+### 21.1. A variante `hover:`
+
+A variante `hover:` aplica um estilo quando o ponteiro está sobre um elemento em dispositivos que suportam esse tipo de interação.
+
+```
+<button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+    Entrar
+</button>
+```
+
+Equivalência aproximada em CSS:
+
+```
+button {
+    background-color: #2563eb;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+}
+
+button:hover {
+    background-color: #1d4ed8;
+}
+```
+
+O botão possui fundo azul inicialmente e fica mais escuro quando o cursor passa sobre ele.
+
+A variante não substitui o estilo inicial. Ela define uma condição adicional para o mesmo elemento.
+
+### 21.2. A variante `focus:`
+
+A variante `focus:` é utilizada quando um elemento recebe foco, por exemplo, quando o usuário seleciona um campo de formulário com o teclado ou clica nele.
+
+```
+<input
+    type="email"
+    placeholder="Seu e-mail"
+    class="border border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 focus:outline-none"
+>
+```
+
+Equivalência aproximada:
+
+```
+input {
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+input:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+```
+
+O campo muda a cor da borda ao receber foco.
+
+**Atenção:** remover o `outline` sem oferecer outra indicação visual de foco prejudica a navegação por teclado. Se remover o contorno padrão, substitua-o por um indicador perceptível.
+
+### 21.3. A variante `focus-visible:`
+
+A variante `focus-visible:` permite aplicar estilos quando o navegador considera que o foco deve ser indicado visualmente, normalmente durante a navegação por teclado.
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+    Salvar
+</button>
+```
+
+Equivalência CSS:
+
+```
+button:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+```
+
+Essa abordagem ajuda a manter uma indicação de foco clara para quem navega utilizando o teclado.
+
+### 21.4. A variante `active:`
+
+A variante `active:` representa o estado ativo de um elemento, normalmente enquanto o usuário pressiona um botão ou link.
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white active:scale-95">
+    Confirmar
+</button>
+```
+
+Equivalência CSS:
+
+```
+button:active {
+    transform: scale(0.95);
+}
+```
+
+O botão diminui ligeiramente enquanto está sendo pressionado.
+
+Esse efeito pode tornar a interação mais perceptível, mas deve ser discreto para não prejudicar a usabilidade.
+
+### 21.5. A variante `disabled:`
+
+A variante `disabled:` aplica estilos quando um elemento de formulário está desabilitado.
+
+```
+<button
+    disabled
+    class="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+>
+    Enviando...
+</button>
+```
+
+Equivalência CSS:
+
+```
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+```
+
+O atributo HTML `disabled` é o responsável por desabilitar o botão. A classe `disabled:opacity-50` apenas modifica sua aparência.
+
+Isso é importante: **estilizar um elemento como desabilitado não significa que ele realmente esteja desabilitado.**
+
+### 21.6. Combinando variantes
+
+É possível combinar várias variantes para definir comportamentos diferentes em um mesmo elemento.
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
+    Enviar formulário
+</button>
+```
+
+Nesse exemplo, o botão:
+
+- Possui fundo azul inicialmente.
+    
+- Fica mais escuro quando recebe `hover`.
+    
+- Apresenta um contorno visível quando recebe foco apropriado.
+    
+- Diminui ligeiramente quando é pressionado.
+    
+- Fica visualmente atenuado quando desabilitado.
+    
+
+Cada variante representa uma condição específica. O Tailwind combina essas condições com as classes utilitárias que definem os estilos.
+
+---
+
+## 22. Variantes estruturais: `first:`, `last:`, `odd:` e `even:`
+
+Além dos estados de interação, o Tailwind possui variantes que permitem selecionar elementos de acordo com sua posição dentro de uma estrutura.
+
+Elas são úteis para listas, tabelas, menus e conjuntos de cartões.
+
+### 22.1. `first:` e `last:`
+
+Considere uma lista com três elementos:
+
+```
+<ul class="divide-y divide-gray-200">
+    <li class="first:pt-0 last:pb-0 py-3">
+        Primeiro item
+    </li>
+
+    <li class="first:pt-0 last:pb-0 py-3">
+        Segundo item
+    </li>
+
+    <li class="first:pt-0 last:pb-0 py-3">
+        Terceiro item
+    </li>
+</ul>
+```
+
+Equivalência CSS:
+
+```
+li {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+li:first-child {
+    padding-top: 0;
+}
+
+li:last-child {
+    padding-bottom: 0;
+}
+```
+
+O primeiro elemento perde o espaçamento superior, enquanto o último perde o espaçamento inferior.
+
+### 22.2. `odd:` e `even:`
+
+Essas variantes selecionam elementos em posições ímpares e pares.
+
+```
+<table class="w-full border-collapse">
+    <tbody>
+        <tr class="odd:bg-gray-100 even:bg-white">
+            <td class="p-3">Python</td>
+        </tr>
+
+        <tr class="odd:bg-gray-100 even:bg-white">
+            <td class="p-3">Flask</td>
+        </tr>
+
+        <tr class="odd:bg-gray-100 even:bg-white">
+            <td class="p-3">SQLAlchemy</td>
+        </tr>
+    </tbody>
+</table>
+```
+
+Equivalência CSS:
+
+```
+tr:nth-child(odd) {
+    background-color: #f3f4f6;
+}
+
+tr:nth-child(even) {
+    background-color: white;
+}
+```
+
+O resultado é uma tabela com cores alternadas, facilitando a leitura das linhas.
+
+---
+
+## 23. Transições com Tailwind CSS
+
+Uma transição controla como uma propriedade CSS muda de um valor para outro ao longo do tempo.
+
+Sem transição, a mudança de cor de um botão pode acontecer imediatamente. Com uma transição, a mudança pode ocorrer gradualmente.
+
+### 23.1. `transition`
+
+A classe `transition` aplica uma transição a um conjunto de propriedades CSS definido pelo Tailwind.
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700">
+    Passar o cursor
+</button>
+```
+
+Equivalência conceitual:
+
+```
+button {
+    transition-property:
+        color,
+        background-color,
+        border-color,
+        text-decoration-color,
+        fill,
+        stroke,
+        opacity,
+        box-shadow,
+        transform,
+        filter,
+        backdrop-filter;
+
+    transition-duration: 150ms;
+}
+```
+
+A lista exata de propriedades e os valores padrão dependem da versão do Tailwind. Consulte a documentação da versão utilizada quando precisar de precisão sobre a saída gerada.
+
+### 23.2. Controlando a duração
+
+As classes `duration-*` definem por quanto tempo a transição ocorre.
+
+|Classe|CSS equivalente|
+|---|---|
+|`duration-75`|`transition-duration: 75ms;`|
+|`duration-150`|`transition-duration: 150ms;`|
+|`duration-300`|`transition-duration: 300ms;`|
+|`duration-500`|`transition-duration: 500ms;`|
+|`duration-700`|`transition-duration: 700ms;`|
+
+Exemplo:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white transition duration-300 hover:bg-blue-700">
+    Transição de 300 ms
+</button>
+```
+
+O botão muda de cor ao longo de 300 milissegundos.
+
+### 23.3. Controlando a curva de animação
+
+A curva de temporização define como a velocidade da transição varia ao longo do tempo.
+
+|Classe|CSS equivalente|
+|---|---|
+|`ease-linear`|`transition-timing-function: linear;`|
+|`ease-in`|`transition-timing-function: ease-in;`|
+|`ease-out`|`transition-timing-function: ease-out;`|
+|`ease-in-out`|`transition-timing-function: ease-in-out;`|
+
+Exemplo:
+
+```
+<button class="rounded-lg bg-blue-600 px-4 py-2 text-white transition duration-300 ease-in-out hover:bg-blue-700">
+    Transição suave
+</button>
+```
+
+A curva `ease-in-out` começa e termina suavemente.
+
+### 23.4. Controlando propriedades específicas
+
+Quando queremos transicionar somente uma propriedade, podemos utilizar classes mais específicas.
+
+```
+<div class="bg-blue-600 text-white transition-colors duration-300 hover:bg-blue-700">
+    Muda apenas as cores
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    transition-property: color, background-color,
+        border-color, text-decoration-color, fill, stroke;
+    transition-duration: 300ms;
+}
+```
+
+Outras classes úteis incluem:
+
+|Classe|Propriedade CSS|
+|---|---|
+|`transition-colors`|Transições de cores|
+|`transition-opacity`|`transition-property: opacity;`|
+|`transition-shadow`|Transições de sombra|
+|`transition-transform`|`transition-property: transform;`|
+|`transition-all`|`transition-property: all;`|
+|`transition-none`|`transition-property: none;`|
+
+Evite usar `transition-all` sem necessidade. Transicionar todas as propriedades pode produzir efeitos inesperados e dificultar a identificação do que está animando.
+
+### 23.5. Atraso da transição
+
+A classe `delay-*` define quanto tempo o navegador espera antes de iniciar a transição.
+
+```
+<div class="transition-opacity delay-150 duration-300 hover:opacity-50">
+    Passe o cursor sobre este elemento
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    transition-property: opacity;
+    transition-delay: 150ms;
+    transition-duration: 300ms;
+}
+```
+
+O atraso pode ser útil para criar efeitos coordenados, mas atrasos excessivos podem fazer a interface parecer lenta.
+
+---
+
+## 24. Transformações com Tailwind CSS
+
+Transformações modificam a apresentação geométrica de um elemento, sem necessariamente alterar o espaço que ele ocupa no fluxo normal do documento.
+
+O Tailwind oferece classes para escala, rotação, translação e outras transformações.
+
+### 24.1. Escala com `scale-*`
+
+```
+<div class="scale-105">
+    Elemento ampliado em 5%
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    scale: 105%;
+}
+```
+
+A classe `scale-95`, por sua vez, reduz a escala para 95%.
+
+Um exemplo de cartão interativo:
+
+```
+<article class="rounded-xl border border-gray-200 p-5 transition-transform duration-200 hover:scale-105">
+    <h2 class="text-lg font-semibold">Projeto Python</h2>
+    <p class="mt-2 text-gray-600">Uma descrição do projeto.</p>
+</article>
+```
+
+O cartão cresce ligeiramente quando o cursor passa sobre ele.
+
+### 24.2. Rotação com `rotate-*`
+
+```
+<div class="rotate-45">
+    Elemento rotacionado
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    rotate: 45deg;
+}
+```
+
+A rotação pode ser utilizada em ícones, indicadores e elementos decorativos.
+
+### 24.3. Translação com `translate-*`
+
+```
+<div class="translate-x-4 translate-y-2">
+    Elemento deslocado
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    translate: calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+}
+```
+
+No tema padrão do Tailwind v4, a escala de espaçamento normalmente corresponde a `0.25rem` por unidade. Nesse caso, `translate-x-4` representa 1rem horizontalmente e `translate-y-2` representa 0.5rem verticalmente.
+
+A implementação CSS exata pode variar conforme a versão e a configuração do Tailwind.
+
+### 24.4. Combinando transformação e transição
+
+```
+<button class="rounded-lg bg-indigo-600 px-4 py-2 text-white transition-transform duration-200 hover:scale-105 active:scale-95">
+    Interagir
+</button>
+```
+
+O botão aumenta ligeiramente ao receber `hover` e diminui quando é pressionado.
+
+Use transformações com moderação. Movimentos exagerados podem distrair o usuário ou prejudicar a experiência em dispositivos móveis.
+
+---
+
+## 25. Animações prontas do Tailwind
+
+Além de transições, o Tailwind disponibiliza algumas animações utilitárias.
+
+Uma transição normalmente representa a mudança entre estados de uma propriedade. Uma animação pode executar uma sequência de etapas definida por `@keyframes`.
+
+### 25.1. `animate-spin`
+
+Utilizada para indicar carregamento ou atividade contínua.
+
+```
+<div class="size-6 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
+```
+
+Equivalência CSS aproximada:
+
+```
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.elemento {
+    animation: spin 1s linear infinite;
+}
+```
+
+### 25.2. `animate-ping`
+
+Cria um efeito de expansão e desaparecimento, frequentemente usado em indicadores de status.
+
+```
+<span class="relative flex size-3">
+    <span class="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+    <span class="relative inline-flex size-3 rounded-full bg-green-500"></span>
+</span>
+```
+
+### 25.3. `animate-pulse`
+
+Cria uma pulsação de opacidade, útil em placeholders de carregamento.
+
+```
+<div class="animate-pulse space-y-3">
+    <div class="h-4 w-3/4 rounded bg-gray-300"></div>
+    <div class="h-4 w-full rounded bg-gray-300"></div>
+    <div class="h-4 w-5/6 rounded bg-gray-300"></div>
+</div>
+```
+
+### 25.4. `animate-bounce`
+
+Cria um movimento de salto.
+
+```
+<div class="animate-bounce">
+    ↓
+</div>
+```
+
+É possível utilizar essa animação para chamar a atenção para um indicador, mas não é recomendável aplicá-la indiscriminadamente a elementos importantes da interface.
+
+### 25.5. Removendo animações
+
+A classe `animate-none` remove a animação aplicada pelo Tailwind.
+
+```
+<div class="animate-none">
+    Sem animação
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    animation: none;
+}
+```
+
+---
+
+## 26. Criando animações personalizadas
+
+As animações prontas não atendem a todos os cenários. Quando precisamos de um comportamento específico, podemos definir nossos próprios `@keyframes`.
+
+No Tailwind CSS v4, podemos declarar uma animação personalizada utilizando CSS e variáveis de tema.
+
+```
+@import "tailwindcss";
+
+@theme {
+    --animate-fade-in: fade-in 300ms ease-out both;
+
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}
+```
+
+Depois, podemos utilizar a classe correspondente no HTML:
+
+```
+<div class="animate-fade-in rounded-xl border p-5">
+    <h2 class="text-lg font-semibold">Painel administrativo</h2>
+    <p class="mt-2 text-gray-600">Conteúdo exibido com uma animação de entrada.</p>
+</div>
+```
+
+A variável `--animate-fade-in` registra a definição da animação no tema. O Tailwind pode gerar a classe utilitária `animate-fade-in` a partir dessa configuração.
+
+O comportamento é equivalente, conceitualmente, a:
+
+```
+.fade-in {
+    animation: fade-in 300ms ease-out both;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+```
+
+A diferença é que, na primeira abordagem, o Tailwind integra a definição ao sistema de utilitários.
+
+---
+
+## 27. Acessibilidade e preferência por movimento reduzido
+
+Uma interface não deve depender exclusivamente de cores, movimentos ou interações com o mouse para transmitir informações.
+
+Além disso, alguns usuários preferem reduzir animações por motivos de conforto ou acessibilidade.
+
+O navegador disponibiliza a media query `prefers-reduced-motion` para indicar essa preferência.
+
+### 27.1. A variante `motion-reduce:`
+
+No Tailwind, podemos utilizar `motion-reduce:` para aplicar estilos quando o usuário prefere movimento reduzido.
+
+```
+<div class="animate-pulse motion-reduce:animate-none">
+    Indicador de carregamento
+</div>
+```
+
+Equivalência CSS:
+
+```
+.elemento {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .elemento {
+        animation: none;
+    }
+}
+```
+
+A definição exata da animação padrão pode variar conforme a versão do Tailwind.
+
+### 27.2. Reduzindo transições
+
+Também podemos aplicar uma duração menor ou remover transições quando o usuário prefere movimento reduzido.
+
+```
+<button class="transition-transform duration-200 hover:scale-105 motion-reduce:transition-none motion-reduce:hover:scale-100">
+    Ação
+</button>
+```
+
+Nesse caso, a interface deixa de aplicar a transição e evita o aumento do elemento para quem opta por movimento reduzido.
+
+### 27.3. Boas práticas de acessibilidade
+
+Ao criar interfaces com Tailwind:
+
+- Mantenha um indicador de foco visível para navegação por teclado.
+    
+- Não dependa apenas de cores para comunicar sucesso, erro ou estado.
+    
+- Garanta contraste suficiente entre texto e fundo.
+    
+- Associe rótulos aos campos de formulário.
+    
+- Use elementos HTML semânticos, como `button`, `nav`, `main` e `form`.
+    
+- Evite animações contínuas sem finalidade clara.
+    
+- Respeite a preferência por movimento reduzido.
+    
+- Não use classes visuais para substituir atributos HTML ou validações reais.
+    
+
+O Tailwind facilita a aplicação dos estilos, mas **não torna uma interface acessível automaticamente**. A acessibilidade depende também da estrutura HTML, do comportamento e das decisões de design.
+
+---
+
+## 28. Aplicando os conceitos em um botão de formulário Flask
+
+Considere um formulário de login renderizado com Jinja em uma aplicação Flask.
+
+```
+<form method="post" action="{{ url_for('login') }}" class="mx-auto max-w-md space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div>
+        <label for="email" class="mb-1 block text-sm font-medium text-gray-700">
+            E-mail
+        </label>
+
+        <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 transition-colors duration-200 focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-blue-500"
+        >
+    </div>
+
+    <div>
+        <label for="password" class="mb-1 block text-sm font-medium text-gray-700">
+            Senha
+        </label>
+
+        <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 transition-colors duration-200 focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-blue-500"
+        >
+    </div>
+
+    <button
+        type="submit"
+        class="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors duration-200 hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:bg-blue-800"
+    >
+        Entrar
+    </button>
+</form>
+```
+
+Nesse exemplo, diferentes grupos de utilitários possuem responsabilidades específicas:
+
+|Classes|Responsabilidade|
+|---|---|
+|`mx-auto max-w-md`|Centralização horizontal e largura máxima|
+|`space-y-4`|Espaçamento vertical entre os elementos filhos|
+|`border rounded-xl shadow-sm`|Borda, cantos arredondados e sombra|
+|`focus:border-blue-500`|Alteração da borda ao receber foco|
+|`focus:outline-2`|Indicador visual de foco|
+|`transition-colors duration-200`|Transição gradual de cores|
+|`hover:bg-blue-700`|Mudança de fundo ao passar o cursor|
+|`active:bg-blue-800`|Mudança de fundo enquanto o botão está ativo|
+
+O atributo `action="{{ url_for('login') }}"` utiliza o Jinja para gerar a URL da rota Flask chamada `login`. Já as classes Tailwind controlam somente a apresentação visual.
+
+O formulário ainda precisa de uma implementação Flask que processe os dados, valide as credenciais e trate os erros. As classes CSS não implementam autenticação nem segurança no servidor.
+
+---
+
+## 29. Como depurar estados e animações no navegador
+
+Quando uma classe parece não funcionar, não presuma imediatamente que o Tailwind está com defeito.
+
+Faça uma verificação organizada:
+
+1. Abra as ferramentas de desenvolvedor do navegador.
+    
+2. Inspecione o elemento HTML.
+    
+3. Confirme se a classe está presente no atributo `class`.
+    
+4. Verifique se o CSS compilado contém a regra correspondente.
+    
+5. Confira se outra regra CSS está sobrescrevendo o estilo.
+    
+6. Para estados como `hover` e `focus`, force o estado na ferramenta de inspeção, quando disponível.
+    
+7. Verifique se a configuração do Tailwind está detectando os arquivos HTML e Jinja.
+    
+
+No Tailwind v4, o mecanismo de detecção de fontes identifica os arquivos que devem ser analisados para gerar as classes utilizadas. Se um template não for detectado, classes presentes nele podem não aparecer no CSS compilado.
+
+Para um projeto Flask, confirme que o caminho de `templates/` está incluído na detecção de fontes quando a configuração utilizada exigir isso.
+
+Exemplo de configuração CSS:
+
+```
+@import "tailwindcss";
+@source "../../templates";
+```
+
+O caminho de `@source` é relativo ao arquivo CSS em que a diretiva aparece. Portanto, ajuste-o conforme a estrutura real do projeto.
+
+Também é importante distinguir duas situações:
+
+- **A classe está no HTML, mas a regra não existe no CSS compilado:** investigue a detecção de fontes e a compilação.
+    
+- **A regra existe, mas o visual não muda:** investigue a condição do estado, a especificidade CSS e as regras que podem estar sobrescrevendo o estilo.
+    
+
+---

@@ -1923,3 +1923,287 @@ Esse formulário pressupõe que a aplicação tenha proteção CSRF configurada,
 Não é recomendável fazer logout por meio de um simples link GET, pois navegadores, rastreadores e outros mecanismos podem abrir links automaticamente.
 
 ---
+# 34. Mantendo o login com Remember Me
+
+Normalmente, quando utilizamos `login_user(usuario)`, o Flask-Login registra a autenticação na sessão atual. Porém, dependendo da configuração e do comportamento do navegador, essa sessão pode deixar de existir quando o navegador for fechado.
+
+Imagine que você esteja desenvolvendo um painel administrativo. O usuário entra na conta, fecha o navegador e, ao voltar, precisa fazer login novamente.
+
+Para oferecer a opção de continuar conectado, o Flask-Login possui o recurso **Remember Me**.
+
+Ele é ativado pelo argumento `remember=True` da função `login_user()`.
+
+```
+from flask_login import login_user
+
+login_user(usuario, remember=True)
+```
+
+Quando essa opção é utilizada, o Flask-Login cria um cookie de lembrança que permite restaurar a autenticação em visitas posteriores, mesmo que a sessão normal não esteja mais disponível.
+
+Esse cookie é diferente do cookie de sessão padrão do Flask.
+
+- **Cookie de sessão:** mantém os dados da sessão atual.
+    
+- **Cookie Remember Me:** permite que o Flask-Login reconheça o usuário em uma visita posterior.
+    
+
+O recurso não significa que o navegador ficará conectado para sempre. O cookie possui uma duração configurável e pode ser removido, expirado ou invalidado.
+
+## 34.1. Criando a opção no formulário de login
+
+No template `login.html`, podemos adicionar uma caixa de seleção:
+
+```
+<form method="POST" action="{{ url_for('login') }}">
+    <label for="email">E-mail</label>
+    <input
+        type="email"
+        id="email"
+        name="email"
+        autocomplete="username"
+        required
+    >
+
+    <label for="senha">Senha</label>
+    <input
+        type="password"
+        id="senha"
+        name="senha"
+        autocomplete="current-password"
+        required
+    >
+
+    <label>
+        <input
+            type="checkbox"
+            name="remember"
+            value="1"
+        >
+        Manter conectado
+    </label>
+
+    <button type="submit">Entrar</button>
+</form>
+```
+
+A caixa de seleção envia o campo `remember` quando está marcada.
+
+Se a aplicação utiliza Flask-WTF, o formulário também deverá incluir o token CSRF conforme a configuração adotada.
+
+## 34.2. Lendo a opção na rota
+
+Na rota de login, podemos ler a caixa de seleção e passá-la para `login_user()`:
+
+```
+remember = request.form.get("remember") == "1"
+
+login_user(usuario, remember=remember)
+```
+
+O operador `== "1"` transforma o valor recebido em uma condição booleana.
+
+- Se o campo enviado for `"1"`, `remember` será `True`.
+    
+- Se o campo estiver ausente ou possuir outro valor, será `False`.
+    
+
+O objeto `usuario` deve ter sido localizado e suas credenciais devem ter sido verificadas antes dessa chamada.
+
+O parâmetro `remember` não substitui a autenticação por senha. Ele apenas controla se o Flask-Login deverá criar o cookie de lembrança.
+
+---
+
+# 35. Configurando a duração do Remember Me
+
+O Flask-Login permite definir por quanto tempo o cookie de lembrança será válido.
+
+Por exemplo:
+
+```
+from datetime import timedelta
+
+app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=14)
+```
+
+Nesse exemplo, o cookie poderá permanecer válido por até 14 dias.
+
+O valor é um objeto `timedelta`, que representa um intervalo de tempo.
+
+Também é possível definir outras opções relacionadas ao cookie:
+
+```
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SECURE"] = True
+app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+```
+
+Essas configurações controlam propriedades importantes do cookie.
+
+|Configuração|Função|
+|---|---|
+|`REMEMBER_COOKIE_HTTPONLY`|Impede que JavaScript comum leia o cookie diretamente.|
+|`REMEMBER_COOKIE_SECURE`|Faz o navegador enviar o cookie somente por HTTPS.|
+|`REMEMBER_COOKIE_SAMESITE`|Controla em quais contextos entre sites o navegador envia o cookie.|
+
+A opção `REMEMBER_COOKIE_SECURE=True` deve ser utilizada em produção com HTTPS configurado. Durante o desenvolvimento local por HTTP, ela pode impedir que o navegador envie o cookie.
+
+Essas opções também não substituem a proteção CSRF. A configuração do cookie de sessão normal do Flask é separada e deve ser revisada também.
+
+---
+
+# 36. Diferença entre sessão normal e sessão lembrada
+
+O Flask-Login distingue uma sessão autenticada recente de uma autenticação restaurada pelo cookie Remember Me.
+
+Essa diferença importa porque algumas operações são mais sensíveis do que outras.
+
+Por exemplo:
+
+- Visualizar o próprio perfil pode exigir somente autenticação.
+    
+- Alterar a senha pode exigir uma confirmação recente da identidade.
+    
+- Modificar configurações críticas da conta pode exigir que o usuário informe novamente a senha.
+    
+
+Para implementar esse comportamento, o Flask-Login fornece o decorador `fresh_login_required`.
+
+## 36.1. Utilizando fresh_login_required
+
+```
+from flask_login import fresh_login_required
+
+
+@app.route("/conta/alterar-senha", methods=["GET", "POST"])
+@fresh_login_required
+def alterar_senha():
+    return "Formulário para alterar a senha"
+```
+
+O decorador exige uma sessão autenticada considerada recente pelo Flask-Login.
+
+Se a autenticação tiver sido restaurada automaticamente por meio do cookie Remember Me e não for considerada recente, o acesso será encaminhado para o fluxo de confirmação de login.
+
+Para configurar esse fluxo, podemos definir:
+
+```
+login_manager.refresh_view = "reautenticar"
+```
+
+O valor `"reautenticar"` deve corresponder ao endpoint de uma rota existente.
+
+Por exemplo:
+
+```
+@app.route("/reautenticar", methods=["GET", "POST"])
+@login_required
+def reautenticar():
+    ...
+```
+
+A implementação dessa rota precisa verificar novamente as credenciais do usuário. Apenas exibir uma página ou chamar `login_user()` sem verificar a senha não é uma reautenticação segura.
+
+---
+
+# 37. Confirmando novamente a identidade
+
+Depois que o usuário informa a senha correta na rota de reautenticação, podemos chamar `confirm_login()`.
+
+```
+from flask_login import confirm_login, current_user
+from werkzeug.security import check_password_hash
+
+
+@app.route("/reautenticar", methods=["GET", "POST"])
+@login_required
+def reautenticar():
+    if request.method == "POST":
+        senha = request.form.get("senha", "")
+
+        if current_user.verificar_senha(senha):
+            confirm_login()
+            return redirect(url_for("alterar_senha"))
+
+        flash("Não foi possível confirmar suas credenciais.")
+
+    return render_template("reautenticar.html")
+```
+
+Esse exemplo pressupõe que:
+
+- `request`, `flash`, `redirect`, `url_for` e `render_template` tenham sido importados do Flask.
+    
+- A classe do usuário implemente `verificar_senha()`.
+    
+- A aplicação tenha configurado o formulário e a proteção CSRF conforme necessário.
+    
+
+A linha:
+
+```
+confirm_login()
+```
+
+marca a sessão atual como recente (_fresh_) no Flask-Login.
+
+Isso permite que o usuário continue para a rota protegida por `fresh_login_required`, depois de comprovar novamente sua identidade.
+
+**Importante:** `confirm_login()` não verifica a senha por conta própria. A aplicação precisa validar as credenciais antes de chamá-lo.
+
+O import `check_password_hash` não é necessário nesse exemplo, pois a verificação é delegada ao método `current_user.verificar_senha()`. Se a rota verificar o hash diretamente, o método e o import devem ser adaptados para evitar duplicação desnecessária.
+
+---
+
+# 38. Encerrando a autenticação e os cookies de lembrança
+
+Quando chamamos:
+
+```
+logout_user()
+```
+
+o Flask-Login encerra a autenticação atual. Se existir um cookie Remember Me associado, o Flask-Login também trata sua remoção na resposta de logout.
+
+Uma rota de logout pode continuar simples:
+
+```
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+```
+
+O formulário que envia essa requisição deve utilizar POST e, em uma aplicação real, incluir proteção CSRF.
+
+É importante entender que apagar um cookie do navegador não equivale necessariamente a invalidar qualquer sessão ou credencial que tenha sido copiada por terceiros. Aplicações que precisam de revogação imediata de sessões lembradas podem implementar controles adicionais, como um identificador de autenticação que muda quando a senha é alterada, ou uma política de invalidação no servidor.
+
+O Remember Me deve ser tratado como uma conveniência para o usuário, e não como uma garantia de segurança.
+
+---
+
+# 39. Cuidados ao utilizar Remember Me em um painel administrativo
+
+Em um painel administrativo, a decisão de oferecer login persistente depende do risco das operações disponíveis.
+
+Considere estas recomendações:
+
+- Evite habilitar a lembrança automaticamente sem considerar o contexto de uso.
+    
+- Utilize HTTPS em produção.
+    
+- Mantenha `HttpOnly` habilitado para o cookie de lembrança.
+    
+- Configure uma duração compatível com o risco da aplicação.
+    
+- Exija reautenticação para operações críticas.
+    
+- Proteja formulários que modificam dados contra CSRF.
+    
+- Não armazene senhas ou tokens secretos diretamente em cookies de sessão.
+    
+- Considere como invalidar sessões lembradas depois de uma alteração de senha ou de uma suspeita de comprometimento.
+    
+
+Em um portfólio pessoal com painel administrativo, por exemplo, o acesso ao painel pode exigir login normalmente, enquanto a alteração de senha ou de credenciais pode exigir uma nova confirmação da identidade.

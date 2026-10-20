@@ -2111,3 +2111,5 @@ Ao personalizar um projeto Tailwind CSS v4:
     
 
 A personalização deve complementar o sistema de utilitários, e não criar uma camada paralela desnecessária de estilos.
+
+---

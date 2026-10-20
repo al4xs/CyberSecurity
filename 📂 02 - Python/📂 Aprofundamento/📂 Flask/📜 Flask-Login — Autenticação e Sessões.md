@@ -1483,3 +1483,443 @@ O exemplo apresentado nesta parte é voltado ao aprendizado. Antes de utilizá-l
 O Flask-Login resolve uma parte importante do processo de autenticação, mas a segurança de um sistema de login depende também do armazenamento das credenciais, da validação dos dados e das proteções implementadas na aplicação.
 
 ---
+# 27. Protegendo rotas com login_required
+
+Até aqui, aprendemos a autenticar um usuário com `login_user()`. Porém, autenticar alguém não significa que todas as páginas da aplicação estejam automaticamente protegidas.
+
+Por exemplo, podemos ter uma página administrativa que só deve ser acessada por usuários autenticados.
+
+Para isso, o Flask-Login disponibiliza o decorador `login_required`.
+
+```
+from flask_login import login_required
+
+
+@app.route("/admin")
+@login_required
+def admin():
+    return "Painel administrativo"
+```
+
+Quando um usuário autenticado acessa `/admin`, a função `admin()` pode ser executada.
+
+Quando um usuário não autenticado tenta acessar essa rota, o Flask-Login redireciona a requisição para a página de login configurada no `LoginManager`.
+
+Observe a posição do decorador:
+
+```
+@app.route("/admin")
+@login_required
+def admin():
+    ...
+```
+
+O `@login_required` fica entre `@app.route()` e a função. Ele envolve a função da rota e verifica a autenticação antes de permitir sua execução.
+
+## 27.1. Configurando a página de login
+
+No arquivo em que a aplicação Flask é configurada:
+
+```
+from flask_login import LoginManager
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+login_manager.login_view = "login"
+```
+
+A propriedade `login_view` recebe o nome do endpoint da rota de login.
+
+Por exemplo:
+
+```
+@app.route("/login")
+def login():
+    ...
+```
+
+Nesse caso, o endpoint padrão é `login`, pois corresponde ao nome da função.
+
+Portanto:
+
+```
+login_manager.login_view = "login"
+```
+
+informa ao Flask-Login qual rota utilizar quando alguém tentar acessar uma página protegida sem estar autenticado.
+
+Se o endpoint da rota de login tiver outro nome, será necessário configurar o valor correspondente.
+
+---
+
+# 28. O que acontece com o usuário autenticado?
+
+Depois de chamar:
+
+```
+login_user(usuario)
+```
+
+o Flask-Login registra a identidade do usuário na sessão do Flask. Nas requisições seguintes, ele utiliza essa informação para recuperar o usuário autenticado.
+
+Isso permite que as rotas consultem o usuário atual sem precisar receber seu identificador manualmente em cada função.
+
+A variável `current_user` representa o usuário atual da requisição.
+
+```
+from flask_login import current_user
+
+
+@app.route("/perfil")
+@login_required
+def perfil():
+    return f"Olá, {current_user.email}!"
+```
+
+Se o usuário estiver autenticado, `current_user.email` poderá acessar o e-mail associado ao objeto carregado pelo Flask-Login.
+
+O exemplo pressupõe que a classe `Usuario` possua um atributo `email`.
+
+Sem o `@login_required`, a rota também poderia ser acessada por visitantes não autenticados. Nesse caso, `current_user` representaria um usuário anônimo, e não seria seguro presumir que ele possui os atributos personalizados de `Usuario`.
+
+## 28.1. Verificando a autenticação sem bloquear a rota
+
+Nem toda página precisa exigir login.
+
+Uma página inicial, por exemplo, pode apresentar conteúdos diferentes conforme o estado da autenticação:
+
+```
+from flask import render_template
+from flask_login import current_user
+
+
+@app.route("/")
+def home():
+    return render_template(
+        "index.html",
+        usuario=current_user,
+    )
+```
+
+No template Jinja:
+
+```
+{% if current_user.is_authenticated %}
+    <p>Olá, {{ current_user.email }}!</p>
+{% else %}
+    <p>Você ainda não entrou na sua conta.</p>
+{% endif %}
+```
+
+A propriedade `is_authenticated` indica se o usuário atual está autenticado.
+
+Ela faz parte da interface esperada pelo Flask-Login, fornecida, por exemplo, por `UserMixin`.
+
+Essa verificação permite alterar o conteúdo exibido, mas não substitui a proteção de rotas que executam operações restritas.
+
+---
+
+# 29. Entendendo o parâmetro next
+
+Imagine que uma pessoa tente acessar diretamente:
+
+```
+/admin
+```
+
+Como ela não está autenticada, o Flask-Login a redireciona para o login.
+
+Durante esse processo, pode incluir um parâmetro chamado `next` na URL:
+
+```
+/login?next=%2Fadmin
+```
+
+O valor `%2Fadmin` é a representação codificada de `/admin`.
+
+Esse parâmetro indica o destino que a pessoa estava tentando acessar antes de ser redirecionada para o login.
+
+Depois de uma autenticação bem-sucedida, podemos utilizar esse destino para devolver a pessoa à página original.
+
+O fluxo fica assim:
+
+```
+Usuário acessa /admin
+        │
+        ▼
+Não está autenticado
+        │
+        ▼
+Redirecionamento para /login?next=...
+        │
+        ▼
+Usuário informa as credenciais
+        │
+        ▼
+Credenciais válidas
+        │
+        ▼
+Redirecionamento para /admin
+```
+
+Isso melhora a navegação, especialmente em aplicações com diversas páginas protegidas.
+
+## 29.1. O risco de confiar diretamente em next
+
+O parâmetro `next` vem da requisição e pode ser manipulado por quem acessa a aplicação.
+
+Considere um exemplo:
+
+```
+/login?next=https://site-malicioso.example
+```
+
+Se a aplicação utilizar esse valor sem validação, poderá redirecionar o usuário para um site externo após o login.
+
+Esse comportamento é conhecido como **redirecionamento aberto** (_open redirect_).
+
+Em aplicações reais, devemos verificar se o destino é permitido antes de utilizá-lo.
+
+---
+
+# 30. Validando o destino do redirecionamento
+
+Uma maneira de restringir o destino é aceitar apenas caminhos relativos locais que não apontem para outro host.
+
+No arquivo `app.py`, podemos criar uma função auxiliar:
+
+```
+from urllib.parse import urljoin, urlsplit
+
+from flask import request
+
+
+def destino_local_seguro(destino):
+    if not destino:
+        return False
+
+    base = urlsplit(request.host_url)
+    alvo = urlsplit(urljoin(request.host_url, destino))
+
+    return (
+        alvo.scheme in ("http", "https")
+        and alvo.scheme == base.scheme
+        and alvo.netloc == base.netloc
+    )
+```
+
+A função compara o destino com a origem da requisição.
+
+- `urlsplit()` separa uma URL em componentes, como esquema, host e caminho.
+    
+- `urljoin()` resolve o destino em relação à URL-base.
+    
+- `request.host_url` fornece a origem da requisição atual, incluindo o esquema e o host.
+    
+
+A função retorna `True` quando o destino resolvido mantém o mesmo esquema e host da origem.
+
+Essa verificação ajuda a evitar redirecionamentos para sites externos. Em aplicações reais, o tratamento de hosts confiáveis, proxies reversos e configurações HTTPS também precisa ser adequado ao ambiente.
+
+## 30.1. Utilizando a validação no login
+
+Depois de validar as credenciais e executar `login_user(usuario)`, podemos escolher o destino:
+
+```
+destino = request.args.get("next")
+
+if destino_local_seguro(destino):
+    return redirect(destino)
+
+return redirect(url_for("admin"))
+```
+
+Esse trecho deve ser inserido no fluxo de sucesso da rota de login, depois que o usuário tiver sido autenticado.
+
+Se o parâmetro `next` estiver ausente ou não passar na validação, a aplicação utiliza o destino padrão, `/admin`.
+
+A validação deve acontecer antes de utilizar o valor em `redirect()`.
+
+---
+
+# 31. Diferença entre autenticação e autorização
+
+O Flask-Login ajuda a responder à pergunta:
+
+**Quem está autenticado nesta requisição?**
+
+Entretanto, isso não significa que ele determine automaticamente quais ações cada usuário pode executar.
+
+Considere uma aplicação com dois tipos de usuário:
+
+- `admin`: pode administrar o sistema.
+    
+- `usuario`: pode acessar somente as próprias informações.
+    
+
+Ambos podem estar autenticados, mas não possuem necessariamente as mesmas permissões.
+
+Esse segundo problema é chamado de **autorização**.
+
+Podemos visualizar a diferença:
+
+```
+Requisição
+    │
+    ▼
+Está autenticado?
+    │
+    ├── Não ──► Solicitar login
+    │
+    ▼ Sim
+Possui a permissão necessária?
+    │
+    ├── Não ──► Negar acesso
+    │
+    ▼ Sim
+Executar a operação
+```
+
+O decorador `login_required` verifica a autenticação. A autorização precisa ser implementada conforme as regras da aplicação.
+
+## 31.1. Exemplo de controle de acesso administrativo
+
+Suponha que a classe `Usuario` possua um atributo `is_admin`.
+
+Podemos criar um decorador adicional:
+
+```
+from functools import wraps
+
+from flask import abort
+from flask_login import current_user, login_required
+
+
+def admin_required(func):
+    @wraps(func)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if not current_user.is_admin:
+            abort(403)
+
+        return func(*args, **kwargs)
+
+    return wrapper
+```
+
+Agora, uma rota pode exigir acesso administrativo:
+
+```
+@app.route("/admin/usuarios")
+@admin_required
+def listar_usuarios():
+    return "Lista de usuários"
+```
+
+O comportamento é:
+
+- Visitante não autenticado: é encaminhado para o login.
+    
+- Usuário autenticado sem permissão administrativa: recebe erro HTTP `403 Forbidden`.
+    
+- Administrador autenticado: a função da rota é executada.
+    
+
+O `@wraps(func)` preserva metadados da função original, como seu nome. Isso é importante ao criar decoradores personalizados.
+
+Esse exemplo pressupõe que `is_admin` exista no objeto do usuário e seja carregado de uma fonte confiável, como o banco de dados. Não se deve permitir que o próprio usuário escolha ou altere livremente esse valor.
+
+---
+
+# 32. Entendendo a sessão do Flask
+
+O Flask-Login utiliza a sessão do Flask para manter o estado de autenticação entre requisições.
+
+Em uma configuração padrão, o Flask armazena os dados da sessão em um cookie assinado enviado ao navegador.
+
+A assinatura permite detectar alterações indevidas nos dados protegidos. Entretanto, **assinar não é o mesmo que criptografar**: os dados da sessão padrão não devem ser tratados como informações secretas.
+
+Por isso, não armazene senhas, tokens secretos ou outros dados confidenciais diretamente na sessão.
+
+O funcionamento simplificado é:
+
+```
+Navegador
+   │
+   │ Cookie de sessão
+   ▼
+Aplicação Flask
+   │
+   ▼
+Valida a assinatura da sessão
+   │
+   ▼
+Flask-Login recupera o usuário
+   │
+   ▼
+current_user representa a identidade
+```
+
+A `SECRET_KEY` é utilizada pelo Flask para proteger a integridade da sessão.
+
+Em desenvolvimento, podemos configurar a chave assim:
+
+```
+app.config["SECRET_KEY"] = "chave-apenas-para-desenvolvimento"
+```
+
+Esse valor é somente ilustrativo. Não utilize uma chave fixa e previsível em produção.
+
+Uma opção para carregar uma chave configurada no ambiente é:
+
+```
+import os
+
+app.config["SECRET_KEY"] = os.environ["FLASK_SECRET_KEY"]
+```
+
+Nesse caso, a variável `FLASK_SECRET_KEY` precisa estar configurada antes de iniciar a aplicação. Se ela não existir, o código gerará `KeyError`, o que é preferível a iniciar silenciosamente sem a configuração obrigatória.
+
+---
+
+# 33. Encerrando a sessão com logout
+
+Para permitir que um usuário encerre sua sessão, o Flask-Login fornece `logout_user()`.
+
+```
+from flask_login import logout_user, login_required
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+```
+
+A chamada:
+
+```
+logout_user()
+```
+
+remove o estado de autenticação do usuário atual na sessão gerenciada pelo Flask-Login.
+
+A rota exige autenticação porque somente usuários autenticados precisam executar essa operação.
+
+Utilizamos `POST` em vez de `GET`, pois o logout modifica o estado da sessão. Em uma aplicação real, a requisição POST também deve ser protegida contra CSRF.
+
+O formulário de logout pode ser:
+
+```
+<form method="POST" action="{{ url_for('logout') }}">
+    <button type="submit">Sair</button>
+</form>
+```
+
+Esse formulário pressupõe que a aplicação tenha proteção CSRF configurada, por exemplo, com Flask-WTF. Quando essa proteção estiver habilitada, o token CSRF correspondente deverá ser incluído no formulário conforme a configuração utilizada.
+
+Não é recomendável fazer logout por meio de um simples link GET, pois navegadores, rastreadores e outros mecanismos podem abrir links automaticamente.
+
+---

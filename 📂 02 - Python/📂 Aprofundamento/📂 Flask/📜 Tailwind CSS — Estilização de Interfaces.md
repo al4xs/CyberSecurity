@@ -3903,4 +3903,673 @@ No template, utilize a classe completa disponibilizada pela aplicação:
 
 As classes possíveis precisam estar disponíveis nos arquivos que o Tailwind examina. Em projetos com caminhos não detectados automaticamente, configure as fontes conforme a versão do Tailwind e a estrutura do projeto.
 
+---# 📜 Tailwind CSS — Estilização de Interfaces
+
 ---
+
+# Parte 8 — Acessibilidade, desempenho e produção
+
+## 61. Acessibilidade com Tailwind CSS
+
+Acessibilidade é a prática de desenvolver interfaces que possam ser utilizadas por pessoas com diferentes capacidades, incluindo usuários de leitores de tela, navegação por teclado e tecnologias assistivas.
+
+O Tailwind facilita a aplicação de estilos acessíveis, mas **não torna uma interface acessível automaticamente**. A estrutura HTML, os atributos semânticos, o contraste e o comportamento dos componentes continuam sendo responsabilidade do desenvolvedor.
+
+### 61.1. Indicadores de foco
+
+Usuários que navegam com o teclado precisam identificar qual elemento está selecionado.
+
+O navegador normalmente fornece um indicador de foco, mas ele pode ser pouco visível ou acabar removido por estilos personalizados.
+
+No Tailwind, podemos utilizar `focus-visible:` para aplicar estilos quando o elemento recebe foco em situações nas quais o navegador considera apropriado exibir o indicador, normalmente durante a navegação por teclado.
+
+```
+<button
+    class="rounded-lg bg-blue-600 px-4 py-2 text-white
+           focus-visible:outline-2
+           focus-visible:outline-offset-2
+           focus-visible:outline-blue-700"
+>
+    Salvar alterações
+</button>
+```
+
+As classes representam:
+
+- `focus-visible:outline-2`: define uma espessura de contorno de 2 pixels.
+    
+- `focus-visible:outline-offset-2`: afasta o contorno do elemento.
+    
+- `focus-visible:outline-blue-700`: define a cor do contorno.
+    
+
+O CSS equivalente, de forma conceitual, é:
+
+```
+button:focus-visible {
+    outline: 2px solid var(--color-blue-700);
+    outline-offset: 2px;
+}
+```
+
+Não remova o contorno de foco sem fornecer uma alternativa visual adequada. Um botão pode parecer correto com o mouse e, ainda assim, ser difícil de utilizar pelo teclado.
+
+### 61.2. Contraste entre texto e fundo
+
+O contraste é importante para a leitura do conteúdo.
+
+Exemplo:
+
+```
+<p class="bg-white text-gray-900">
+    Texto com alto contraste sobre fundo claro.
+</p>
+```
+
+Nesse caso:
+
+- `bg-white` define um fundo branco.
+    
+- `text-gray-900` define um texto escuro.
+    
+
+Equivalente em CSS:
+
+```
+p {
+    background-color: white;
+    color: var(--color-gray-900);
+}
+```
+
+Não basta escolher duas cores que parecem diferentes. Para texto comum, a recomendação WCAG de nível AA é uma razão de contraste de pelo menos `4.5:1`. Para texto grande, o mínimo é `3:1`, conforme os critérios aplicáveis.
+
+Verifique o contraste real das cores utilizadas, especialmente em estados de desabilitado, erro, aviso e texto secundário.
+
+### 61.3. Não comunicar informações somente por cores
+
+Considere um formulário que mostra uma mensagem de erro apenas com uma borda vermelha.
+
+```
+<input class="border border-red-500" type="email">
+```
+
+Embora a borda possa indicar um problema visualmente, a interface não explica qual é o erro.
+
+Uma abordagem melhor inclui uma mensagem textual:
+
+```
+<label for="email" class="mb-1 block font-medium">
+    E-mail
+</label>
+
+<input
+    id="email"
+    name="email"
+    type="email"
+    aria-invalid="true"
+    aria-describedby="email-error"
+    class="w-full rounded-lg border border-red-500 px-3 py-2"
+/>
+
+<p id="email-error" class="mt-1 text-sm text-red-700">
+    Informe um endereço de e-mail válido.
+</p>
+```
+
+O atributo `aria-invalid="true"` indica que o valor está inválido, enquanto `aria-describedby="email-error"` associa o campo à mensagem explicativa.
+
+O CSS não substitui esses atributos: as classes cuidam da apresentação, e o HTML fornece a estrutura e a semântica.
+
+Em uma aplicação Flask real, os atributos e a mensagem devem refletir o estado efetivo da validação, em vez de serem definidos permanentemente como inválidos.
+
+### 61.4. Texto exclusivo para leitores de tela
+
+Às vezes, precisamos fornecer uma informação acessível sem exibi-la visualmente.
+
+Para isso, o Tailwind disponibiliza a classe `sr-only`.
+
+```
+<button type="button" class="rounded p-2">
+    <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        class="size-5"
+    >
+        <!-- Desenho do ícone -->
+    </svg>
+
+    <span class="sr-only">Fechar janela</span>
+</button>
+```
+
+A classe `sr-only` aplica técnicas CSS para ocultar visualmente o texto sem removê-lo da árvore de acessibilidade.
+
+O CSS equivalente utiliza propriedades como `position`, `width`, `height`, `overflow` e outras para manter o conteúdo disponível para tecnologias assistivas.
+
+Já `size-5` define largura e altura de acordo com a escala de espaçamento do Tailwind.
+
+Se o botão tiver um texto visível que já identifique claramente sua função, o texto adicional pode ser desnecessário. O importante é que controles interativos tenham nomes acessíveis.
+
+---
+
+## 62. Desempenho e tamanho do CSS gerado
+
+O Tailwind trabalha gerando CSS para as classes detectadas nas fontes do projeto. Isso evita a necessidade de enviar indiscriminadamente uma folha de estilos contendo todas as utilidades possíveis do framework.
+
+Entretanto, o resultado depende da configuração, das fontes analisadas e dos estilos personalizados.
+
+### 62.1. Entendendo a compilação
+
+Em um projeto Flask, podemos manter os arquivos separados:
+
+```
+meu_portfolio/
+├── app.py
+├── templates/
+│   ├── base.html
+│   └── projetos.html
+├── static/
+│   ├── src/
+│   │   └── input.css
+│   └── css/
+│       └── output.css
+└── package.json
+```
+
+O arquivo `input.css` contém o ponto de entrada do Tailwind:
+
+```
+@import "tailwindcss";
+```
+
+O arquivo `output.css` é gerado pelo processo de compilação e carregado pelo navegador.
+
+A compilação transforma a entrada e os utilitários detectados em uma folha CSS utilizável pela aplicação.
+
+### 62.2. Compilação durante o desenvolvimento
+
+Com o CLI do Tailwind CSS v4 instalado no projeto, podemos executar:
+
+```
+npx @tailwindcss/cli \
+    -i ./static/src/input.css \
+    -o ./static/css/output.css \
+    --watch
+```
+
+As opções são:
+
+- `-i`: define o arquivo de entrada.
+    
+- `-o`: define o arquivo de saída.
+    
+- `--watch`: monitora alterações relevantes e recompila quando necessário.
+    
+
+O comando permanece em execução enquanto monitora os arquivos. Em outro terminal, podemos iniciar a aplicação Flask.
+
+Por exemplo:
+
+```
+flask --app app run --debug
+```
+
+O servidor Flask e o processo de compilação do Tailwind são processos separados. Reiniciar um não significa necessariamente que o outro também será reiniciado.
+
+### 62.3. Compilação para produção
+
+Em produção, não é necessário manter o processo de observação executando continuamente. O CSS pode ser compilado durante o processo de construção ou implantação.
+
+Para gerar a folha de saída com minificação:
+
+```
+npx @tailwindcss/cli \
+    -i ./static/src/input.css \
+    -o ./static/css/output.css \
+    --minify
+```
+
+A opção `--minify` reduz o tamanho do CSS gerado, removendo espaços e outras informações dispensáveis à apresentação.
+
+A minificação não corrige estilos incorretos nem substitui a configuração adequada das fontes.
+
+### 62.4. Não confundir o servidor de desenvolvimento com a aplicação publicada
+
+O modo de depuração do Flask é útil durante o desenvolvimento, mas não deve ser habilitado em uma implantação pública.
+
+Em produção, o ideal é:
+
+- Compilar os arquivos estáticos antes da publicação.
+    
+- Desabilitar o modo de depuração.
+    
+- Utilizar uma configuração de execução apropriada para produção.
+    
+- Garantir que os arquivos estáticos gerados sejam incluídos na implantação.
+    
+- Verificar se o HTML referencia o caminho correto do CSS compilado.
+    
+
+O Tailwind cuida da geração de CSS; ele não configura sozinho o ambiente de produção do Flask.
+
+---
+
+## 63. Detecção de classes e CSS ausente
+
+Um dos problemas mais comuns é utilizar uma classe no HTML e perceber que seu estilo não aparece no navegador.
+
+Em muitos casos, a classe não foi incluída no CSS compilado porque o Tailwind não a detectou nas fontes analisadas.
+
+### 63.1. Exemplo com classe dinâmica
+
+Considere:
+
+```
+<div class="bg-{{ cor }}-500">
+    Conteúdo
+</div>
+```
+
+O template Jinja pode produzir nomes como `bg-red-500` ou `bg-green-500`.
+
+Entretanto, durante a compilação, o Tailwind não executa o template Jinja para descobrir todas as combinações possíveis dessa expressão.
+
+A solução é fornecer as classes completas de forma estática.
+
+No Python:
+
+```
+cores = {
+    "sucesso": "bg-green-500",
+    "erro": "bg-red-500",
+    "aviso": "bg-yellow-500",
+}
+```
+
+No template:
+
+```
+<div class="{{ cores[status] }}">
+    {{ mensagem }}
+</div>
+```
+
+Como os nomes completos das classes aparecem nos arquivos examinados, o Tailwind consegue detectá-los.
+
+O exemplo pressupõe que `cores` e `status` sejam fornecidos pela aplicação e que `status` corresponda a uma chave válida.
+
+### 63.2. Classes provenientes de arquivos externos
+
+Se as classes estiverem em um diretório que não é analisado automaticamente, será necessário configurar a detecção das fontes.
+
+No Tailwind CSS v4, a diretiva `@source` pode registrar explicitamente um caminho.
+
+Por exemplo:
+
+```
+@import "tailwindcss";
+
+@source "../../templates";
+```
+
+O caminho é relativo ao arquivo CSS no qual a diretiva aparece. Portanto, nesse exemplo, `input.css` está em `static/src/`, e o caminho aponta para o diretório `templates/` na raiz do projeto.
+
+A configuração exata depende da organização dos diretórios e de quais fontes precisam ser analisadas.
+
+### 63.3. Como diagnosticar uma classe que não funciona
+
+Siga esta sequência:
+
+1. Inspecione o elemento no navegador.
+    
+2. Verifique se a classe aparece no HTML final gerado pelo Jinja.
+    
+3. Confirme se o arquivo CSS compilado está carregado.
+    
+4. Procure a regra correspondente no CSS gerado.
+    
+5. Confira se o arquivo que contém a classe foi detectado pelo Tailwind.
+    
+6. Verifique se outra regra está sobrescrevendo o estilo.
+    
+7. Execute novamente a compilação depois de corrigir a configuração.
+    
+
+Essa sequência ajuda a distinguir problemas de template, compilação, carregamento do CSS e cascata.
+
+---
+
+## 64. Depuração pelo navegador
+
+As ferramentas de desenvolvedor do navegador são essenciais para descobrir por que uma interface não apresenta o resultado esperado.
+
+No Chromium, Chrome ou navegadores derivados, normalmente podemos abrir as ferramentas com `F12` ou `Ctrl + Shift + I`.
+
+### 64.1. Inspecionando um elemento
+
+Ao selecionar um elemento na aba de inspeção, podemos verificar:
+
+- As classes presentes no HTML.
+    
+- As regras CSS aplicadas.
+    
+- As declarações sobrescritas.
+    
+- As dimensões finais do elemento.
+    
+- Os estilos calculados.
+    
+- As propriedades herdadas.
+    
+- Os estados de interação e os breakpoints ativos.
+    
+
+Por exemplo, se o elemento contém:
+
+```
+<div class="w-64 p-4">
+    Conteúdo
+</div>
+```
+
+Podemos investigar se a largura está sendo afetada por outras regras, se o elemento possui `box-sizing` esperado e se o contêiner pai interfere no layout.
+
+### 64.2. Testando alterações temporárias
+
+As ferramentas de desenvolvedor permitem alterar valores CSS diretamente no navegador.
+
+Isso é útil para testar hipóteses sem modificar imediatamente o código-fonte.
+
+Por exemplo, se suspeitamos de um problema de espaçamento, podemos experimentar:
+
+```
+padding: 24px;
+```
+
+Se a alteração resolver o problema, devemos identificar qual regra ou utilitário representa corretamente o resultado desejado e aplicar a correção no projeto.
+
+Alterações feitas diretamente nas ferramentas de desenvolvedor são temporárias e não modificam automaticamente os arquivos do projeto.
+
+### 64.3. Inspecionando o CSS calculado
+
+A aba de estilos mostra as regras candidatas; a área de estilos calculados permite consultar o valor final de uma propriedade.
+
+Isso é especialmente útil quando:
+
+- Uma cor parece não corresponder à classe.
+    
+- Uma largura não respeita o valor esperado.
+    
+- Um elemento não recebe o espaçamento esperado.
+    
+- Uma regra personalizada interfere em um utilitário.
+    
+- Uma variante não é ativada no estado esperado.
+    
+
+Em vez de adicionar mais classes aleatoriamente, identifique primeiro a propriedade que está produzindo o comportamento incorreto.
+
+---
+
+## 65. Responsividade e testes em diferentes tamanhos
+
+O uso de variantes responsivas não garante que a interface funcione corretamente em todas as telas.
+
+Um layout pode funcionar em um monitor grande e apresentar problemas em dispositivos estreitos, especialmente quando contém textos longos, tabelas ou elementos com dimensões fixas.
+
+### 65.1. Exemplo de layout responsivo
+
+```
+<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <article class="rounded-lg border p-4">
+        Primeiro item
+    </article>
+
+    <article class="rounded-lg border p-4">
+        Segundo item
+    </article>
+
+    <article class="rounded-lg border p-4">
+        Terceiro item
+    </article>
+</section>
+```
+
+As classes representam:
+
+- `grid`: ativa o layout CSS Grid.
+    
+- `grid-cols-1`: define uma coluna.
+    
+- `sm:grid-cols-2`: define duas colunas a partir do breakpoint `sm`.
+    
+- `lg:grid-cols-3`: define três colunas a partir do breakpoint `lg`.
+    
+- `gap-4`: define o espaçamento entre os itens.
+    
+
+O CSS equivalente, de forma conceitual, é:
+
+```
+.container {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (min-width: 40rem) {
+    .container {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 64rem) {
+    .container {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+```
+
+Esses valores correspondem aos breakpoints padrão `sm` e `lg` do Tailwind CSS v4. Se o tema for personalizado, os pontos de quebra podem mudar.
+
+### 65.2. O que verificar nos testes
+
+Teste a interface em larguras diferentes e confira:
+
+- Se o conteúdo ultrapassa a largura da tela.
+    
+- Se os textos permanecem legíveis.
+    
+- Se botões e campos continuam utilizáveis.
+    
+- Se menus e navegação continuam acessíveis.
+    
+- Se cartões mantêm espaçamento adequado.
+    
+- Se tabelas precisam de rolagem horizontal.
+    
+- Se o foco do teclado continua visível.
+    
+- Se mensagens de erro podem ser lidas e compreendidas.
+    
+
+Não escolha breakpoints apenas por corresponderem a modelos específicos de celulares. O importante é identificar em quais larguras o layout precisa mudar para continuar utilizável.
+
+---
+
+## 66. Organizando os estilos de um projeto Flask
+
+Uma organização clara facilita a manutenção conforme o projeto cresce.
+
+Uma estrutura possível é:
+
+```
+meu_portfolio/
+├── app.py
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── projetos.html
+│   └── admin/
+│       ├── dashboard.html
+│       └── editar_projeto.html
+└── static/
+    ├── src/
+    │   └── input.css
+    ├── css/
+    │   └── output.css
+    ├── js/
+    └── img/
+```
+
+As responsabilidades ficam separadas:
+
+- `templates/`: HTML e templates Jinja.
+    
+- `static/src/input.css`: entrada do Tailwind e definições CSS.
+    
+- `static/css/output.css`: CSS compilado servido ao navegador.
+    
+- `static/js/`: código JavaScript.
+    
+- `static/img/`: imagens estáticas.
+    
+
+### 66.1. Quando criar um arquivo CSS separado
+
+Um arquivo CSS adicional pode ser útil para estilos globais, integrações com bibliotecas ou regras complexas que não se encaixam bem no sistema de utilitários.
+
+Por exemplo:
+
+```
+static/
+├── src/
+│   ├── input.css
+│   └── custom.css
+└── css/
+    └── output.css
+```
+
+A maneira de importar ou compilar os arquivos deve ser definida de acordo com o processo de build adotado. Não basta criar `custom.css`: ele precisa ser incluído no resultado compilado ou carregado separadamente pelo HTML.
+
+Evite duplicar a mesma regra em diferentes arquivos sem uma razão clara.
+
+### 66.2. Não editar manualmente o arquivo compilado
+
+O arquivo `output.css` é gerado pelo processo de compilação.
+
+Editar esse arquivo diretamente é uma prática ruim porque as alterações podem desaparecer na próxima compilação.
+
+Faça as modificações no arquivo de entrada ou nos arquivos-fonte configurados para serem processados e depois gere novamente a saída.
+
+---
+
+## 67. Erros comuns ao utilizar Tailwind em produção
+
+### 67.1. Publicar sem o CSS compilado
+
+Se o template carregar `output.css`, mas o arquivo não estiver presente no ambiente publicado, os estilos não serão aplicados.
+
+Verifique se a compilação faz parte do processo de implantação e se a saída foi incluída no artefato final.
+
+### 67.2. Usar classes dinâmicas que não foram detectadas
+
+Classes construídas por concatenação ou expressões de template podem não aparecer no CSS final.
+
+Prefira nomes completos de classes e configure fontes ou inclusões explícitas quando necessário.
+
+### 67.3. Usar sintaxe de outra versão
+
+Projetos Tailwind v3 e v4 podem diferir em instalação, configuração, diretivas e modificadores.
+
+Antes de copiar uma solução, confira a versão instalada no projeto.
+
+Para consultar a versão dos pacotes npm:
+
+```
+npm list tailwindcss @tailwindcss/cli
+```
+
+### 67.4. Confundir erro de CSS com erro de Jinja
+
+Se uma expressão Jinja não gerar o HTML esperado, o problema pode estar no template ou nos dados fornecidos pelo Flask, não no Tailwind.
+
+Inspecione o HTML final antes de alterar as classes.
+
+### 67.5. Depender excessivamente de `!important`
+
+Se vários elementos precisam de modificadores de importância, investigue a cascata e os estilos conflitantes.
+
+A correção da causa geralmente é mais sustentável do que adicionar novas exceções.
+
+---
+
+## 68. Checklist de qualidade antes da publicação
+
+Antes de publicar uma interface Flask estilizada com Tailwind, confira os seguintes pontos.
+
+### Estrutura e compilação
+
+- O CSS de entrada importa o Tailwind corretamente.
+    
+- O processo de compilação gera o arquivo de saída.
+    
+- Os templates carregam o caminho correto do CSS.
+    
+- As classes utilizadas estão presentes nas fontes analisadas.
+    
+- As classes dinâmicas foram tratadas adequadamente.
+    
+- A compilação para produção foi executada.
+    
+- O arquivo CSS gerado está incluído na implantação.
+    
+
+### Interface e responsividade
+
+- O layout funciona em telas estreitas e largas.
+    
+- Não há rolagem horizontal inesperada.
+    
+- Textos e botões permanecem legíveis.
+    
+- Campos de formulário têm espaçamento e dimensões adequados.
+    
+- Estados de foco, hover, erro e desabilitado foram verificados.
+    
+- A interface não depende exclusivamente de cores para comunicar informações.
+    
+
+### Acessibilidade
+
+- Os controles interativos podem ser utilizados pelo teclado.
+    
+- O foco é visível.
+    
+- Os campos têm rótulos adequados.
+    
+- Mensagens de erro estão associadas aos campos correspondentes.
+    
+- Os nomes acessíveis dos botões e links são claros.
+    
+- O contraste do texto foi verificado.
+    
+
+### Manutenção
+
+- Não existem classes conflitantes desnecessárias.
+    
+- Tokens são utilizados para valores compartilhados importantes.
+    
+- O CSS personalizado está organizado.
+    
+- Arquivos compilados não são editados manualmente.
+    
+- As versões do Tailwind e das ferramentas de build estão identificadas.
+    
+- O modo de depuração do Flask está desabilitado em produção.
+    
+
+---
+

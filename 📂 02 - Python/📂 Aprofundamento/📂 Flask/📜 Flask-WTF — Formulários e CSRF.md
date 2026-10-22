@@ -1150,3 +1150,299 @@ Por isso, a validação feita no servidor continua sendo necessária.
 Uma aplicação confiável não depende exclusivamente das verificações realizadas pelo HTML ou pelo JavaScript do navegador.
 
 ---
+## 23. Entendendo o ataque CSRF
+
+CSRF significa _Cross-Site Request Forgery_, ou falsificação de requisição entre sites.
+
+É um tipo de ataque em que alguém tenta induzir o navegador de uma pessoa autenticada a enviar uma requisição indesejada para uma aplicação na qual ela já possui uma sessão ativa.
+
+Imagine que você esteja conectado ao painel administrativo do seu portfólio Flask. O navegador possui um cookie de sessão que permite à aplicação reconhecer você como administrador.
+
+Se uma rota permitir publicar um artigo por meio de uma requisição POST sem verificar se ela foi realmente iniciada pelo seu formulário legítimo, um site malicioso poderá tentar induzir seu navegador a enviar uma requisição para essa rota.
+
+O navegador pode enviar automaticamente os cookies associados ao destino, dependendo das condições da requisição e das configurações dos cookies. Isso pode permitir que uma ação seja executada com a sessão da vítima.
+
+O problema não é simplesmente o uso do método POST. **POST, sozinho, não impede CSRF.**
+
+### 23.1. Exemplo de uma rota vulnerável
+
+Considere uma rota que publica um artigo:
+
+```
+@app.route("/admin/publicar", methods=["POST"])
+@login_required
+def publicar():
+    titulo = request.form.get("titulo")
+
+    # Publica o artigo...
+    return "Artigo publicado!"
+```
+
+Essa rota verifica se o usuário está autenticado, mas não verifica se a requisição contém uma proteção contra CSRF.
+
+O `login_required` protege o acesso de usuários não autenticados. Ele não comprova que a requisição foi iniciada por um formulário legítimo da aplicação.
+
+Uma proteção CSRF ajuda a verificar essa origem esperada da ação.
+
+## 24. Como funciona a proteção CSRF
+
+Uma abordagem comum é utilizar um token CSRF: um valor associado ao contexto da sessão ou do formulário, que o servidor verifica quando recebe uma requisição que altera dados.
+
+O fluxo simplificado é:
+
+```
+Usuário acessa o formulário
+          |
+          v
+Servidor disponibiliza um token CSRF
+          |
+          v
+Formulário envia o token junto com os dados
+          |
+          v
+Servidor verifica o token recebido
+          |
+          v
+Token válido? ---- Não ----> Requisição rejeitada
+          |
+         Sim
+          |
+          v
+Aplicação continua o processamento
+```
+
+O token dificulta que um site externo produza uma requisição válida sem conhecer o valor esperado.
+
+A proteção depende de uma implementação correta: o token precisa ser verificado no servidor, e a chave usada para protegê-lo deve permanecer secreta.
+
+Um token CSRF também não substitui autenticação, autorização, validação dos dados ou HTTPS.
+
+## 25. Configurando a proteção CSRF no Flask-WTF
+
+O Flask-WTF oferece proteção CSRF integrada.
+
+Em uma aplicação que utiliza `FlaskForm`, a proteção pode ser habilitada configurando uma chave secreta:
+
+```
+from flask import Flask
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = "chave-de-desenvolvimento"
+```
+
+A `SECRET_KEY` é utilizada para proteger dados assinados e participa da proteção CSRF padrão do Flask-WTF.
+
+O valor apresentado é apenas ilustrativo. Em produção, gere uma chave aleatória forte e armazene-a em uma variável de ambiente, em vez de deixá-la no código-fonte.
+
+Por exemplo:
+
+```
+import os
+
+app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+```
+
+Nesse caso, a variável de ambiente `SECRET_KEY` precisa estar configurada antes de iniciar a aplicação.
+
+Por padrão, o Flask-WTF habilita a proteção CSRF para formulários `FlaskForm`. Também é possível configurar a proteção global para requisições que alteram dados, inclusive quando a aplicação não utiliza `FlaskForm` em todas as rotas.
+
+## 26. Utilizando o token no template
+
+Quando utilizamos um formulário criado com `FlaskForm`, podemos inserir os campos ocultos com:
+
+```
+<form method="POST">
+    {{ form.hidden_tag() }}
+
+    {{ form.nome.label }}
+    {{ form.nome() }}
+
+    {{ form.enviar() }}
+</form>
+```
+
+O método `hidden_tag()` renderiza os campos ocultos do formulário, incluindo o campo do token CSRF quando a proteção está habilitada.
+
+Também podemos renderizar o token explicitamente:
+
+```
+<form method="POST">
+    <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ form.csrf_token.current_token }}"
+    >
+
+    {{ form.nome.label }}
+    {{ form.nome() }}
+
+    {{ form.enviar() }}
+</form>
+```
+
+Escolha uma das abordagens. Não é necessário incluir as duas no mesmo formulário.
+
+A primeira costuma ser mais prática porque também renderiza outros campos ocultos definidos no formulário.
+
+**Importante:** não basta colocar um campo chamado `csrf_token` no HTML. O valor precisa corresponder a um token válido, e o servidor precisa verificar esse token.
+
+## 27. Protegendo formulários HTML que não utilizam FlaskForm
+
+Em algumas situações, podemos ter um formulário HTML simples que não foi definido por uma classe `FlaskForm`.
+
+Se a proteção CSRF global estiver habilitada, podemos utilizar o `CSRFProtect` para proteger as requisições compatíveis.
+
+No arquivo `app.py`:
+
+```
+from flask import Flask
+from flask_wtf.csrf import CSRFProtect
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = "chave-de-desenvolvimento"
+
+csrf = CSRFProtect(app)
+```
+
+A chamada `CSRFProtect(app)` registra a proteção CSRF global na aplicação.
+
+Com isso, requisições que alteram dados, como POST, PUT, PATCH e DELETE, precisam fornecer um token válido, conforme a configuração da extensão.
+
+### 27.1. Gerando um token para o template
+
+O Flask-WTF disponibiliza a função `generate_csrf()`:
+
+```
+from flask_wtf.csrf import generate_csrf
+
+@app.route("/formulario")
+def formulario():
+    return render_template(
+        "formulario.html",
+        csrf_token=generate_csrf(),
+    )
+```
+
+No template:
+
+```
+<form method="POST" action="{{ url_for('salvar') }}">
+    <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ csrf_token }}"
+    >
+
+    <label for="titulo">Título:</label>
+    <input type="text" id="titulo" name="titulo">
+
+    <button type="submit">Salvar</button>
+</form>
+```
+
+Quando o formulário for enviado, o token acompanhará os outros campos da requisição.
+
+O `CSRFProtect` verificará o token recebido antes de permitir que a requisição protegida continue normalmente.
+
+## 28. Integrando CSRF com uma rota POST
+
+Considere o exemplo completo de um formulário HTML simples protegido globalmente:
+
+```
+import os
+
+from flask import Flask, render_template, request
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+
+app = Flask(__name__)
+
+app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+
+csrf = CSRFProtect(app)
+
+
+@app.route("/formulario")
+def formulario():
+    return render_template(
+        "formulario.html",
+        csrf_token=generate_csrf(),
+    )
+
+
+@app.route("/salvar", methods=["POST"])
+def salvar():
+    titulo = request.form.get("titulo", "")
+
+    return f"Título recebido: {titulo}"
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+No ambiente, configure uma chave secreta antes de iniciar o servidor. Para um teste local no shell, você pode gerar uma com:
+
+```
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+```
+
+Depois, execute:
+
+```
+python app.py
+```
+
+A rota `/formulario` disponibiliza o token. O formulário envia esse valor para `/salvar`, e a proteção global verifica a requisição.
+
+Se uma requisição POST protegida não apresentar um token válido, a extensão normalmente rejeitará a requisição com um erro HTTP 400.
+
+Esse exemplo é didático. Uma aplicação real deve validar os dados recebidos e implementar o comportamento adequado após salvar as informações.
+
+## 29. CSRF e o logout do Flask-Login
+
+Na anotação de Flask-Login, utilizamos uma rota de logout que aceita somente POST:
+
+```
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+```
+
+O formulário correspondente é:
+
+```
+<form method="POST" action="{{ url_for('logout') }}">
+    <button type="submit">Sair</button>
+</form>
+```
+
+Quando o Flask-WTF está configurado para proteger esse formulário, precisamos incluir o token CSRF.
+
+Se a rota utiliza um `FlaskForm`, podemos usar `form.hidden_tag()`. Se a proteção global está habilitada e o formulário não utiliza `FlaskForm`, podemos incluir o token gerado por `generate_csrf()`.
+
+Isso adiciona uma proteção contra requisições de logout forjadas, evitando depender apenas do fato de a rota aceitar POST.
+
+## 30. O que acontece quando o token é inválido?
+
+Se o token estiver ausente, incorreto ou expirado, o Flask-WTF poderá rejeitar a requisição.
+
+Durante o desenvolvimento, é importante distinguir um erro CSRF de um erro na lógica da rota. Verifique se:
+
+- A aplicação está configurada com uma `SECRET_KEY`.
+    
+- O formulário realmente envia o token.
+    
+- O token é gerado pela proteção CSRF da aplicação.
+    
+- A sessão e o token não ficaram inválidos após alterações de configuração.
+    
+- O formulário envia os dados ao endpoint esperado.
+    
+
+Não resolva erros CSRF desabilitando a proteção indiscriminadamente. Em vez disso, identifique a causa e corrija a geração ou o envio do token.
+
+---

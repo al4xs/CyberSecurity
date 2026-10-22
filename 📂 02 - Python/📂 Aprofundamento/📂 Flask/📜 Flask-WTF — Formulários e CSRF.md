@@ -784,3 +784,369 @@ Esse exemplo demonstra como definir vários campos, renderizá-los no template e
 A senha não é exibida na resposta e, em uma aplicação real, não deve ser armazenada em texto puro.
 
 ---
+## 12. Entendendo os validadores do WTForms
+
+Na parte anterior, criamos formulários com campos como `StringField`, `EmailField`, `PasswordField` e `SelectField`.
+
+Porém, definir um campo não significa que os dados recebidos sejam válidos.
+
+Por exemplo, este campo aceita texto, mas não exige que o usuário preencha alguma coisa:
+
+```
+nome = StringField("Nome")
+```
+
+Se quisermos exigir o preenchimento, precisamos adicionar um validador.
+
+Os **validadores** são regras que verificam se os dados enviados atendem às condições definidas pela aplicação.
+
+Eles são importados do módulo `wtforms.validators` e podem ser associados aos campos por meio do argumento `validators`.
+
+## 13. DataRequired — exigindo o preenchimento
+
+O `DataRequired` verifica se o campo contém um valor considerado preenchido.
+
+```
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField(
+        "Nome",
+        validators=[DataRequired()],
+    )
+```
+
+Observe:
+
+```
+validators=[DataRequired()]
+```
+
+O argumento `validators` recebe uma lista de validadores. Utilizamos `DataRequired()` porque estamos criando uma instância do validador.
+
+Se o usuário enviar o formulário sem preencher o campo, a validação falhará.
+
+Também podemos definir uma mensagem personalizada:
+
+```
+nome = StringField(
+    "Nome",
+    validators=[
+        DataRequired(message="O nome é obrigatório.")
+    ],
+)
+```
+
+Assim, quando a validação falhar, o formulário poderá apresentar a mensagem definida.
+
+**Importante:** `DataRequired` verifica o valor após o processamento do campo e considera inválidos valores falsy, como uma string vazia. Para verificar se o valor bruto enviado não está vazio, sem depender desse comportamento, existe `InputRequired`. A escolha depende do tipo de campo e da regra desejada.
+
+## 14. Length — limitando o tamanho do texto
+
+O `Length` permite definir o tamanho mínimo e máximo de um valor textual.
+
+```
+from wtforms.validators import DataRequired, Length
+
+
+nome = StringField(
+    "Nome",
+    validators=[
+        DataRequired(),
+        Length(min=3, max=50),
+    ],
+)
+```
+
+Nesse exemplo:
+
+- `min=3`: exige pelo menos três caracteres.
+    
+- `max=50`: permite no máximo cinquenta caracteres.
+    
+
+Também podemos personalizar a mensagem:
+
+```
+nome = StringField(
+    "Nome",
+    validators=[
+        DataRequired(),
+        Length(
+            min=3,
+            max=50,
+            message="O nome deve ter entre 3 e 50 caracteres.",
+        ),
+    ],
+)
+```
+
+Os validadores são executados na ordem em que aparecem na lista. Nesse exemplo, primeiro verificamos se o campo foi preenchido e depois verificamos o comprimento.
+
+## 15. Email — validando o formato do e-mail
+
+O `Email` verifica se o valor informado possui um formato de endereço de e-mail reconhecido pelo validador.
+
+```
+from wtforms import EmailField
+from wtforms.validators import DataRequired, Email
+
+
+email = EmailField(
+    "E-mail",
+    validators=[
+        DataRequired(),
+        Email(message="Informe um e-mail válido."),
+    ],
+)
+```
+
+A presença de `EmailField` não substitui o validador `Email`.
+
+O campo define o tipo de entrada; o validador verifica o formato do valor recebido no servidor.
+
+Mesmo quando o endereço passa nessa verificação, isso não comprova que a caixa postal existe ou pertence ao usuário. Para confirmar a posse do endereço, uma aplicação pode enviar um link de verificação.
+
+## 16. EqualTo — comparando dois campos
+
+O `EqualTo` verifica se o valor de um campo é igual ao valor de outro campo do formulário.
+
+É útil em cadastros que pedem a confirmação da senha.
+
+```
+from flask_wtf import FlaskForm
+from wtforms import PasswordField
+from wtforms.validators import DataRequired, EqualTo
+
+
+class CadastroForm(FlaskForm):
+    senha = PasswordField(
+        "Senha",
+        validators=[DataRequired()],
+    )
+
+    confirmar_senha = PasswordField(
+        "Confirmar senha",
+        validators=[
+            DataRequired(),
+            EqualTo(
+                "senha",
+                message="As senhas não são iguais.",
+            ),
+        ],
+    )
+```
+
+O argumento `"senha"` indica o nome do outro campo que será comparado.
+
+Se os valores forem diferentes, a validação falhará.
+
+A confirmação serve para evitar erros de digitação, mas não substitui a política de segurança da senha nem o armazenamento por hash.
+
+## 17. NumberRange — limitando valores numéricos
+
+O `NumberRange` permite estabelecer limites para valores numéricos.
+
+```
+from wtforms import IntegerField
+from wtforms.validators import DataRequired, NumberRange
+
+
+class IdadeForm(FlaskForm):
+    idade = IntegerField(
+        "Idade",
+        validators=[
+            DataRequired(),
+            NumberRange(
+                min=18,
+                max=120,
+                message="A idade deve estar entre 18 e 120.",
+            ),
+        ],
+    )
+```
+
+Nesse exemplo, o campo precisa conter um valor numérico processável e a validação exige que ele esteja entre 18 e 120, inclusive.
+
+O `IntegerField` cuida da conversão para inteiro; o `NumberRange` verifica o intervalo.
+
+## 18. Optional — permitindo campos opcionais
+
+Nem todo campo precisa ser obrigatório.
+
+O `Optional` interrompe a validação do campo quando a entrada é considerada vazia, limpando os erros produzidos até aquele ponto.
+
+```
+from wtforms import StringField
+from wtforms.validators import Optional, Length
+
+
+apelido = StringField(
+    "Apelido",
+    validators=[
+        Optional(),
+        Length(max=30),
+    ],
+)
+```
+
+Nesse exemplo, o usuário pode deixar o campo vazio. Se preencher o apelido, o valor deverá respeitar o limite de trinta caracteres.
+
+A ordem é importante: `Optional()` aparece antes de `Length()` para que uma entrada vazia não seja rejeitada pelo validador de comprimento.
+
+## 19. Combinando vários validadores
+
+Um campo pode ter várias regras simultaneamente.
+
+```
+from wtforms import StringField
+from wtforms.validators import DataRequired, Length
+
+
+usuario = StringField(
+    "Usuário",
+    validators=[
+        DataRequired(message="Informe um usuário."),
+        Length(
+            min=3,
+            max=20,
+            message="O usuário deve ter entre 3 e 20 caracteres.",
+        ),
+    ],
+)
+```
+
+Nesse caso, o valor precisa:
+
+1. Estar preenchido.
+    
+2. Ter pelo menos três caracteres.
+    
+3. Ter no máximo vinte caracteres.
+    
+
+Cada validador verifica uma condição específica. Isso facilita a manutenção porque podemos alterar ou combinar regras sem colocar todas as verificações dentro da rota.
+
+## 20. Acessando os erros de validação
+
+Quando a validação falha, o WTForms disponibiliza as mensagens de erro por meio do atributo `errors` de cada campo.
+
+Considere este formulário:
+
+```
+from flask_wtf import FlaskForm
+from wtforms import StringField, SubmitField
+from wtforms.validators import DataRequired, Length
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField(
+        "Nome",
+        validators=[
+            DataRequired(message="O nome é obrigatório."),
+            Length(min=3, message="Digite pelo menos 3 caracteres."),
+        ],
+    )
+
+    enviar = SubmitField("Cadastrar")
+```
+
+Na rota:
+
+```
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    form = CadastroForm()
+
+    if form.validate_on_submit():
+        return f"Cadastro recebido: {form.nome.data}"
+
+    return render_template(
+        "cadastro.html",
+        form=form,
+    )
+```
+
+Se o usuário enviar um valor inválido, `validate_on_submit()` retornará `False` e o formulário será renderizado novamente.
+
+No template, podemos acessar os erros do campo:
+
+```
+<form method="POST">
+    {{ form.hidden_tag() }}
+
+    {{ form.nome.label }}
+    {{ form.nome() }}
+
+    {% for erro in form.nome.errors %}
+        <p>{{ erro }}</p>
+    {% endfor %}
+
+    {{ form.enviar() }}
+</form>
+```
+
+A expressão `form.nome.errors` contém uma lista de mensagens de erro associadas ao campo.
+
+O laço `for` percorre essas mensagens e apresenta cada uma delas na página.
+
+## 21. Exibindo erros de todos os campos
+
+Em formulários maiores, não é necessário escrever um laço separado para cada campo. Podemos percorrer os campos e seus erros.
+
+```
+<form method="POST">
+    {{ form.hidden_tag() }}
+
+    {% for campo in form %}
+        {% if campo.type != "CSRFTokenField" %}
+            <div>
+                {{ campo.label }}
+                {{ campo() }}
+
+                {% for erro in campo.errors %}
+                    <p>{{ erro }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endfor %}
+</form>
+```
+
+O laço externo percorre os campos do formulário, enquanto o interno percorre os erros de cada campo.
+
+A condição evita renderizar novamente o campo CSRF, já que `hidden_tag()` já inclui os campos ocultos necessários.
+
+Essa abordagem é útil para formulários dinâmicos, mas em interfaces mais elaboradas pode ser melhor renderizar cada campo explicitamente para controlar a estrutura HTML e o estilo.
+
+## 22. Validação no navegador e no servidor
+
+Alguns campos podem incluir atributos HTML, como `required`, `minlength` e `maxlength`.
+
+Por exemplo:
+
+```
+nome = StringField(
+    "Nome",
+    render_kw={
+        "required": True,
+        "minlength": 3,
+        "maxlength": 50,
+    },
+    validators=[
+        DataRequired(),
+        Length(min=3, max=50),
+    ],
+)
+```
+
+Esses atributos ajudam o navegador a orientar o usuário, mas podem ser ignorados por quem envia uma requisição diretamente.
+
+Por isso, a validação feita no servidor continua sendo necessária.
+
+Uma aplicação confiável não depende exclusivamente das verificações realizadas pelo HTML ou pelo JavaScript do navegador.
+
+---

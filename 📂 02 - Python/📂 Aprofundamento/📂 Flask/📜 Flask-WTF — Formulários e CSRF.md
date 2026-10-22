@@ -387,3 +387,400 @@ O fluxo separa três responsabilidades:
 Essa separação torna os formulários mais fáceis de manter e permite reutilizar regras de validação em diferentes partes da aplicação.
 
 ---
+## 7. Entendendo os campos dos formulários
+
+Na parte anterior, criamos um formulário usando `FlaskForm`, `StringField` e `SubmitField`.
+
+Agora vamos aprofundar os tipos de campos disponíveis no WTForms e entender como configurá-los para diferentes situações.
+
+Cada campo representa um tipo de dado que o usuário pode preencher ou enviar. A escolha depende da informação que queremos receber.
+
+Por exemplo:
+
+- Nome: `StringField`.
+    
+- Senha: `PasswordField`.
+    
+- E-mail: `EmailField`.
+    
+- Número inteiro: `IntegerField`.
+    
+- Caixa de seleção: `BooleanField`.
+    
+- Data: `DateField`.
+    
+- Área de texto: `TextAreaField`.
+    
+- Opções de uma lista: `SelectField`.
+    
+- Botão de envio: `SubmitField`.
+    
+
+Os campos ficam disponíveis no módulo `wtforms` e podem ser utilizados nas classes que herdam de `FlaskForm`.
+
+## 8. Principais tipos de campos
+
+### 8.1. StringField — texto simples
+
+```
+from flask_wtf import FlaskForm
+from wtforms import StringField
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField("Nome")
+```
+
+O `StringField` representa um campo de texto de uma linha.
+
+Normalmente, ele será renderizado como:
+
+```
+<input type="text" name="nome" id="nome">
+```
+
+O WTForms gera os atributos HTML a partir da definição do campo e das opções fornecidas.
+
+Esse campo pode ser usado para nomes, títulos, apelidos e outras informações textuais curtas.
+
+### 8.2. PasswordField — senhas
+
+```
+from wtforms import PasswordField
+
+
+class LoginForm(FlaskForm):
+    senha = PasswordField("Senha")
+```
+
+O `PasswordField` representa um campo de senha. No HTML, ele é renderizado como um campo do tipo `password`, que oculta visualmente os caracteres digitados.
+
+Isso **não criptografa a senha nem a protege durante o envio por si só**. A aplicação ainda precisa utilizar HTTPS e tratar as senhas corretamente no servidor, por exemplo, armazenando hashes seguros em vez das senhas originais.
+
+### 8.3. EmailField — endereço de e-mail
+
+```
+from wtforms import EmailField
+
+
+class ContatoForm(FlaskForm):
+    email = EmailField("E-mail")
+```
+
+O `EmailField` representa um campo de entrada de e-mail, normalmente renderizado com `type="email"`.
+
+Ele ajuda o navegador a apresentar uma interface apropriada para esse tipo de dado, mas o campo sozinho não garante que o endereço seja válido ou que pertença ao usuário.
+
+Para validar o formato do e-mail no servidor, podemos adicionar um validador, como `Email`, que será estudado na próxima parte.
+
+### 8.4. IntegerField — números inteiros
+
+```
+from wtforms import IntegerField
+
+
+class IdadeForm(FlaskForm):
+    idade = IntegerField("Idade")
+```
+
+O `IntegerField` tenta converter o valor recebido para um número inteiro Python.
+
+Se o usuário enviar um valor que não possa ser convertido, o processamento do campo poderá gerar um erro de validação.
+
+A conversão para inteiro não significa que o número seja adequado para a aplicação. Por exemplo, ainda precisamos definir se uma idade negativa deve ser aceita.
+
+### 8.5. BooleanField — valor verdadeiro ou falso
+
+```
+from wtforms import BooleanField
+
+
+class PreferenciasForm(FlaskForm):
+    receber_novidades = BooleanField(
+        "Desejo receber novidades"
+    )
+```
+
+O `BooleanField` representa um campo booleano, normalmente renderizado como uma caixa de seleção.
+
+Ele é útil para opções que podem estar marcadas ou desmarcadas, como uma preferência de interface.
+
+Não confunda uma caixa de seleção com uma confirmação automaticamente confiável: o servidor deve processar e validar os dados de acordo com a finalidade do campo.
+
+### 8.6. DateField — datas
+
+```
+from wtforms import DateField
+
+
+class EventoForm(FlaskForm):
+    data_evento = DateField("Data do evento")
+```
+
+O `DateField` processa o valor como uma data Python, normalmente um objeto `datetime.date`.
+
+Podemos especificar o formato esperado usando `format`:
+
+```
+data_evento = DateField(
+    "Data do evento",
+    format="%Y-%m-%d",
+)
+```
+
+O formato `%Y-%m-%d` corresponde a ano, mês e dia, como `2026-10-22`.
+
+Se o valor não puder ser convertido para o formato esperado, a validação do campo poderá falhar.
+
+### 8.7. TextAreaField — texto com várias linhas
+
+```
+from wtforms import TextAreaField
+
+
+class ArtigoForm(FlaskForm):
+    conteudo = TextAreaField("Conteúdo")
+```
+
+O `TextAreaField` representa uma área de texto com várias linhas.
+
+É adequado para descrições, comentários, artigos e outras informações que podem ocupar mais de uma linha.
+
+No HTML, ele corresponde ao elemento `<textarea>`.
+
+### 8.8. SelectField — seleção de opções
+
+```
+from wtforms import SelectField
+
+
+class PerfilForm(FlaskForm):
+    linguagem = SelectField(
+        "Linguagem",
+        choices=[
+            ("python", "Python"),
+            ("javascript", "JavaScript"),
+            ("c", "C"),
+        ],
+    )
+```
+
+O `SelectField` permite selecionar uma opção entre as disponíveis.
+
+Cada item de `choices` contém dois valores:
+
+```
+("python", "Python")
+```
+
+- `"python"` é o valor associado à opção.
+    
+- `"Python"` é o texto apresentado ao usuário.
+    
+
+Assim, o usuário vê a palavra Python, enquanto o valor processado pelo formulário é `"python"`.
+
+O servidor ainda precisa verificar se a opção recebida é permitida. Em um formulário convencional, o WTForms utiliza as escolhas configuradas para validar o valor selecionado.
+
+### 8.9. SubmitField — botão de envio
+
+```
+from wtforms import SubmitField
+
+
+class CadastroForm(FlaskForm):
+    enviar = SubmitField("Cadastrar")
+```
+
+O `SubmitField` representa um botão de envio do formulário.
+
+Ele não substitui a lógica de processamento na rota. Depois que o usuário envia os dados, o Flask precisa decidir o que fazer com eles.
+
+## 9. Configurando atributos HTML dos campos
+
+Além do rótulo, podemos configurar atributos HTML para controlar a apresentação e o comportamento dos campos no navegador.
+
+Por exemplo:
+
+```
+from flask_wtf import FlaskForm
+from wtforms import StringField, SubmitField
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField(
+        "Nome",
+        render_kw={
+            "placeholder": "Digite seu nome",
+            "class": "campo-nome",
+            "autocomplete": "name",
+        },
+    )
+
+    enviar = SubmitField("Cadastrar")
+```
+
+O argumento `render_kw` recebe um dicionário com atributos HTML que serão aplicados ao campo renderizado.
+
+Nesse exemplo:
+
+- `placeholder` apresenta uma dica dentro do campo.
+    
+- `class` define uma classe CSS.
+    
+- `autocomplete` informa ao navegador que o campo pode receber um nome salvo.
+    
+
+Esses atributos ajudam na interface, mas não substituem a validação no servidor. Um usuário pode enviar uma requisição sem utilizar a interface do navegador.
+
+Também podemos definir alguns atributos diretamente no template:
+
+```
+{{ form.nome(class="campo-nome", placeholder="Digite seu nome") }}
+```
+
+Essa abordagem é útil quando os atributos variam conforme o contexto de apresentação.
+
+## 10. Acessando os valores dos campos
+
+Depois que o formulário é processado, podemos acessar seus valores pelo atributo `.data`.
+
+Considere:
+
+```
+class CadastroForm(FlaskForm):
+    nome = StringField("Nome")
+    idade = IntegerField("Idade")
+```
+
+Na rota:
+
+```
+form = CadastroForm()
+
+if form.validate_on_submit():
+    nome = form.nome.data
+    idade = form.idade.data
+```
+
+Nesse caso:
+
+- `form.nome.data` contém o nome processado.
+    
+- `form.idade.data` contém a idade convertida para inteiro, se o processamento for bem-sucedido.
+    
+
+O valor de um campo não precisa ser necessariamente uma string. O tipo depende do campo utilizado e do processamento realizado pelo WTForms.
+
+Por isso, é importante conhecer o tipo de campo antes de utilizar seu valor em cálculos, comparações ou operações no banco de dados.
+
+## 11. Exemplo integrado com vários campos
+
+Vamos criar um formulário de cadastro simples com nome, e-mail, senha e uma linguagem preferida.
+
+No arquivo `app.py`:
+
+```
+from flask import Flask, render_template
+from flask_wtf import FlaskForm
+from wtforms import (
+    StringField,
+    EmailField,
+    PasswordField,
+    SelectField,
+    SubmitField,
+)
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "chave-de-desenvolvimento"
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField("Nome")
+    email = EmailField("E-mail")
+    senha = PasswordField("Senha")
+
+    linguagem = SelectField(
+        "Linguagem preferida",
+        choices=[
+            ("python", "Python"),
+            ("javascript", "JavaScript"),
+            ("c", "C"),
+        ],
+    )
+
+    enviar = SubmitField("Cadastrar")
+
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    form = CadastroForm()
+
+    if form.validate_on_submit():
+        nome = form.nome.data
+        email = form.email.data
+        linguagem = form.linguagem.data
+
+        return (
+            f"Cadastro recebido: {nome}, "
+            f"{email}, linguagem: {linguagem}"
+        )
+
+    return render_template(
+        "cadastro.html",
+        form=form,
+    )
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+Crie `templates/cadastro.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro</title>
+</head>
+<body>
+    <h1>Cadastro</h1>
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+
+        <div>
+            {{ form.nome.label }}
+            {{ form.nome() }}
+        </div>
+
+        <div>
+            {{ form.email.label }}
+            {{ form.email() }}
+        </div>
+
+        <div>
+            {{ form.senha.label }}
+            {{ form.senha() }}
+        </div>
+
+        <div>
+            {{ form.linguagem.label }}
+            {{ form.linguagem() }}
+        </div>
+
+        {{ form.enviar() }}
+    </form>
+</body>
+</html>
+```
+
+Esse exemplo demonstra como definir vários campos, renderizá-los no template e acessar os valores processados na rota.
+
+**Importante:** o exemplo é apenas didático. Ainda não adicionamos regras para exigir o preenchimento dos campos, validar o formato do e-mail ou definir requisitos para a senha. Também não estamos salvando o cadastro no banco de dados. Essas etapas exigem validação e tratamento adicionais.
+
+A senha não é exibida na resposta e, em uma aplicação real, não deve ser armazenada em texto puro.
+
+---

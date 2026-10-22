@@ -1446,3 +1446,625 @@ Durante o desenvolvimento, é importante distinguir um erro CSRF de um erro na l
 Não resolva erros CSRF desabilitando a proteção indiscriminadamente. Em vez disso, identifique a causa e corrija a geração ou o envio do token.
 
 ---
+## 31. Integrando Flask-WTF com Flask-Login
+
+Até aqui, aprendemos a criar formulários com `FlaskForm`, validar campos e proteger requisições com CSRF.
+
+Agora vamos integrar esses recursos a um fluxo comum de uma aplicação Flask: cadastro de usuários, login e logout.
+
+A ideia é separar as responsabilidades:
+
+- **Flask-WTF:** define os campos e valida os dados enviados.
+    
+- **Flask-Login:** gerencia a autenticação e a sessão do usuário.
+    
+- **Flask:** recebe as requisições, executa as rotas e renderiza os templates.
+    
+- **Banco de dados:** armazena os usuários de forma persistente.
+    
+
+Neste exemplo, utilizaremos um dicionário em memória para manter o foco nos formulários e na autenticação. Os dados serão perdidos quando a aplicação for reiniciada. Em um projeto real, o cadastro deve ser persistido no banco de dados.
+
+## 32. Criando os formulários de cadastro e login
+
+Vamos criar um arquivo `forms.py` para separar a definição dos formulários da lógica das rotas.
+
+Estrutura do projeto:
+
+```
+meu_projeto/
+├── app.py
+├── forms.py
+└── templates/
+    ├── cadastro.html
+    └── login.html
+```
+
+No arquivo `forms.py`:
+
+```
+from flask_wtf import FlaskForm
+from wtforms import (
+    StringField,
+    PasswordField,
+    SubmitField,
+)
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    EqualTo,
+    Length,
+)
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField(
+        "Nome",
+        validators=[
+            DataRequired(message="Informe seu nome."),
+            Length(
+                min=3,
+                max=50,
+                message="O nome deve ter entre 3 e 50 caracteres.",
+            ),
+        ],
+    )
+
+    email = StringField(
+        "E-mail",
+        validators=[
+            DataRequired(message="Informe seu e-mail."),
+            Email(message="Informe um e-mail válido."),
+        ],
+    )
+
+    senha = PasswordField(
+        "Senha",
+        validators=[
+            DataRequired(message="Informe uma senha."),
+            Length(
+                min=8,
+                message="A senha deve ter pelo menos 8 caracteres.",
+            ),
+        ],
+    )
+
+    confirmar_senha = PasswordField(
+        "Confirmar senha",
+        validators=[
+            DataRequired(message="Confirme sua senha."),
+            EqualTo(
+                "senha",
+                message="As senhas não coincidem.",
+            ),
+        ],
+    )
+
+    enviar = SubmitField("Cadastrar")
+
+
+class LoginForm(FlaskForm):
+    email = StringField(
+        "E-mail",
+        validators=[
+            DataRequired(message="Informe seu e-mail."),
+            Email(message="Informe um e-mail válido."),
+        ],
+    )
+
+    senha = PasswordField(
+        "Senha",
+        validators=[
+            DataRequired(message="Informe sua senha."),
+        ],
+    )
+
+    enviar = SubmitField("Entrar")
+```
+
+### 32.1. Por que separar os formulários?
+
+O arquivo `forms.py` concentra os campos e suas regras de validação.
+
+Assim, as rotas não precisam repetir todas as regras de cada campo. Se precisarmos alterar o tamanho mínimo da senha, por exemplo, podemos fazer isso na definição do formulário.
+
+O `CadastroForm` possui quatro campos de entrada, enquanto o `LoginForm` utiliza somente e-mail e senha.
+
+Observe que os validadores verificam os dados recebidos, mas ainda não confirmam se o e-mail já está cadastrado ou se a senha corresponde à senha armazenada. Essas verificações pertencem à lógica de negócio da aplicação.
+
+## 33. Criando a aplicação com Flask-Login
+
+No arquivo `app.py`:
+
+```
+from flask import (
+    Flask,
+    render_template,
+    redirect,
+    url_for,
+    flash,
+)
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+    logout_user,
+    login_required,
+    current_user,
+)
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
+
+from forms import CadastroForm, LoginForm
+
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "chave-de-desenvolvimento"
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+
+
+usuarios = {}
+proximo_id = 1
+
+
+class Usuario(UserMixin):
+    def __init__(self, id, nome, email, senha_hash):
+        self.id = id
+        self.nome = nome
+        self.email = email
+        self.senha_hash = senha_hash
+
+
+@login_manager.user_loader
+def carregar_usuario(user_id):
+    try:
+        return usuarios.get(int(user_id))
+    except (TypeError, ValueError):
+        return None
+```
+
+### 33.1. Configurando o LoginManager
+
+O `LoginManager` integra o Flask-Login à aplicação.
+
+A configuração:
+
+```
+login_manager.login_view = "login"
+```
+
+indica qual endpoint deve ser utilizado para redirecionar usuários não autenticados quando tentam acessar uma rota protegida.
+
+### 33.2. Criando o modelo simplificado de usuário
+
+A classe `Usuario` herda de `UserMixin`, que fornece propriedades e métodos esperados pelo Flask-Login.
+
+O atributo `senha_hash` armazena o hash da senha, e não a senha original.
+
+Neste exemplo, os objetos ficam no dicionário `usuarios`. Essa estrutura serve apenas para demonstrar o fluxo e não oferece persistência, controle de concorrência ou gerenciamento adequado de usuários para produção.
+
+### 33.3. Recuperando o usuário da sessão
+
+O Flask-Login utiliza a função registrada com `user_loader` para recuperar o usuário associado à sessão.
+
+```
+@login_manager.user_loader
+def carregar_usuario(user_id):
+    try:
+        return usuarios.get(int(user_id))
+    except (TypeError, ValueError):
+        return None
+```
+
+O identificador recebido é convertido para inteiro e utilizado para consultar o dicionário.
+
+Se o identificador for inválido ou não existir, a função retorna `None`, indicando que o usuário não foi encontrado.
+
+## 34. Implementando a rota de cadastro
+
+Acrescente ao `app.py`:
+
+```
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    global proximo_id
+
+    form = CadastroForm()
+
+    if form.validate_on_submit():
+        email = form.email.data.strip().lower()
+
+        if any(
+            usuario.email == email
+            for usuario in usuarios.values()
+        ):
+            flash("Esse e-mail já está cadastrado.", "error")
+
+            return render_template(
+                "cadastro.html",
+                form=form,
+            )
+
+        usuario = Usuario(
+            id=proximo_id,
+            nome=form.nome.data.strip(),
+            email=email,
+            senha_hash=generate_password_hash(form.senha.data),
+        )
+
+        usuarios[proximo_id] = usuario
+        proximo_id += 1
+
+        flash("Cadastro realizado com sucesso!", "success")
+
+        return redirect(url_for("login"))
+
+    return render_template(
+        "cadastro.html",
+        form=form,
+    )
+```
+
+### 34.1. Validando o formulário
+
+```
+if form.validate_on_submit():
+```
+
+Verifica se o formulário foi enviado por POST e se os validadores configurados foram aprovados.
+
+Se os dados forem inválidos, o código não cria o usuário e renderiza novamente o formulário.
+
+### 34.2. Normalizando o e-mail
+
+```
+email = form.email.data.strip().lower()
+```
+
+`strip()` remove espaços em branco das extremidades, enquanto `lower()` converte as letras para minúsculas.
+
+Isso ajuda a manter uma representação consistente dos e-mails nesse exemplo. Em uma aplicação real, a política de normalização e a unicidade precisam ser definidas e aplicadas também no banco de dados.
+
+### 34.3. Verificando e-mails duplicados
+
+```
+if any(
+    usuario.email == email
+    for usuario in usuarios.values()
+):
+```
+
+O `any()` retorna `True` quando pelo menos um usuário possui o e-mail informado.
+
+Se o endereço já existir, a aplicação apresenta uma mensagem e não cria outro usuário com o mesmo e-mail.
+
+Em um sistema real, essa verificação precisa ser reforçada por uma restrição de unicidade no banco de dados. Uma consulta anterior, isoladamente, não impede duplicações em acessos concorrentes.
+
+### 34.4. Armazenando o hash da senha
+
+```
+senha_hash=generate_password_hash(form.senha.data)
+```
+
+Gera um hash apropriado para armazenamento de senhas usando as ferramentas do Werkzeug.
+
+A aplicação deve armazenar esse hash, nunca a senha original. Durante o login, a senha fornecida será comparada com o hash por meio de `check_password_hash()`.
+
+### 34.5. Utilizando flash e redirect
+
+```
+flash("Cadastro realizado com sucesso!", "success")
+return redirect(url_for("login"))
+```
+
+`flash()` registra uma mensagem temporária para ser apresentada em uma requisição posterior.
+
+`redirect()` redireciona o navegador, e `url_for("login")` gera a URL do endpoint de login.
+
+Esse padrão evita que uma atualização da página repita automaticamente o envio do formulário de cadastro.
+
+## 35. Criando o template de cadastro
+
+Crie `templates/cadastro.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro</title>
+</head>
+<body>
+    <h1>Criar conta</h1>
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+        {% for categoria, mensagem in mensagens %}
+            <p>{{ mensagem }}</p>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+
+        <div>
+            {{ form.nome.label }}
+            {{ form.nome() }}
+
+            {% for erro in form.nome.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        <div>
+            {{ form.email.label }}
+            {{ form.email() }}
+
+            {% for erro in form.email.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        <div>
+            {{ form.senha.label }}
+            {{ form.senha() }}
+
+            {% for erro in form.senha.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        <div>
+            {{ form.confirmar_senha.label }}
+            {{ form.confirmar_senha() }}
+
+            {% for erro in form.confirmar_senha.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        {{ form.enviar() }}
+    </form>
+
+    <p>
+        Já possui conta?
+        <a href="{{ url_for('login') }}">Entrar</a>
+    </p>
+</body>
+</html>
+```
+
+O template apresenta os campos e percorre os erros de cada um.
+
+A chamada `form.hidden_tag()` inclui o token CSRF do formulário. Como o formulário utiliza `FlaskForm`, não precisamos criar manualmente o campo oculto do token.
+
+A mensagem flash é renderizada por meio de `get_flashed_messages(with_categories=true)`, que permite receber tanto a mensagem quanto sua categoria.
+
+Em uma interface com CSS, a categoria pode ser usada para aplicar estilos diferentes a mensagens de sucesso e de erro.
+
+## 36. Implementando a rota de login
+
+Acrescente ao `app.py`:
+
+```
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    form = LoginForm()
+
+    if form.validate_on_submit():
+        email = form.email.data.strip().lower()
+        senha = form.senha.data
+
+        usuario = next(
+            (
+                usuario
+                for usuario in usuarios.values()
+                if usuario.email == email
+            ),
+            None,
+        )
+
+        if (
+            usuario is not None
+            and check_password_hash(usuario.senha_hash, senha)
+        ):
+            login_user(usuario)
+
+            flash("Login realizado com sucesso!", "success")
+
+            return redirect(url_for("perfil"))
+
+        flash("E-mail ou senha incorretos.", "error")
+
+    return render_template(
+        "login.html",
+        form=form,
+    )
+```
+
+### 36.1. Procurando o usuário
+
+O `next()` percorre os usuários até encontrar o primeiro que tenha o e-mail informado.
+
+O segundo argumento, `None`, define o valor retornado quando nenhum usuário correspondente é encontrado.
+
+Essa consulta é suficiente para o exemplo em memória. Com um banco de dados, o ideal seria buscar o usuário diretamente por meio de uma consulta apropriada.
+
+### 36.2. Conferindo a senha
+
+```
+check_password_hash(usuario.senha_hash, senha)
+```
+
+Compara a senha recebida com o hash armazenado.
+
+A função retorna `True` se a senha corresponder ao hash e `False` caso contrário.
+
+Não é necessário gerar um novo hash da senha recebida e compará-lo diretamente com o hash armazenado, pois algoritmos seguros de hash de senhas normalmente utilizam salt e parâmetros próprios.
+
+### 36.3. Iniciando a sessão autenticada
+
+```
+login_user(usuario)
+```
+
+Informa ao Flask-Login que o usuário foi autenticado e inicia a sessão de login gerenciada pela extensão.
+
+A aplicação não precisa criar manualmente um cookie de autenticação para reproduzir o funcionamento básico do Flask-Login.
+
+## 37. Criando o template de login
+
+Crie `templates/login.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Entrar</h1>
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+        {% for categoria, mensagem in mensagens %}
+            <p>{{ mensagem }}</p>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+
+        <div>
+            {{ form.email.label }}
+            {{ form.email() }}
+
+            {% for erro in form.email.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        <div>
+            {{ form.senha.label }}
+            {{ form.senha() }}
+
+            {% for erro in form.senha.errors %}
+                <p>{{ erro }}</p>
+            {% endfor %}
+        </div>
+
+        {{ form.enviar() }}
+    </form>
+
+    <p>
+        Ainda não possui conta?
+        <a href="{{ url_for('cadastro') }}">Cadastrar-se</a>
+    </p>
+</body>
+</html>
+```
+
+Esse template segue a mesma estrutura do cadastro, mas utiliza somente os campos definidos em `LoginForm`.
+
+As mensagens de erro dos campos são apresentadas separadamente das mensagens flash. Essa distinção é útil porque os erros de validação pertencem ao formulário atual, enquanto as mensagens flash podem comunicar resultados de uma operação anterior.
+
+## 38. Protegendo o perfil e implementando o logout
+
+Acrescente ao `app.py`:
+
+```
+@app.route("/perfil")
+@login_required
+def perfil():
+    return render_template("perfil.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+
+    flash("Você saiu da sua conta.", "success")
+
+    return redirect(url_for("login"))
+```
+
+Crie `templates/perfil.html`:
+
+```
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Perfil</title>
+</head>
+<body>
+    <h1>Olá, {{ current_user.nome }}!</h1>
+
+    <p>E-mail: {{ current_user.email }}</p>
+
+    <form method="POST" action="{{ url_for('logout') }}">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <button type="submit">Sair</button>
+    </form>
+</body>
+</html>
+```
+
+### 38.1. Protegendo o perfil
+
+O decorador `login_required` impede que usuários não autenticados acessem a rota protegida.
+
+O template pode acessar `current_user` porque o Flask-Login disponibiliza esse objeto durante as requisições.
+
+### 38.2. Encerrando a sessão
+
+`logout_user()` encerra a sessão autenticada gerenciada pelo Flask-Login.
+
+A rota aceita somente POST, e o formulário de logout inclui um token CSRF.
+
+Nesse template, `csrf_token()` está disponível porque a proteção CSRF do Flask-WTF está configurada. Se você não configurou essa proteção globalmente, essa chamada não estará disponível automaticamente nesse formato.
+
+O uso de POST evita que um simples acesso por link GET encerre a sessão. O token CSRF acrescenta proteção contra requisições forjadas.
+
+## 39. Completando a aplicação
+
+O `app.py` deve conter as importações, a configuração, a classe `Usuario`, o `user_loader` e as rotas de cadastro, login, perfil e logout apresentadas nesta parte.
+
+No final do arquivo, utilize:
+
+```
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+Para executar:
+
+```
+python app.py
+```
+
+Acesse `/cadastro` para criar uma conta, depois `/login` para entrar e `/perfil` para visualizar os dados do usuário autenticado.
+
+**Limitações importantes deste exemplo:**
+
+- Os usuários ficam em memória e desaparecem quando o processo é reiniciado.
+    
+- A chave secreta está ilustrada com um valor fixo; em produção, deve ser obtida de uma variável de ambiente.
+    
+- O servidor de desenvolvimento com `debug=True` não deve ser utilizado como servidor de produção.
+    
+- O exemplo não implementa limitação de tentativas de login, recuperação de senha, verificação de e-mail ou gerenciamento de permissões administrativas.
+    
+- Uma aplicação real deve usar um banco de dados, impor unicidade de e-mail no banco e configurar HTTPS e cookies de sessão seguros.
+    
+
+---

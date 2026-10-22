@@ -2068,3 +2068,336 @@ Acesse `/cadastro` para criar uma conta, depois `/login` para entrar e `/perfil`
     
 
 ---
+## 40. Preparando os testes automatizados
+
+Nas partes anteriores, aprendemos a criar formulários, validar campos, configurar CSRF e integrar Flask-WTF com Flask-Login.
+
+Agora vamos testar o comportamento dos formulários sem precisar abrir o navegador ou iniciar um servidor manualmente.
+
+O Flask oferece um cliente de testes que permite simular requisições HTTP. Com ele, podemos enviar formulários, verificar respostas e confirmar se a aplicação aceita ou rejeita determinados dados.
+
+O `pytest` será utilizado para executar os testes e verificar os resultados.
+
+### 40.1. Instalando o pytest
+
+No ambiente virtual do projeto, execute:
+
+```
+python -m pip install pytest
+```
+
+Se o projeto utiliza `requirements.txt`, inclua:
+
+```
+Flask-WTF
+Flask-Login
+pytest
+```
+
+Mantenha também as outras dependências que seu projeto já utiliza.
+
+### 40.2. Estrutura dos arquivos
+
+Vamos utilizar uma aplicação de teste pequena e independente para concentrar os testes de formulários.
+
+```
+meu_projeto/
+├── app.py
+├── forms.py
+├── requirements.txt
+├── templates/
+│   ├── cadastro.html
+│   └── login.html
+└── tests/
+    └── test_forms.py
+```
+
+A aplicação principal pode continuar contendo as rotas do projeto. Os testes abaixo utilizarão uma aplicação simplificada para evitar depender de um banco de dados ou de usuários reais.
+
+## 41. Criando uma aplicação de teste
+
+Crie `tests/test_forms.py`:
+
+```
+import pytest
+
+from flask import Flask, render_template_string
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import DataRequired, EqualTo, Length
+
+
+class CadastroForm(FlaskForm):
+    nome = StringField(
+        "Nome",
+        validators=[
+            DataRequired(),
+            Length(min=3, max=50),
+        ],
+    )
+
+    senha = PasswordField(
+        "Senha",
+        validators=[
+            DataRequired(),
+            Length(min=8),
+        ],
+    )
+
+    confirmar_senha = PasswordField(
+        "Confirmar senha",
+        validators=[
+            DataRequired(),
+            EqualTo("senha"),
+        ],
+    )
+
+    enviar = SubmitField("Cadastrar")
+
+
+@pytest.fixture
+def app():
+    app = Flask(__name__)
+
+    app.config.update(
+        SECRET_KEY="chave-exclusiva-para-testes",
+        TESTING=True,
+        WTF_CSRF_ENABLED=False,
+    )
+
+    @app.route("/cadastro", methods=["GET", "POST"])
+    def cadastro():
+        form = CadastroForm()
+
+        if form.validate_on_submit():
+            return "Cadastro válido", 200
+
+        return render_template_string(
+            """
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                {{ form.nome() }}
+                {{ form.senha() }}
+                {{ form.confirmar_senha() }}
+                {{ form.enviar() }}
+            </form>
+            """,
+            form=form,
+        ), 200
+
+    return app
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+def test_cadastro_valido(client):
+    response = client.post(
+        "/cadastro",
+        data={
+            "nome": "Marcos",
+            "senha": "senha-segura-123",
+            "confirmar_senha": "senha-segura-123",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Cadastro valido" in response.data
+
+
+def test_nome_obrigatorio(client):
+    response = client.post(
+        "/cadastro",
+        data={
+            "nome": "",
+            "senha": "senha-segura-123",
+            "confirmar_senha": "senha-segura-123",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Cadastro valido" not in response.data
+
+
+def test_senhas_diferentes(client):
+    response = client.post(
+        "/cadastro",
+        data={
+            "nome": "Marcos",
+            "senha": "senha-segura-123",
+            "confirmar_senha": "outra-senha-456",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Cadastro valido" not in response.data
+```
+
+### 41.1. Entendendo o fixture `app`
+
+```
+@pytest.fixture
+def app():
+```
+
+O `fixture` prepara um recurso que pode ser reutilizado pelos testes. Nesse caso, cria e configura uma aplicação Flask exclusiva para os testes.
+
+A configuração `TESTING=True` indica que a aplicação está sendo executada em modo de teste.
+
+Já `WTF_CSRF_ENABLED=False` desabilita a proteção CSRF nesta aplicação de teste, permitindo concentrar os testes nas regras dos campos.
+
+Isso **não deve ser copiado para a configuração de produção**. A proteção CSRF precisa continuar habilitada na aplicação real.
+
+### 41.2. Entendendo o fixture `client`
+
+```
+@pytest.fixture
+def client(app):
+    return app.test_client()
+```
+
+O `test_client()` permite simular requisições HTTP para a aplicação sem iniciar um servidor externo.
+
+Por exemplo:
+
+```
+response = client.post("/cadastro", data={...})
+```
+
+Essa chamada simula uma requisição POST com os dados do formulário.
+
+### 41.3. O que os testes verificam?
+
+- `test_cadastro_valido`: verifica se os campos válidos permitem o processamento.
+    
+- `test_nome_obrigatorio`: verifica se um nome vazio é rejeitado.
+    
+- `test_senhas_diferentes`: verifica se a confirmação diferente da senha impede o cadastro.
+    
+
+Observe que esses testes não criam usuários nem salvam dados. Eles verificam somente a validação do formulário e a resposta da rota simplificada.
+
+## 42. Executando os testes
+
+Na raiz do projeto, execute:
+
+```
+python -m pytest -v
+```
+
+O parâmetro `-v` apresenta o nome de cada teste e seu resultado.
+
+Para executar somente o arquivo criado:
+
+```
+python -m pytest -v tests/test_forms.py
+```
+
+Se algum teste falhar, examine o traceback e confira se o resultado esperado corresponde ao comportamento da aplicação.
+
+### 42.1. Uma observação sobre o texto da resposta
+
+No exemplo, a rota retorna `"Cadastro válido"`, com acento, mas o teste procura `b"Cadastro valido"`, sem acento. Como os bytes UTF-8 são diferentes, essa comparação falhará.
+
+Para corrigir, altere a asserção para:
+
+```
+assert "Cadastro válido".encode("utf-8") in response.data
+```
+
+Esse detalhe demonstra por que é importante verificar não apenas a lógica da aplicação, mas também as expectativas definidas nos testes.
+
+## 43. Testando a proteção CSRF
+
+Os testes anteriores desabilitam CSRF para concentrar-se na validação dos campos. Agora vamos observar como testar a proteção em si.
+
+Em uma aplicação de teste separada, configure:
+
+```
+app.config.update(
+    SECRET_KEY="chave-exclusiva-para-testes",
+    TESTING=True,
+    WTF_CSRF_ENABLED=True,
+)
+```
+
+Se a aplicação utiliza `CSRFProtect(app)`, uma requisição POST sem token válido deve ser rejeitada.
+
+Um teste básico pode verificar essa rejeição:
+
+```
+def test_post_sem_token_csrf(client):
+    response = client.post(
+        "/cadastro",
+        data={
+            "nome": "Marcos",
+            "senha": "senha-segura-123",
+            "confirmar_senha": "senha-segura-123",
+        },
+    )
+
+    assert response.status_code == 400
+```
+
+Esse teste pressupõe que o cliente esteja utilizando uma aplicação com proteção CSRF global habilitada e que a rota esteja protegida por ela.
+
+Não execute esse teste sobre o fixture anterior sem alterar sua configuração: naquele fixture, `WTF_CSRF_ENABLED=False`.
+
+Para testar um envio legítimo, o cliente precisa primeiro obter um token válido, normalmente acessando a página do formulário e extraindo o token renderizado. Depois, deve enviar esse token junto com os dados do POST.
+
+Em testes mais completos, vale verificar tanto a rejeição de requisições sem token quanto a aceitação de requisições com token válido.
+
+## 44. Boas práticas ao trabalhar com Flask-WTF
+
+### 44.1. Valide os dados no servidor
+
+Atributos HTML como `required`, `minlength` e `maxlength` ajudam a orientar o usuário, mas podem ser ignorados por quem envia uma requisição diretamente.
+
+Mantenha os validadores no WTForms para verificar os dados no servidor.
+
+### 44.2. Mantenha a proteção CSRF habilitada
+
+Utilize os recursos de proteção do Flask-WTF para formulários que executam ações que alteram dados.
+
+Não desabilite CSRF globalmente para resolver erros em formulários específicos. Investigue se o token está sendo gerado, enviado e verificado corretamente.
+
+### 44.3. Não confie em campos ocultos
+
+Campos HTML ocultos podem ser alterados pelo usuário. Eles não devem ser tratados como prova de autorização.
+
+Por exemplo, ocultar um campo `is_admin` no formulário não impede que alguém tente enviar outro valor. A permissão administrativa deve ser determinada no servidor.
+
+### 44.4. Não armazene senhas em texto puro
+
+Em formulários de cadastro, armazene hashes seguros de senha usando ferramentas apropriadas, como `generate_password_hash()` do Werkzeug.
+
+Para verificar uma senha, utilize `check_password_hash()` em vez de comparar a senha original com o hash diretamente.
+
+### 44.5. Trate os erros de forma clara
+
+Apresente mensagens que ajudem o usuário a corrigir os dados, sem expor detalhes internos da aplicação, consultas SQL, caminhos locais ou informações sensíveis.
+
+### 44.6. Separe formulários, rotas e templates
+
+Uma organização comum é:
+
+- `forms.py`: campos e regras de validação.
+    
+- `routes.py` ou módulos de rotas: processamento e lógica da aplicação.
+    
+- `templates/`: estrutura HTML e apresentação das mensagens.
+    
+- `tests/`: testes automatizados.
+    
+
+Essa separação facilita manutenção, reutilização e testes.
+
+### 44.7. Teste os casos válidos e inválidos
+
+Além de testar o envio correto, verifique campos vazios, formatos inválidos, limites de tamanho, confirmações diferentes e tokens CSRF ausentes ou inválidos.
+
+Os testes devem refletir as regras reais do projeto e não apenas confirmar que a rota respondeu com HTTP 200.
+
+---
